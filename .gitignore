@@ -1,0 +1,43 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
+
+# Cloned source repositories (gigabytes of kernel, buildroot, and vitasdk git trees)
+sources/*
+!sources/.gitkeep
+
+# Build and downloaded output artifacts
+output/*
+!output/.gitkeep
+
+# Temporary build directories & files
+.tmp*
+*.tmp
+*.log
+
+# Compiled binaries and kernels
+*.bin
+*.elf
+*.skprx
+*.vpk
+*.cpio.xz
+*.dtb
+zImage
+uImage
+
+# Object files & dependency lists
+*.o
+*.a
+*.so
+*.d
+
+# Editor and IDE directories
+.vscode/
+.idea/
+*.swp
+*~
