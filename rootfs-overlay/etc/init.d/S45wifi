@@ -23,16 +23,37 @@ start)
         if [ -n "$IFACE" ]; then
             echo "[WiFi] $IFACE interface detected. Starting association..."
             if [ -f /etc/wpa_supplicant.conf ]; then
+                # Defensive check: remove any ctrl_interface lines that cause wpa_supplicant to exit
+                sed -i '/^ctrl_interface/d' /etc/wpa_supplicant.conf 2>/dev/null || true
+
+                # Kill any previous/stale instances
+                killall wpa_supplicant 2>/dev/null || true
+                killall udhcpc 2>/dev/null || true
+
                 ip link set "$IFACE" up 2>/dev/null || true
-                /sbin/ifup "$IFACE" 2>/dev/null || {
-                    wpa_supplicant -B -i "$IFACE" -c /etc/wpa_supplicant.conf 2>/dev/null || true
-                    udhcpc -i "$IFACE" -b -R 2>/dev/null || true
-                }
+
+                echo "[WiFi] Launching wpa_supplicant on $IFACE..."
+                wpa_supplicant -B -i "$IFACE" -c /etc/wpa_supplicant.conf
+
+                # Wait up to 15s for 802.11 association (carrier state)
+                echo "[WiFi] Waiting for $IFACE association..."
+                k=0
+                while [ $k -lt 15 ]; do
+                    if [ "$(cat /sys/class/net/$IFACE/carrier 2>/dev/null || echo 0)" = "1" ]; then
+                        echo "[WiFi] $IFACE associated successfully!"
+                        break
+                    fi
+                    sleep 1
+                    k=$((k + 1))
+                done
+
+                echo "[WiFi] Requesting DHCP lease on $IFACE..."
+                udhcpc -i "$IFACE" -b -R 2>/dev/null || true
 
                 # Wait for DHCP lease
                 j=0
                 IP=""
-                while [ $j -lt 15 ]; do
+                while [ $j -lt 25 ]; do
                     IP=$(ip -4 addr show "$IFACE" 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2)
                     [ -n "$IP" ] && break
                     sleep 1

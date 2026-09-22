@@ -83,7 +83,6 @@ if [ -f "${WIFI_CONF}" ]; then
     # shellcheck source=/dev/null
     source "${WIFI_CONF}"
     cat << EOF > "${WPA_TARGET}"
-ctrl_interface=/var/run/wpa_supplicant
 update_config=1
 
 network={
@@ -95,7 +94,6 @@ EOF
 else
     echo "Notice: configs/wifi.conf not found. Using placeholder credentials."
     cat << 'EOF' > "${WPA_TARGET}"
-ctrl_interface=/var/run/wpa_supplicant
 update_config=1
 
 network={
