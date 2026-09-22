@@ -26,6 +26,7 @@ case "$1" in
             if [ -b "$ur_dev" ] && ! mountpoint -q /mnt/ur0 2>/dev/null; then
                 mount -t exfat -o rw "$ur_dev" /mnt/ur0 2>/dev/null || \
                 mount -t vfat -o rw "$ur_dev" /mnt/ur0 2>/dev/null || \
+                mount -t ext4 -o rw "$ur_dev" /mnt/ur0 2>/dev/null || \
                 mount "$ur_dev" /mnt/ur0 2>/dev/null || true
                 break
             fi
@@ -36,6 +37,7 @@ case "$1" in
             if [ -b "$dev" ] && ! mountpoint -q /mnt/ux0 2>/dev/null; then
                 mount -t exfat -o rw "$dev" /mnt/ux0 2>/dev/null || \
                 mount -t vfat -o rw "$dev" /mnt/ux0 2>/dev/null || \
+                mount -t ext4 -o rw "$dev" /mnt/ux0 2>/dev/null || \
                 mount "$dev" /mnt/ux0 2>/dev/null || true
                 break
             fi

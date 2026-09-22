@@ -47,6 +47,7 @@ ensure_storage_mounted() {
             if [ -b "$dev" ]; then
                 mount -t exfat -o rw "$dev" /mnt/ux0 2>/dev/null || \
                 mount -t vfat -o rw "$dev" /mnt/ux0 2>/dev/null || \
+                mount -t ext4 -o rw "$dev" /mnt/ux0 2>/dev/null || \
                 mount "$dev" /mnt/ux0 2>/dev/null || true
                 break
             fi
@@ -59,6 +60,7 @@ ensure_storage_mounted() {
             if [ -b "$dev" ]; then
                 mount -t exfat -o rw "$dev" /mnt/ur0 2>/dev/null || \
                 mount -t vfat -o rw "$dev" /mnt/ur0 2>/dev/null || \
+                mount -t ext4 -o rw "$dev" /mnt/ur0 2>/dev/null || \
                 mount "$dev" /mnt/ur0 2>/dev/null || true
                 break
             fi
@@ -76,8 +78,11 @@ show_status() {
         echo "Active mount: ${MOUNT_POINT} (not mounted)"
     fi
     echo ""
-    echo "Available Storage:"
+    echo "Available Storage Mounts:"
     df -h /mnt/ux0 /mnt/ur0 /tmp 2>/dev/null
+    echo ""
+    echo "Detected Block Devices:"
+    ls -la /dev/mmcblk* 2>/dev/null || echo "  (no /dev/mmcblk* found)"
     exit 0
 }
 
@@ -142,11 +147,30 @@ else
         IMG_FILE="/mnt/ux0/alpine.img"
     elif mountpoint -q /mnt/ur0 2>/dev/null; then
         # Secondary fallback: Internal eMMC (ur0)
+        echo "Notice: /mnt/ux0 (SD card / SD2Vita) is not mounted."
+        echo "        Defaulting to /mnt/ur0 (internal eMMC storage)."
+        echo "        (Run 'alpine-chroot --status' to inspect available storage)"
+        echo ""
         IMG_FILE="/mnt/ur0/alpine.img"
     else
         echo "Notice: Neither /mnt/ux0 nor /mnt/ur0 storage detected. Falling back to RAM mode."
         USE_RAM=1
         TARGET="/tmp/alpine"
+    fi
+
+    # Safety check: prevent writing multi-gigabyte images to unmounted RAM tmpfs
+    if [ -n "${CUSTOM_DIR}" ] || [ -n "${CUSTOM_FILE}" ]; then
+        CHECK_DIR="${CUSTOM_DIR:-$(dirname "${CUSTOM_FILE}")}"
+        case "${CHECK_DIR}" in
+            /mnt/ux0*|/mnt/ux0)
+                if ! mountpoint -q /mnt/ux0 2>/dev/null; then
+                    echo "Error: /mnt/ux0 is not mounted!"
+                    echo "Cannot create image on /mnt/ux0 because no SD card filesystem is mounted."
+                    echo "Run 'alpine-chroot --status' or check 'dmesg | grep mmc' to see detected storage."
+                    exit 1
+                fi
+                ;;
+        esac
     fi
 fi
 
