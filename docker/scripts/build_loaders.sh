@@ -28,6 +28,10 @@ if [ ! -d "vita-baremetal-loader" ]; then
     git clone https://github.com/xerpi/vita-baremetal-loader.git
 fi
 cd vita-baremetal-loader
+if [ -f "${BUILD_DIR}/patches/vita-baremetal-loader/0001-loader-features.patch" ]; then
+    git apply --check "${BUILD_DIR}/patches/vita-baremetal-loader/0001-loader-features.patch" 2>/dev/null && \
+        git apply "${BUILD_DIR}/patches/vita-baremetal-loader/0001-loader-features.patch" || true
+fi
 make clean || true
 make CFLAGS="-std=gnu17 -Wl,-q -Wall -O0 -nostartfiles -mcpu=cortex-a9 -mthumb-interwork"
 if [ -f "baremetal-loader_363.skprx" ]; then
@@ -43,7 +47,12 @@ echo "[2/4] Building and installing libbaremetal..."
 if [ ! -d "vita-libbaremetal" ]; then
     git clone https://github.com/xerpi/vita-libbaremetal.git
 fi
-cd vita-libbaremetal/libbaremetal
+cd vita-libbaremetal
+if [ -f "${BUILD_DIR}/patches/vita-libbaremetal/0001-max-brightness.patch" ]; then
+    git apply --check "${BUILD_DIR}/patches/vita-libbaremetal/0001-max-brightness.patch" 2>/dev/null && \
+        git apply "${BUILD_DIR}/patches/vita-libbaremetal/0001-max-brightness.patch" || true
+fi
+cd libbaremetal
 make clean || true
 make install
 cd "${SRC_DIR}"

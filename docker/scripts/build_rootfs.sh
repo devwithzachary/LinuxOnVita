@@ -26,7 +26,11 @@ if [ -d "${TOOLS_DIR}" ]; then
     make -C "${TOOLS_DIR}" CC="${TARGET_CC}"
     cp "${TOOLS_DIR}/fbkeyboard/fbkeyboard" "${ROOTFS_OVERLAY}/usr/bin/"
     cp "${TOOLS_DIR}/vita-input-mapper/vita-input-mapper" "${ROOTFS_OVERLAY}/usr/bin/"
-    echo "Input tools compiled and staged to ${ROOTFS_OVERLAY}/usr/bin/"
+    if [ -f "${TOOLS_DIR}/fbdoom/fbdoom" ]; then
+        arm-linux-gnueabihf-strip "${TOOLS_DIR}/fbdoom/fbdoom" 2>/dev/null || true
+        cp "${TOOLS_DIR}/fbdoom/fbdoom" "${ROOTFS_OVERLAY}/usr/bin/"
+    fi
+    echo "Tools compiled and staged to ${ROOTFS_OVERLAY}/usr/bin/"
 fi
 
 # Ensure Marvell Wi-Fi firmware is present in overlay

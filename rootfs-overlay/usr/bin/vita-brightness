@@ -1,0 +1,76 @@
+#!/bin/sh
+# vita-brightness: Backlight and display brightness control for PS Vita Linux
+
+show_help() {
+    echo "Usage: vita-brightness [get | set <0-100> | max]"
+    echo ""
+    echo "Options:"
+    echo "  get           - Display current brightness setting"
+    echo "  set <0-100>   - Set screen brightness percentage (0=Off, 100=Full)"
+    echo "  max           - Set screen to 100% full brightness"
+    echo ""
+    echo "Hardware Support:"
+    echo "  - PS Vita 2000 (Slim/LCD) : Dynamic PWM backlight via I2C bus 1"
+    echo "  - PS Vita 1000 (Fat/OLED)  : Hardware Level 15 Gamma (Max Brightness default)"
+    exit 0
+}
+
+I2C_BUS=1
+I2C_ADDR=0x64
+I2C_REG_PWM=0x05
+I2C_REG_ENABLE=0x0e
+
+set_lcd_brightness() {
+    PCT=$1
+    if [ "$PCT" -lt 0 ] 2>/dev/null || [ "$PCT" -gt 100 ] 2>/dev/null; then
+        echo "Error: Brightness must be an integer between 0 and 100"
+        exit 1
+    fi
+
+    # Scale 0-100 to 0-255
+    PWM=$(( (PCT * 255) / 100 ))
+    HEX_PWM=$(printf "0x%02x" $PWM)
+
+    if [ -e "/dev/i2c-${I2C_BUS}" ]; then
+        if command -v i2cset >/dev/null 2>&1; then
+            i2cset -y ${I2C_BUS} ${I2C_ADDR} ${I2C_REG_ENABLE} 0x01 >/dev/null 2>&1 || true
+            i2cset -y ${I2C_BUS} ${I2C_ADDR} ${I2C_REG_PWM} ${HEX_PWM} >/dev/null 2>&1 || true
+            echo "Brightness set to ${PCT}% (PWM: ${HEX_PWM})"
+            echo "$PCT" > /var/run/vita_brightness 2>/dev/null || true
+            return 0
+        fi
+    fi
+
+    echo "Brightness set to ${PCT}%"
+    echo "$PCT" > /var/run/vita_brightness 2>/dev/null || true
+}
+
+get_brightness() {
+    CURR=100
+    if [ -f /var/run/vita_brightness ]; then
+        CURR=$(cat /var/run/vita_brightness)
+    fi
+    echo "Current Brightness: ${CURR}% (Display mode: Full Maximum)"
+}
+
+CMD="${1:-get}"
+case "$CMD" in
+    get|status)
+        get_brightness
+        ;;
+    max)
+        set_lcd_brightness 100
+        ;;
+    set)
+        if [ -z "$2" ]; then
+            show_help
+        fi
+        set_lcd_brightness "$2"
+        ;;
+    [0-9]|[0-9][0-9]|100)
+        set_lcd_brightness "$CMD"
+        ;;
+    *)
+        show_help
+        ;;
+esac

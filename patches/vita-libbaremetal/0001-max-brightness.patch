@@ -1,0 +1,41 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Vita Linux Port <dev@vita-linux.org>
+Date: Tue, 22 Sep 2026 16:35:00 +0100
+Subject: [PATCH] Set OLED and LCD displays to 100% full brightness
+
+---
+ libbaremetal/src/lcd.c  | 2 +-
+ libbaremetal/src/oled.c | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/libbaremetal/src/lcd.c b/libbaremetal/src/lcd.c
+index 715e9a2..328e017 100644
+--- a/libbaremetal/src/lcd.c
++++ b/libbaremetal/src/lcd.c
+@@ -416,7 +416,7 @@ int lcd_init(void)
+ 
+ 	lcd_bl_reset();
+ 
+-	lcd_bl_set_brightness(65536 / 2);
++	lcd_bl_set_brightness(65535);
+ 
+ 	return 0;
+ }
+diff --git a/libbaremetal/src/oled.c b/libbaremetal/src/oled.c
+index 2ab4958..568411b 100644
+--- a/libbaremetal/src/oled.c
++++ b/libbaremetal/src/oled.c
+@@ -73,10 +73,10 @@ static const uint8_t oled_color_space_mode_1_cmdlist[] = {
+ };
+ 
+ static const uint8_t oled_brightness_cmdlist[] = {
+-	0xF9, 0x16, 1, 0x79, 0x78, 0x8D, 0xD9, 0xDF, 0xD5, 0xCB, 0xCF, 0xC5, 0xE5, 0xE0, 0xE4, 0xDC, 0xB8, 0xD4, 0xFA, 0xED, 0xE6, 0x2F, 0, 0x2F,
++	0xF9, 0x16, 1, 0x9F, 0x9F, 0xBE, 0xCF, 0xD7, 0xC9, 0xC2, 0xCB, 0xBB, 0xE1, 0xE3, 0xDE, 0xD6, 0xD0, 0xD3, 0xFA, 0xED, 0xE6, 0x2F, 0, 0x2F,
+ 	0xF9, 1, 0,
+ 	0x26, 1, 0,
+-	0xB2, 1, 0x15,
++	0xB2, 1, 0x12,
+ 	END, END
+ };
+ 
+-- 

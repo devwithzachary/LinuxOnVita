@@ -1,0 +1,86 @@
+#!/bin/sh
+# vita-doom: Framebuffer DOOM Launcher for PlayStation Vita Linux
+
+show_help_missing() {
+    echo "======================================================="
+    echo "          PlayStation Vita DOOM (Framebuffer)          "
+    echo "======================================================="
+    echo " No DOOM WAD file was found!"
+    echo ""
+    echo " How to play:"
+    echo " 1. Copy any DOOM WAD (e.g. DOOM1.WAD, DOOM.WAD, DOOM2.WAD)"
+    echo "    to your Vita memory card or internal storage:"
+    echo "      - /mnt/ux0/doom/DOOM1.WAD  (recommended)"
+    echo "      - /mnt/ur0/doom/DOOM1.WAD"
+    echo "      - /mnt/ux0/linux/doom/DOOM1.WAD"
+    echo ""
+    echo " 2. Or pass the path directly:"
+    echo "      vita-doom /path/to/your.wad"
+    echo ""
+    echo " Controls:"
+    echo "   * Left Analog / D-Pad : Move forward/back, turn left/right"
+    echo "   * Right Analog        : Strafe left / right"
+    echo "   * R-Trigger           : Fire / Shoot"
+    echo "   * Square (□)          : Open doors / Use switches"
+    echo "   * Cross (✕)           : Enter / Select in menus"
+    echo "   * Circle (○)          : Back / Cancel"
+    echo "   * L-Trigger           : Speed / Run"
+    echo "   * Triangle (△)        : Automap"
+    echo "   * Start               : Menu / Pause (ESC)"
+    echo "======================================================="
+    exit 1
+}
+
+# 1. Check if user passed an explicit WAD file as argument
+SELECTED_WAD=""
+if [ -n "$1" ] && [ -f "$1" ]; then
+    SELECTED_WAD="$1"
+    shift
+fi
+
+# 2. Search common locations for WAD files
+if [ -z "$SELECTED_WAD" ]; then
+    SEARCH_DIRS="
+    /mnt/ux0/doom
+    /mnt/ur0/doom
+    /mnt/ux0/linux/doom
+    /mnt/ur0/linux/doom
+    /usr/share/games/doom
+    /usr/share/doom
+    /root
+    /mnt/ux0
+    /mnt/ur0
+    .
+    "
+
+    for dir in $SEARCH_DIRS; do
+        if [ -d "$dir" ]; then
+            # Check for common names first
+            for name in doom1.wad DOOM1.WAD doom.wad DOOM.WAD doom2.wad DOOM2.WAD tnt.wad plutonia.wad; do
+                if [ -f "$dir/$name" ]; then
+                    SELECTED_WAD="$dir/$name"
+                    break 2
+                fi
+            done
+            # Check wildcard
+            for f in "$dir"/*.wad "$dir"/*.WAD; do
+                if [ -f "$f" ]; then
+                    SELECTED_WAD="$f"
+                    break 2
+                fi
+            done
+        fi
+    done
+fi
+
+if [ -z "$SELECTED_WAD" ] || [ ! -f "$SELECTED_WAD" ]; then
+    show_help_missing
+fi
+
+echo "======================================================="
+echo " Starting DOOM on Linux Framebuffer (/dev/fb0)..."
+echo " Active WAD: $SELECTED_WAD"
+echo "======================================================="
+
+# Run fbdoom with the found WAD
+exec /usr/bin/fbdoom -iwad "$SELECTED_WAD" "$@"

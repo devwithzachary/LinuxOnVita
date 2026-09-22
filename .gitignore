@@ -36,9 +36,12 @@ uImage
 # Compiled tools
 tools/fbkeyboard/fbkeyboard
 tools/vita-input-mapper/vita-input-mapper
+tools/fbdoom/fbdoom
 rootfs-overlay/usr/bin/fbkeyboard
 rootfs-overlay/usr/bin/vita-input-mapper
+rootfs-overlay/usr/bin/fbdoom
 rootfs-overlay/lib/
+tools/**/*.map
 
 # Sensitive local configurations
 configs/wifi.conf
