@@ -11,11 +11,11 @@ While the original upstream projects proved that modern Linux can boot on the PS
 
 ---
 
-## 🌟 What Makes This Project Different: Upstream vs. Vita Linux Toolkit
+## 🌟 What Makes This Project Different: Upstream vs. LinuxOnVita
 
 If you build the raw upstream projects by default, you get a bare-bones Linux kernel that boots to a terminal you cannot interact with without soldering serial wires. Below is a breakdown of what this distribution adds:
 
-| Feature Area | Upstream Default Experience (Raw Proof-of-Concept) | **Vita Linux Toolkit (This Distribution)** |
+| Feature Area | Upstream Default Experience (Raw Proof-of-Concept) | **LinuxOnVita (This Distribution)** |
 | :--- | :--- | :--- |
 | **Interactive Terminal Input** | ❌ **None.** Requires a custom soldered UART cable or USB-UART interface to type commands. | ✅ **Built-in Touch Keyboard (`fbkeyboard`):** Rendered directly on `/dev/fb0` with dual ABC / ?123 layout, customizable keys, and VT isolation. |
 | **Physical Button Navigation** | ❌ Raw evdev only; buttons do nothing in the console shell. | ✅ **`vita-input-mapper`:** D-Pad, Cross (Enter), Circle (Backspace), Square (Space), Triangle (Tab), and L-Trigger (Ctrl+C) synthesized via `/dev/uinput`. |
@@ -31,7 +31,26 @@ If you build the raw upstream projects by default, you get a bare-bones Linux ke
 
 ---
 
-## 🚀 Complete Step-by-Step Guide: From Clone to Running Linux
+## 📦 Pre-Built Releases (Quick Install)
+
+Don't want to compile from source? Download the latest pre-built release from the [GitHub Releases page](https://github.com/devwithzachary/LinuxOnVita/releases).
+
+> [!IMPORTANT]
+> **Pre-built releases do NOT include Wi-Fi credentials.** The release zip is intentionally built without a `wpa_supplicant.conf` so you must add your own network details before the Vita can connect to Wi-Fi or SSH.
+> After extracting the release, edit `ux0:linux/wpa_supplicant.conf` directly on your memory card (via VitaShell FTP or USB):
+> ```
+> network={
+>     ssid="YourWiFiNetworkName"
+>     psk="YourWiFiPassword"
+> }
+> ```
+> Without this step the system **will still boot into Linux** but Wi-Fi and SSH will not be available.
+
+The release zip contains a pre-structured `ux0/` folder — simply copy its contents onto your Vita's memory card (`ux0:`) and follow Steps 4 and 5 below.
+
+---
+
+## 🚀 Complete Step-by-Step Guide: From Clone to Running Linux (Build from Source)
 
 Follow these steps to build and install Linux on your PlayStation Vita:
 
@@ -48,12 +67,16 @@ Follow these steps to build and install Linux on your PlayStation Vita:
 Clone this repository to your computer (macOS or Linux):
 ```bash
 git clone https://github.com/devwithzachary/LinuxOnVita.git
-cd vita-linux
+cd LinuxOnVita
 ```
 
 ---
 
-### Step 2: Configure Your Wi-Fi Credentials (Optional)
+### Step 2: Configure Your Wi-Fi Credentials
+
+> [!IMPORTANT]
+> **Wi-Fi must be configured before building.** Pre-built release downloads do **not** include Wi-Fi credentials — you must add them yourself before flashing. Without this step the Vita will boot into Linux but will **not** connect to your network and SSH will not be available.
+
 If you want your Vita to automatically join your Wi-Fi network and start SSH on boot:
 ```bash
 cp configs/wifi.conf.example configs/wifi.conf
@@ -75,8 +98,14 @@ Run the automated Docker build system:
 
 # 2. Build the complete system (RootFS, Linux 6.12 Kernel, and Loaders)
 ./build.sh all
+
+# 3. (Optional) Create a distributable release zip for sharing
+./build.sh release
 ```
-*(You can also build individual components if desired: `./build.sh rootfs`, `./build.sh kernel`, or `./build.sh loaders`)*.
+*(You can also build individual components: `./build.sh rootfs`, `./build.sh kernel`, or `./build.sh loaders`.)*
+
+> [!NOTE]
+> `./build.sh release` packages everything into `output/LinuxOnVita-release-<version>.zip` ready to share or upload to GitHub Releases. Wi-Fi credentials are **never** included in the release zip.
 
 ---
 

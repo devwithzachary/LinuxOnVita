@@ -254,11 +254,16 @@ if [ ! -f "${TARGET}/bin/sh" ]; then
     }
 
     # Set up APK repositories
+    # Detect Alpine version from the tarball filename, fall back to 'edge'
+    ALPINE_VER=$(echo "${TARBALL}" | grep -o 'minirootfs-[0-9.]*' | grep -o '[0-9.]*' | cut -d. -f1,2 || echo "edge")
+    if [ -z "${ALPINE_VER}" ]; then ALPINE_VER="edge"; fi
+    REPO_BASE="http://dl-cdn.alpinelinux.org/alpine"
     mkdir -p "${TARGET}/etc/apk"
-    cat << 'EOF' > "${TARGET}/etc/apk/repositories"
-http://dl-cdn.alpinelinux.org/alpine/v3.20/main
-http://dl-cdn.alpinelinux.org/alpine/v3.20/community
-EOF
+    if [ "${ALPINE_VER}" = "edge" ]; then
+        printf '%s/edge/main\n%s/edge/community\n' "${REPO_BASE}" "${REPO_BASE}" > "${TARGET}/etc/apk/repositories"
+    else
+        printf '%s/v%s/main\n%s/v%s/community\n' "${REPO_BASE}" "${ALPINE_VER}" "${REPO_BASE}" "${ALPINE_VER}" > "${TARGET}/etc/apk/repositories"
+    fi
 
     echo "Alpine Linux rootfs initialized successfully."
     echo ""
@@ -277,6 +282,16 @@ mountpoint -q "${TARGET}/dev"  || mount --bind /dev "${TARGET}/dev"
 mountpoint -q "${TARGET}/dev/pts" || mount -t devpts devpts "${TARGET}/dev/pts" -o mode=0620,gid=5,ptmxmode=0666 2>/dev/null || true
 mountpoint -q "${TARGET}/dev/shm" || mount -t tmpfs tmpfs "${TARGET}/dev/shm" -o mode=1777 2>/dev/null || true
 
+# Clean up all bind mounts — always runs on exit, Ctrl+C, or kill
+cleanup_chroot() {
+    umount "${TARGET}/dev/shm" 2>/dev/null || true
+    umount "${TARGET}/dev/pts" 2>/dev/null || true
+    umount "${TARGET}/dev"     2>/dev/null || true
+    umount "${TARGET}/sys"     2>/dev/null || true
+    umount "${TARGET}/proc"    2>/dev/null || true
+}
+trap cleanup_chroot EXIT INT TERM
+
 echo "========================================================="
 echo " 🏔️  Welcome to Alpine Linux Userland (chroot)           "
 echo "========================================================="
@@ -292,10 +307,3 @@ echo ""
 
 # Execute login shell inside Alpine chroot
 chroot "${TARGET}" /bin/sh -l
-
-# Clean up bind mounts on exit
-umount "${TARGET}/dev/shm" 2>/dev/null || true
-umount "${TARGET}/dev/pts" 2>/dev/null || true
-umount "${TARGET}/dev" 2>/dev/null || true
-umount "${TARGET}/sys" 2>/dev/null || true
-umount "${TARGET}/proc" 2>/dev/null || true

@@ -18,6 +18,7 @@ usage() {
     echo "  rootfs       - Build only RootFS with Wi-Fi & input tools inside Docker"
     echo "  kernel       - Build only Linux 6.12 kernel inside Docker"
     echo "  loaders      - Build VitaSDK loaders and bootstrapper VPK inside Docker"
+    echo "  release      - Build everything and package a distributable release zip (no Wi-Fi credentials)"
     echo "  shell        - Open an interactive shell inside the build container"
     echo "  clean        - Clean build artifacts"
     exit 1
@@ -78,6 +79,9 @@ case "${CMD}" in
         ;;
     all)
         run_in_docker /build/docker/scripts/build_all.sh
+        ;;
+    release)
+        run_in_docker /build/docker/scripts/build_release.sh
         ;;
     clean)
         echo "Cleaning output..."
