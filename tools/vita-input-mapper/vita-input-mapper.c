@@ -37,7 +37,10 @@ static int find_buttons_device(void) {
 
         memset(name, 0, sizeof(name));
         if (ioctl(fd, EVIOCGNAME(sizeof(name)), name) >= 0) {
-            if (strstr(name, "vita-buttons") || strstr(name, "vita_buttons")) {
+            if (strstr(name, "PlayStation Vita Buttons") ||
+                strstr(name, "Buttons") ||
+                strstr(name, "vita-buttons") ||
+                strstr(name, "vita_buttons")) {
                 printf("[InputMapper] Found buttons device: %s (%s)\n", path, name);
                 return fd;
             }
@@ -124,11 +127,13 @@ int main(int argc, char **argv) {
         }
     }
 
-    int uinput_fd = setup_uinput_keyboard();
-    if (uinput_fd < 0) {
-        fprintf(stderr, "[InputMapper] Cannot initialize uinput. Exiting.\n");
-        close(buttons_fd);
-        return 1;
+    int uinput_fd = -1;
+    while (uinput_fd < 0) {
+        uinput_fd = setup_uinput_keyboard();
+        if (uinput_fd < 0) {
+            fprintf(stderr, "[InputMapper] /dev/uinput not ready yet, retrying in 1s...\n");
+            sleep(1);
+        }
     }
 
     // Set non-blocking to blocking for event reading

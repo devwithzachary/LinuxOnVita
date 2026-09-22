@@ -15,12 +15,12 @@ start)
     [ -e /dev/uinput ] || mknod /dev/uinput c 10 223 2>/dev/null || true
 
     if [ -x /usr/bin/vita-input-mapper ]; then
-        /usr/bin/vita-input-mapper > /dev/null 2>&1 &
+        /usr/bin/vita-input-mapper > /tmp/vita-input-mapper.log 2>&1 &
         echo "vita-input-mapper started."
     fi
 
     if [ -x /usr/bin/fbkeyboard ]; then
-        /usr/bin/fbkeyboard > /dev/null 2>&1 &
+        /usr/bin/fbkeyboard > /tmp/fbkeyboard.log 2>&1 &
         echo "fbkeyboard started."
     fi
     ;;

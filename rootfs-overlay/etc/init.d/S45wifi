@@ -57,7 +57,7 @@ start)
             echo "[WiFi] Wireless interface not detected after ${TIMEOUT}s."
             logger -t wifi "No wireless interface found after ${TIMEOUT}s"
         fi
-    ) &
+    ) 2>&1 | tee /tmp/wifi.log &
     echo "Starting Wi-Fi daemon in background..."
     ;;
 stop)

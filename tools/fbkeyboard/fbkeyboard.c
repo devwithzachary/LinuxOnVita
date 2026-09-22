@@ -374,6 +374,30 @@ static void emit_key(int uinput_fd, int keycode, int press) {
     }
 }
 
+static void emit_key_or_tty(int uinput_fd, int tty_fd, int keycode, const char *label, int press) {
+    if (uinput_fd >= 0) {
+        emit_key(uinput_fd, keycode, press);
+    } else if (tty_fd >= 0 && press == 0) {
+        // Fallback to TIOCSTI when uinput is unavailable
+        if (keycode == KEY_ENTER) {
+            char c = '\n';
+            ioctl(tty_fd, TIOCSTI, &c);
+        } else if (keycode == KEY_BACKSPACE) {
+            char c = 0x7f;
+            ioctl(tty_fd, TIOCSTI, &c);
+        } else if (keycode == KEY_TAB) {
+            char c = '\t';
+            ioctl(tty_fd, TIOCSTI, &c);
+        } else if (keycode == KEY_SPACE) {
+            char c = ' ';
+            ioctl(tty_fd, TIOCSTI, &c);
+        } else if (label && strlen(label) == 1) {
+            char c = label[0];
+            ioctl(tty_fd, TIOCSTI, &c);
+        }
+    }
+}
+
 int main(int argc, char **argv) {
     (void)argc;
     (void)argv;
@@ -403,8 +427,18 @@ int main(int argc, char **argv) {
     init_key_layout();
     draw_keyboard();
 
-    int uinput_fd = setup_uinput();
-    if (uinput_fd < 0) return 1;
+    int uinput_fd = -1;
+    for (int retry = 0; retry < 5 && uinput_fd < 0; retry++) {
+        uinput_fd = setup_uinput();
+        if (uinput_fd < 0) {
+            printf("[fbkeyboard] Waiting for /dev/uinput (try %d/5)...\n", retry + 1);
+            sleep(1);
+        }
+    }
+    int tty_fd = open("/dev/tty1", O_WRONLY);
+    if (uinput_fd < 0 && tty_fd < 0) {
+        fprintf(stderr, "[fbkeyboard] Warning: neither /dev/uinput nor /dev/tty1 accessible. Continuing in visual mode.\n");
+    }
 
     int touch_fd = -1;
     while (touch_fd < 0) {
@@ -416,8 +450,9 @@ int main(int argc, char **argv) {
     fcntl(touch_fd, F_SETFL, flags & ~O_NONBLOCK);
 
     struct input_event ev;
-    int cur_touch_x = 0, cur_touch_y = 0;
+    int cur_touch_x = -1, cur_touch_y = -1;
     int is_touching = 0;
+    int was_touching = 0;
     Key *active_key = NULL;
 
     struct pollfd pfd;
@@ -444,29 +479,37 @@ int main(int argc, char **argv) {
         }
 
         if (ev.type == EV_ABS) {
-            if (ev.code == ABS_MT_POSITION_X) {
+            if (ev.code == ABS_MT_POSITION_X || ev.code == ABS_X) {
                 // Front touch digitizer is 0-1920 -> scale to screen_w (960)
                 cur_touch_x = (ev.value * screen_w) / 1920;
-            } else if (ev.code == ABS_MT_POSITION_Y) {
+            } else if (ev.code == ABS_MT_POSITION_Y || ev.code == ABS_Y) {
                 // Front touch digitizer is 0-1080 -> scale to screen_h (544)
                 cur_touch_y = (ev.value * screen_h) / 1080;
+            } else if (ev.code == ABS_MT_TRACKING_ID) {
+                if (ev.value >= 0) {
+                    is_touching = 1;
+                } else {
+                    is_touching = 0;
+                }
             }
         } else if (ev.type == EV_KEY && ev.code == BTN_TOUCH) {
             is_touching = ev.value;
-            if (is_touching) {
+        } else if (ev.type == EV_SYN && ev.code == SYN_REPORT) {
+            // Frame completed: evaluate touch state transitions
+            if (is_touching && !was_touching) {
+                was_touching = 1;
                 last_redraw = now;
-                // If keyboard was hidden, tap near bottom unhides it
+
                 if (!keyboard_visible) {
                     if (cur_touch_y > screen_h - 60) {
                         keyboard_visible = 1;
                         draw_keyboard();
                     }
                     continue;
-                } else {
-                    draw_keyboard();
                 }
 
                 // Check key hit
+                active_key = NULL;
                 for (int i = 0; i < num_keys; i++) {
                     if (cur_touch_x >= keys[i].x && cur_touch_x < keys[i].x + keys[i].w &&
                         cur_touch_y >= keys[i].y && cur_touch_y < keys[i].y + keys[i].h) {
@@ -475,45 +518,52 @@ int main(int argc, char **argv) {
                         break;
                     }
                 }
-            } else if (active_key) {
-                // Release key
-                draw_key(active_key, 0);
+            } else if (!is_touching && was_touching) {
+                was_touching = 0;
+                if (active_key) {
+                    draw_key(active_key, 0);
 
-                if (active_key->keycode == -99) {
-                    // Hide key
-                    keyboard_visible = 0;
-                    // Blank keyboard area back to black
-                    draw_rect(0, screen_h - KB_HEIGHT, screen_w, KB_HEIGHT, 0x00000000);
-                    // Draw a small subtle "Show KB" tab at bottom right
-                    draw_rect(screen_w - 100, screen_h - 24, 100, 24, COLOR_SPECIAL);
-                    draw_string(screen_w - 85, screen_h - 20, "[Keyboard]", 0xFF11111B);
-                } else if (active_key->keycode == -98) {
-                    // Ctrl+C
-                    emit_key(uinput_fd, KEY_LEFTCTRL, 1);
-                    emit_key(uinput_fd, KEY_C, 1);
-                    emit_key(uinput_fd, KEY_C, 0);
-                    emit_key(uinput_fd, KEY_LEFTCTRL, 0);
-                } else if (active_key->keycode == KEY_LEFTSHIFT) {
-                    shift_active = !shift_active;
-                    draw_keyboard();
-                } else {
-                    if (shift_active) emit_key(uinput_fd, KEY_LEFTSHIFT, 1);
-                    emit_key(uinput_fd, active_key->keycode, 1);
-                    emit_key(uinput_fd, active_key->keycode, 0);
-                    if (shift_active) {
-                        emit_key(uinput_fd, KEY_LEFTSHIFT, 0);
-                        shift_active = 0;
+                    if (active_key->keycode == -99) {
+                        // Hide key
+                        keyboard_visible = 0;
+                        draw_rect(0, screen_h - KB_HEIGHT, screen_w, KB_HEIGHT, 0x00000000);
+                        draw_rect(screen_w - 100, screen_h - 24, 100, 24, COLOR_SPECIAL);
+                        draw_string(screen_w - 85, screen_h - 20, "[Keyboard]", 0xFF11111B);
+                    } else if (active_key->keycode == -98) {
+                        // Ctrl+C
+                        if (uinput_fd >= 0) {
+                            emit_key(uinput_fd, KEY_LEFTCTRL, 1);
+                            emit_key(uinput_fd, KEY_C, 1);
+                            emit_key(uinput_fd, KEY_C, 0);
+                            emit_key(uinput_fd, KEY_LEFTCTRL, 0);
+                        } else if (tty_fd >= 0) {
+                            char c = 0x03;
+                            ioctl(tty_fd, TIOCSTI, &c);
+                        }
+                    } else if (active_key->keycode == KEY_LEFTSHIFT) {
+                        shift_active = !shift_active;
                         draw_keyboard();
+                    } else {
+                        const char *lbl = shift_active ? active_key->shift_label : active_key->label;
+                        if (shift_active && uinput_fd >= 0) emit_key(uinput_fd, KEY_LEFTSHIFT, 1);
+                        emit_key_or_tty(uinput_fd, tty_fd, active_key->keycode, lbl, 1);
+                        emit_key_or_tty(uinput_fd, tty_fd, active_key->keycode, lbl, 0);
+                        if (shift_active) {
+                            if (uinput_fd >= 0) emit_key(uinput_fd, KEY_LEFTSHIFT, 0);
+                            shift_active = 0;
+                            draw_keyboard();
+                        }
                     }
+                    active_key = NULL;
                 }
-                active_key = NULL;
             }
         }
     }
 
     munmap(fb_mem, fb_size);
     close(fb_fd);
-    close(uinput_fd);
+    if (uinput_fd >= 0) close(uinput_fd);
+    if (tty_fd >= 0) close(tty_fd);
     close(touch_fd);
     return 0;
 }

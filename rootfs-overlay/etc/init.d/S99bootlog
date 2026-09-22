@@ -1,0 +1,97 @@
+#!/bin/sh
+# PlayStation Vita Boot Logger
+# Automatically captures dmesg, system diagnostics, and input logs to ux0:linux/boot.log
+
+case "$1" in
+start)
+    (
+        # Allow asynchronous kernel probes (SD card, Wi-Fi) to initialize
+        sleep 4
+
+        # Mount ur0 (Vita internal eMMC partition 12) if available
+        mkdir -p /mnt/ur0 /mnt/ux0
+        for ur_dev in /dev/vita/ur0 /dev/mmcblk0p12; do
+            if [ -b "$ur_dev" ]; then
+                mount -t exfat -o rw "$ur_dev" /mnt/ur0 2>/dev/null || \
+                mount -t vfat -o rw "$ur_dev" /mnt/ur0 2>/dev/null || \
+                mount "$ur_dev" /mnt/ur0 2>/dev/null || true
+                break
+            fi
+        done
+
+        # SD card device detection (SD2Vita / memory card appears as mmcblk1 or mmcblk2)
+        SD_DEV=""
+        for dev in /dev/mmcblk1p1 /dev/mmcblk1 /dev/mmcblk2p1 /dev/mmcblk2; do
+            if [ -b "$dev" ]; then
+                SD_DEV="$dev"
+                break
+            fi
+        done
+
+        if [ -n "$SD_DEV" ]; then
+            mount -t exfat -o rw "$SD_DEV" /mnt/ux0 2>/dev/null || \
+            mount -t vfat -o rw "$SD_DEV" /mnt/ux0 2>/dev/null || \
+            mount "$SD_DEV" /mnt/ux0 2>/dev/null || true
+        fi
+
+        # Loop for 35 seconds (7 iterations x 5s) to record late-boot events (Wi-Fi DHCP, SSH)
+        for iter in 1 2 3 4 5 6 7; do
+            LOG_TARGETS="/tmp/boot.log"
+
+            if mountpoint -q /mnt/ux0 2>/dev/null; then
+                mkdir -p /mnt/ux0/linux
+                LOG_TARGETS="${LOG_TARGETS} /mnt/ux0/linux/boot.log"
+            fi
+            if mountpoint -q /mnt/ur0 2>/dev/null; then
+                LOG_TARGETS="${LOG_TARGETS} /mnt/ur0/boot.log"
+            fi
+
+            for target in $LOG_TARGETS; do
+                {
+                    echo "========================================================"
+                    echo " PlayStation Vita Linux Boot Diagnostic Log"
+                    echo " Iteration: $iter / 7  |  Timestamp: $(date 2>/dev/null || echo 'N/A')"
+                    echo " Uptime: $(uptime 2>/dev/null || echo 'N/A')"
+                    echo "========================================================"
+                    echo ""
+                    echo "--- Kernel Messages (dmesg) ---"
+                    dmesg
+                    echo ""
+                    echo "--- Input Devices (/proc/bus/input/devices) ---"
+                    cat /proc/bus/input/devices 2>/dev/null || true
+                    echo ""
+                    echo "--- Storage Block Devices and Mounts ---"
+                    ls -l /dev/mmcblk* /dev/vita/* 2>/dev/null || true
+                    echo ""
+                    mount
+                    echo ""
+                    echo "--- Network Interfaces & IP Addresses ---"
+                    ip addr show 2>/dev/null || ifconfig 2>/dev/null || true
+                    echo ""
+                    echo "--- Running Processes ---"
+                    ps aux 2>/dev/null || ps 2>/dev/null || true
+                    echo ""
+                    echo "--- Input Mapper Log (/tmp/vita-input-mapper.log) ---"
+                    [ -f /tmp/vita-input-mapper.log ] && cat /tmp/vita-input-mapper.log
+                    echo ""
+                    echo "--- Framebuffer Keyboard Log (/tmp/fbkeyboard.log) ---"
+                    [ -f /tmp/fbkeyboard.log ] && cat /tmp/fbkeyboard.log
+                    echo ""
+                    echo "--- Wi-Fi Log (/tmp/wifi.log) ---"
+                    [ -f /tmp/wifi.log ] && cat /tmp/wifi.log
+                    echo ""
+                } > "$target" 2>/dev/null || true
+            done
+
+            sync
+            sleep 5
+        done
+        echo "[BootLog] Diagnostic snapshot successfully written to SD card."
+    ) &
+    ;;
+stop)
+    ;;
+*)
+    echo "Usage: $0 {start|stop}"
+    ;;
+esac

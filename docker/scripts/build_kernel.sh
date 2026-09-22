@@ -37,6 +37,8 @@ if [ -d "${PORT_DIR}" ]; then
     
     echo "Applying vita_defconfig..."
     make config CROSS_COMPILE="${CROSS_COMPILE}"
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_INPUT_MISC
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_INPUT_UINPUT
     
     echo "Compiling zImage and DTBs..."
     make build CROSS_COMPILE="${CROSS_COMPILE}"
@@ -60,6 +62,8 @@ else
     cd linux_vita
     cp "${ROOTFS_ZST}" ./rootfs.cpio.zst
     make ARCH=arm vita_defconfig
+    ./scripts/config --file .config --enable CONFIG_INPUT_MISC
+    ./scripts/config --file .config --enable CONFIG_INPUT_UINPUT
     make ARCH=arm CROSS_COMPILE="${CROSS_COMPILE}" -j"$(nproc)" zImage
     make ARCH=arm CROSS_COMPILE="${CROSS_COMPILE}" sony/vita1000.dtb sony/vita2000.dtb sony/pstv.dtb
     
