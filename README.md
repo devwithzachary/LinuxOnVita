@@ -5,11 +5,6 @@
 [![Architecture](https://img.shields.io/badge/Architecture-ARMv7--A%20(Cortex--A9)-green.svg)](https://developer.arm.com/Processors/Cortex-A9)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-<div align="center">
-  <a href="https://www.patreon.com/DevWithZachary"><img src="https://img.shields.io/badge/Patreon-Support%20the%20Project-F96854.svg?logo=patreon&logoColor=white" alt="Patreon" /></a>
-  <a href="https://buymeacoffee.com/linuxonandroid"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support%20Development-FFDD00.svg?logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee" /></a>
-</div>
-
 A complete distribution, automated build environment, and handheld userland for running **Linux 6.12** on hacked PlayStation Vita consoles ([HENlo](https://vita.hacks.guide/using-henlo) / HENkaku / Ensō 3.60 & 3.65).
 
 While the original upstream projects proved that modern Linux can boot on the PS Vita SoC, they functioned primarily as developer proof-of-concepts requiring specialized hardware (such as soldered UART debug cables). LinuxOnVita bridges the gap into a **fully standalone, interactive handheld Linux device** with out-of-the-box touch typing, physical gamepad navigation, automated Wi-Fi, battery monitoring, package management (`apk`), and native framebuffer gaming.
