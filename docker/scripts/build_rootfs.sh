@@ -65,9 +65,25 @@ if [ ! -d "vita-linux-port" ]; then
     git clone --depth 1 --shallow-submodules --recurse-submodules https://github.com/incognitojam/vita-linux-port.git
 else
     echo "vita-linux-port already exists. Updating submodules..."
-    cd vita-linux-port
-    git submodule update --init --recursive --depth 1
-    cd ..
+    cd "${PORT_DIR}"
+fi
+
+# Apply tracked repository patches to buildroot and vita-linux-port
+if [ -d "${BUILD_DIR}/patches/buildroot" ]; then
+    for p in "${BUILD_DIR}/patches/buildroot/"*.patch; do
+        if [ -f "$p" ] && git -C "${PORT_DIR}/buildroot" apply --check "$p" >/dev/null 2>&1; then
+            echo "Applying patch: $p"
+            git -C "${PORT_DIR}/buildroot" apply "$p" || true
+        fi
+    done
+fi
+if [ -d "${BUILD_DIR}/patches/vita-linux-port" ]; then
+    for p in "${BUILD_DIR}/patches/vita-linux-port/"*.patch; do
+        if [ -f "$p" ] && git -C "${PORT_DIR}" apply --check "$p" >/dev/null 2>&1; then
+            echo "Applying patch: $p"
+            git -C "${PORT_DIR}" apply "$p" || true
+        fi
+    done
 fi
 
 cd "${PORT_DIR}"

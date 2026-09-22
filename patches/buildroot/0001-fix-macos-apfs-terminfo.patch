@@ -1,0 +1,19 @@
+diff --git a/package/ncurses/ncurses.mk b/package/ncurses/ncurses.mk
+index 5e207750..a301b2ff 100644
+--- a/package/ncurses/ncurses.mk
++++ b/package/ncurses/ncurses.mk
+@@ -143,9 +143,13 @@ endif
+ 
+ define NCURSES_TARGET_CLEANUP_TERMINFO
+ 	$(RM) -rf $(TARGET_DIR)/usr/share/terminfo $(TARGET_DIR)/usr/share/tabset
++	for c in a b c d e f g h i j k l m n o p q r s t u v w x y z; do \
++		hex=$$(printf '%02x' "'$$c"); \
++		[ -d $(STAGING_DIR)/usr/share/terminfo/$$hex ] && ln -sfn $$hex $(STAGING_DIR)/usr/share/terminfo/$$c 2>/dev/null || true; \
++	done
+ 	$(foreach t,$(NCURSES_TERMINFO_FILES), \
+ 		$(INSTALL) -D -m 0644 $(STAGING_DIR)/usr/share/terminfo/$(t) \
+-			$(TARGET_DIR)/usr/share/terminfo/$(t)
++			$(TARGET_DIR)/usr/share/terminfo/$(t) || true; \
+ 	)
+ endef
+ NCURSES_POST_INSTALL_TARGET_HOOKS += NCURSES_TARGET_CLEANUP_TERMINFO

@@ -35,6 +35,22 @@ if [ -d "${PORT_DIR}" ]; then
     # Ensure rootfs.cpio.zst is in place
     cp "${ROOTFS_ZST}" "${PORT_DIR}/linux_vita/rootfs.cpio.zst"
     
+    # Apply tracked kernel defconfig if present in repository
+    if [ -f "${BUILD_DIR}/configs/kernel/vita_defconfig" ]; then
+        echo "Using tracked configs/kernel/vita_defconfig..."
+        cp "${BUILD_DIR}/configs/kernel/vita_defconfig" "${PORT_DIR}/linux_vita/arch/arm/configs/vita_defconfig"
+    fi
+
+    # Apply tracked kernel patches (DTS SD2Vita support, etc.)
+    if [ -d "${BUILD_DIR}/patches/kernel" ]; then
+        for p in "${BUILD_DIR}/patches/kernel/"*.patch; do
+            if [ -f "$p" ] && git -C "${PORT_DIR}/linux_vita" apply --check "$p" >/dev/null 2>&1; then
+                echo "Applying kernel patch: $p"
+                git -C "${PORT_DIR}/linux_vita" apply "$p" || true
+            fi
+        done
+    fi
+
     echo "Applying vita_defconfig..."
     make config CROSS_COMPILE="${CROSS_COMPILE}"
     "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_INPUT_MISC

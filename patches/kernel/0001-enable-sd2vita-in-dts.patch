@@ -1,0 +1,55 @@
+diff --git a/arch/arm/boot/dts/vita1000.dts b/arch/arm/boot/dts/vita1000.dts
+index ec05ab2a0..a473f61ad 100644
+--- a/arch/arm/boot/dts/vita1000.dts
++++ b/arch/arm/boot/dts/vita1000.dts
+@@ -32,14 +32,19 @@ &i2c0 {
+ 
+ /* I2C1 disabled — bus scan empty on PCH-1000 (no powered consumers) */
+ 
+-/* SDIF0 = eMMC, SDIF2 = WLAN/BT (SD8787 via SDIO) */
++/* SDIF0 = eMMC, SDIF1 = Game card / SD2Vita, SDIF2 = WLAN/BT, SDIF3 = Memory Card */
+ &sdif0 {
+ 	status = "okay";
+ };
+ 
+-/* SDIF1 (game card) and SDIF3 (microSD/SD2Vita) disabled --
+- * no cards present, and polling creates log spam */
++&sdif1 {
++	status = "okay";
++};
+ 
+ &sdif2 {
+ 	status = "okay";
+ };
++
++&sdif3 {
++	status = "okay";
++};
+diff --git a/arch/arm/boot/dts/vita2000.dts b/arch/arm/boot/dts/vita2000.dts
+index 04e833fc2..d03b741d9 100644
+--- a/arch/arm/boot/dts/vita2000.dts
++++ b/arch/arm/boot/dts/vita2000.dts
+@@ -25,3 +25,23 @@ framebuffer0: framebuffer@20000000 {
+ 		};
+ 	};
+ };
++
++&i2c0 {
++	status = "okay";
++};
++
++&sdif0 {
++	status = "okay";
++};
++
++&sdif1 {
++	status = "okay";
++};
++
++&sdif2 {
++	status = "okay";
++};
++
++&sdif3 {
++	status = "okay";
++};

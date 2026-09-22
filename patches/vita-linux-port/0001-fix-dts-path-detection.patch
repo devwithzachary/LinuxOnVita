@@ -1,0 +1,17 @@
+diff --git a/Makefile b/Makefile
+index 078b584..dd03703 100644
+--- a/Makefile
++++ b/Makefile
+@@ -37,7 +37,11 @@ endif
+ 
+ LOCAL_KERNEL_DIR := $(LINUX_VITA_DIR)
+ ZIMAGE           := $(LOCAL_KERNEL_DIR)/arch/arm/boot/zImage
+-DTS_PATH         := arch/arm/boot/dts/sony
++ifneq ($(wildcard $(LOCAL_KERNEL_DIR)/arch/arm/boot/dts/sony/vita1000.dts),)
++  DTS_PATH       := arch/arm/boot/dts/sony
++else
++  DTS_PATH       := arch/arm/boot/dts
++endif
+ DTS_DIR          := $(LOCAL_KERNEL_DIR)/$(DTS_PATH)
+ VITA_MODELS      := vita1000 vita2000 pstv
+ DTBS             := $(foreach m,$(VITA_MODELS),$(DTS_DIR)/$(m).dtb)
