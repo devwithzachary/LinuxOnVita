@@ -8,13 +8,19 @@ if [ -t 0 ]; then
 
     export PS1='\[\033[01;32m\]root@vita\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]# '
 
+    HN=$(hostname 2>/dev/null)
+    if [ -z "$HN" ] || [ "$HN" = "(none)" ]; then
+        hostname -F /etc/hostname 2>/dev/null || hostname vita 2>/dev/null || true
+        HN=$(hostname 2>/dev/null)
+    fi
+
     echo "  ========================================================"
     echo "   🎮 Welcome to PlayStation Vita Linux 6.12!             "
     echo "  ========================================================"
     echo ""
     echo "   * System:     ARMv7 Cortex-A9 Quad-Core (SMP active)   "
     echo "   * Kernel:     $(uname -r)                              "
-    echo "   * Hostname:   $(hostname)                              "
+    echo "   * Hostname:   $HN                                      "
 
     IP=$(ip -4 addr show mlan0 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2)
     [ -z "$IP" ] && IP=$(ip -4 addr show wlan0 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2)

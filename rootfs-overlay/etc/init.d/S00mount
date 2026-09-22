@@ -12,6 +12,13 @@ case "$1" in
         mount -t tmpfs tmpfs /run -o mode=0755,nosuid,nodev 2>/dev/null || true
         mount -t tmpfs tmpfs /tmp -o mode=1777 2>/dev/null || true
         mount -a 2>/dev/null || true
+
+        # Set system hostname
+        if [ -f /etc/hostname ]; then
+            hostname -F /etc/hostname 2>/dev/null || hostname "$(cat /etc/hostname 2>/dev/null)" 2>/dev/null || true
+        else
+            hostname vita 2>/dev/null || true
+        fi
         ;;
     stop)
         ;;

@@ -5,6 +5,7 @@
 ::sysinit:/bin/mount -t sysfs sysfs /sys
 ::sysinit:/bin/mount -t devpts devpts /dev/pts -o mode=0620,gid=5,ptmxmode=0666
 ::sysinit:/bin/chmod 666 /dev/ptmx
+::sysinit:/bin/hostname -F /etc/hostname
 ::sysinit:/bin/mount -a
 ::sysinit:/etc/init.d/rcS
 
