@@ -1,6 +1,7 @@
-FROM ubuntu:22.04
+FROM --platform=linux/amd64 ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV FORCE_UNSAFE_CONFIGURE=1
 
 # Install host compilation tools and dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -43,7 +44,8 @@ ENV VITASDK=/usr/local/vitasdk
 RUN git clone https://github.com/vitasdk/vdpm /tmp/vdpm && \
     cd /tmp/vdpm && \
     ./bootstrap-vitasdk.sh --install-dir /usr/local/vitasdk && \
-    rm -rf /tmp/vdpm
+    rm -rf /tmp/vdpm && \
+    yes | /usr/local/vitasdk/bin/vdpm taihen
 
 # Set environment PATH
 ENV PATH="${TOOLCHAIN_DIR}/bin:${VITASDK}/bin:${PATH}"

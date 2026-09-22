@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Bypass GNU tar / autotools root user check when compiling in Docker
+export FORCE_UNSAFE_CONFIGURE=1
+
 echo "=== Building RootFS for PS Vita Linux 6.12 ==="
 
 BUILD_DIR="/build"
@@ -103,7 +106,7 @@ make rootfs
 # 6. Copy output rootfs.cpio.zst
 if [ -f "${PORT_DIR}/linux_vita/rootfs.cpio.zst" ]; then
     cp "${PORT_DIR}/linux_vita/rootfs.cpio.zst" "${OUTPUT_DIR}/rootfs.cpio.zst"
-    echo "=== RootFS build completed successfully: ${OUTPUT_DIR}/rootfs.cpio.zst ($ (du -h "${OUTPUT_DIR}/rootfs.cpio.zst" | cut -f1)) ==="
+    echo "=== RootFS build completed successfully: ${OUTPUT_DIR}/rootfs.cpio.zst ($(du -h "${OUTPUT_DIR}/rootfs.cpio.zst" | cut -f1)) ==="
 elif [ -f "${PORT_DIR}/buildroot/output/images/rootfs.cpio.zst" ]; then
     cp "${PORT_DIR}/buildroot/output/images/rootfs.cpio.zst" "${OUTPUT_DIR}/rootfs.cpio.zst"
     echo "=== RootFS build completed successfully: ${OUTPUT_DIR}/rootfs.cpio.zst ==="

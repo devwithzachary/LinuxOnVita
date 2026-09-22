@@ -29,7 +29,7 @@ fi
 
 build_docker_image() {
     echo "=== Building Docker image: ${IMAGE_NAME} ==="
-    docker build -t "${IMAGE_NAME}" -f "${ROOT_DIR}/docker/Dockerfile" "${ROOT_DIR}"
+    docker build --platform linux/amd64 -t "${IMAGE_NAME}" -f "${ROOT_DIR}/docker/Dockerfile" "${ROOT_DIR}"
 }
 
 ensure_image() {
@@ -45,7 +45,7 @@ run_in_docker() {
     if [ -t 0 ] && [ -t 1 ]; then
         tty_flags="-it"
     fi
-    docker run --rm ${tty_flags} \
+    docker run --rm --platform linux/amd64 ${tty_flags} \
         -v "${ROOT_DIR}:/build" \
         -w /build \
         "${IMAGE_NAME}" \

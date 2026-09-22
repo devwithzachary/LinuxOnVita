@@ -42,11 +42,15 @@ if [ -d "${PORT_DIR}" ]; then
     make build CROSS_COMPILE="${CROSS_COMPILE}"
     
     echo "Copying compiled kernel and DTBs to ${LINUX_OUT}..."
+    DTB_DIR="linux_vita/arch/arm/boot/dts"
+    if [ -f "linux_vita/arch/arm/boot/dts/sony/vita1000.dtb" ]; then
+        DTB_DIR="linux_vita/arch/arm/boot/dts/sony"
+    fi
     cp linux_vita/arch/arm/boot/zImage "${LINUX_OUT}/zImage"
-    cp linux_vita/arch/arm/boot/dts/sony/vita1000.dtb "${LINUX_OUT}/vita1000.dtb"
-    cp linux_vita/arch/arm/boot/dts/sony/vita2000.dtb "${LINUX_OUT}/vita2000.dtb"
-    cp linux_vita/arch/arm/boot/dts/sony/pstv.dtb "${LINUX_OUT}/pstv.dtb"
-    cp linux_vita/arch/arm/boot/dts/sony/vita1000.dtb "${LINUX_OUT}/vita.dtb"
+    cp "${DTB_DIR}/vita1000.dtb" "${LINUX_OUT}/vita1000.dtb"
+    cp "${DTB_DIR}/vita2000.dtb" "${LINUX_OUT}/vita2000.dtb"
+    cp "${DTB_DIR}/pstv.dtb" "${LINUX_OUT}/pstv.dtb"
+    cp "${DTB_DIR}/vita1000.dtb" "${LINUX_OUT}/vita.dtb"
 else
     echo "Building standalone kernel from linux_vita..."
     cd "${SRC_DIR}"

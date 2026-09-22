@@ -41,6 +41,7 @@ rootfs-overlay/usr/bin/vita-input-mapper
 
 # Sensitive local configurations
 configs/wifi.conf
+rootfs-overlay/etc/wpa_supplicant.conf
 
 # Object files & dependency lists
 *.o

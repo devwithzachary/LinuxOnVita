@@ -16,6 +16,12 @@ export PATH="${VITASDK}/bin:${PATH}"
 
 cd "${SRC_DIR}"
 
+# Ensure taihen headers and library are installed
+if [ ! -f "${VITASDK}/arm-vita-eabi/include/taihen.h" ]; then
+    echo "Installing taihen via vdpm..."
+    echo "y" | vdpm taihen
+fi
+
 # 1. Build vita-baremetal-loader (Kernel plugin)
 echo "[1/4] Building vita-baremetal-loader..."
 if [ ! -d "vita-baremetal-loader" ]; then
@@ -23,9 +29,10 @@ if [ ! -d "vita-baremetal-loader" ]; then
 fi
 cd vita-baremetal-loader
 make clean || true
-make
-if [ -f "baremetal-loader_363_or_newer.skprx" ]; then
-    cp baremetal-loader_363_or_newer.skprx "${LINUX_OUT}/baremetal-loader.skprx"
+make CFLAGS="-std=gnu17 -Wl,-q -Wall -O0 -nostartfiles -mcpu=cortex-a9 -mthumb-interwork"
+if [ -f "baremetal-loader_363.skprx" ]; then
+    cp baremetal-loader_363.skprx "${LINUX_OUT}/baremetal-loader.skprx"
+    cp baremetal-loader.skprx "${LINUX_OUT}/baremetal-loader_360.skprx" 2>/dev/null || true
 elif [ -f "baremetal-loader.skprx" ]; then
     cp baremetal-loader.skprx "${LINUX_OUT}/baremetal-loader.skprx"
 fi
@@ -48,7 +55,7 @@ if [ ! -d "vita-baremetal-linux-loader" ]; then
 fi
 cd vita-baremetal-linux-loader
 make clean || true
-make
+make CFLAGS="-std=gnu17 -Iinclude -IFatFs -mcpu=cortex-a9 -mthumb-interwork -O0 -g3 -Wall -Wno-unused-const-variable -ffreestanding"
 cp vita-baremetal-linux-loader.bin "${LINUX_OUT}/payload.bin"
 cd "${SRC_DIR}"
 
