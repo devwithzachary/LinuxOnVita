@@ -1,64 +1,225 @@
 #!/bin/sh
 # alpine-chroot: Launch an interactive Alpine Linux environment with apk package manager.
+# Supports persistent ext4 loopback images on SD2Vita / Memory Card (ux0) or internal storage (ur0).
 
 TARBALL="/usr/share/alpine/alpine-minirootfs-armv7.tar.gz"
+DEFAULT_SIZE_MB=1024
+CUSTOM_SIZE_MB=""
+CUSTOM_DIR=""
+CUSTOM_FILE=""
+USE_RAM=0
+DO_RECREATE=0
+MOUNT_POINT="/mnt/alpine"
+
+show_usage() {
+    cat << 'EOF'
+Usage: alpine-chroot [OPTIONS]
+
+Launch an interactive Alpine Linux environment with 'apk' package manager.
+By default, stores a persistent 1GB ext4 image on your SD card or memory card (ux0).
+
+Options:
+  -s, --size <MB|GB>   Image size when creating (default: 1024 MB / 1 GB, e.g. 2048 or 2G)
+  -d, --dir <PATH>     Directory to store alpine.img (default: /mnt/ux0)
+  -f, --file <PATH>    Exact custom path for the alpine image file
+  --ram                Run entirely in volatile RAM (tmpfs at /tmp/alpine, no image file)
+  --recreate           Delete existing image and create a fresh one from scratch
+  --status             Show current Alpine chroot mount status and disk usage
+  -h, --help           Show this help message
+
+Examples:
+  alpine-chroot                       # Default: persistent 1GB on SD card (/mnt/ux0)
+  alpine-chroot --size 2G             # Create 2GB persistent Alpine image on SD card
+  alpine-chroot --size 4096           # Create 4GB persistent Alpine image on SD card
+  alpine-chroot --dir /mnt/ur0        # Save alpine.img on internal storage (ur0)
+  alpine-chroot --ram                 # Launch temporary in-memory session
+EOF
+    exit 0
+}
+
+# Ensure storage partitions are mounted
+ensure_storage_mounted() {
+    mkdir -p /mnt/ur0 /mnt/ux0 "${MOUNT_POINT}" /tmp/alpine
+
+    # Mount ux0 (Game card slot / SD2Vita or Sony memory card)
+    if ! mountpoint -q /mnt/ux0 2>/dev/null; then
+        for dev in /dev/mmcblk1p1 /dev/mmcblk1 /dev/mmcblk2p1 /dev/mmcblk2; do
+            if [ -b "$dev" ]; then
+                mount -t exfat -o rw "$dev" /mnt/ux0 2>/dev/null || \
+                mount -t vfat -o rw "$dev" /mnt/ux0 2>/dev/null || \
+                mount "$dev" /mnt/ux0 2>/dev/null || true
+                break
+            fi
+        done
+    fi
+
+    # Mount ur0 (Vita internal eMMC)
+    if ! mountpoint -q /mnt/ur0 2>/dev/null; then
+        for dev in /dev/vita/ur0 /dev/mmcblk0p12; do
+            if [ -b "$dev" ]; then
+                mount -t exfat -o rw "$dev" /mnt/ur0 2>/dev/null || \
+                mount -t vfat -o rw "$dev" /mnt/ur0 2>/dev/null || \
+                mount "$dev" /mnt/ur0 2>/dev/null || true
+                break
+            fi
+        done
+    fi
+}
+
+show_status() {
+    ensure_storage_mounted
+    echo "=== Alpine Linux Chroot Status ==="
+    if mountpoint -q "${MOUNT_POINT}" 2>/dev/null; then
+        echo "Active mount: ${MOUNT_POINT} (mounted)"
+        df -h "${MOUNT_POINT}" 2>/dev/null
+    else
+        echo "Active mount: ${MOUNT_POINT} (not mounted)"
+    fi
+    echo ""
+    echo "Available Storage:"
+    df -h /mnt/ux0 /mnt/ur0 /tmp 2>/dev/null
+    exit 0
+}
+
+# Parse command-line arguments
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h|--help)
+            show_usage
+            ;;
+        --status)
+            show_status
+            ;;
+        --ram)
+            USE_RAM=1
+            shift
+            ;;
+        --recreate)
+            DO_RECREATE=1
+            shift
+            ;;
+        -s|--size)
+            [ -z "${2:-}" ] && { echo "Error: --size requires a size (e.g. 2048 or 2G)"; exit 1; }
+            CUSTOM_SIZE_MB="$2"
+            shift 2
+            ;;
+        -d|--dir)
+            [ -z "${2:-}" ] && { echo "Error: --dir requires a directory path"; exit 1; }
+            CUSTOM_DIR="$2"
+            shift 2
+            ;;
+        -f|--file)
+            [ -z "${2:-}" ] && { echo "Error: --file requires a file path"; exit 1; }
+            CUSTOM_FILE="$2"
+            shift 2
+            ;;
+        *)
+            echo "Unknown option: $1 (run 'alpine-chroot --help' for options)"
+            exit 1
+            ;;
+    esac
+done
 
 if [ ! -f "${TARBALL}" ]; then
-    echo "Error: ${TARBALL} not found."
+    echo "Error: Alpine mini-rootfs tarball not found at ${TARBALL}!"
     exit 1
 fi
 
-# Detect storage for persistent Alpine installation
-PERSISTENT_DIR=""
-if mountpoint -q /mnt/ux0 2>/dev/null; then
-    PERSISTENT_DIR="/mnt/ux0"
-elif mountpoint -q /mnt/ur0 2>/dev/null; then
-    PERSISTENT_DIR="/mnt/ur0"
-fi
+ensure_storage_mounted
 
-USE_RAM=0
-if [ "$1" = "--ram" ] || [ -z "$PERSISTENT_DIR" ]; then
-    USE_RAM=1
-fi
-
+# Handle RAM mode
 if [ $USE_RAM -eq 1 ]; then
     TARGET="/tmp/alpine"
-    echo "=== Running Alpine Linux in RAM (tmpfs) ==="
+    echo "=== Running Alpine Linux in volatile RAM (tmpfs) ==="
 else
-    IMG_FILE="${PERSISTENT_DIR}/alpine.img"
-    TARGET="/mnt/alpine"
+    # Determine target image file
+    if [ -n "${CUSTOM_FILE}" ]; then
+        IMG_FILE="${CUSTOM_FILE}"
+    elif [ -n "${CUSTOM_DIR}" ]; then
+        IMG_FILE="${CUSTOM_DIR}/alpine.img"
+    elif mountpoint -q /mnt/ux0 2>/dev/null; then
+        # Primary default: SD card / Memory Card (ux0)
+        IMG_FILE="/mnt/ux0/alpine.img"
+    elif mountpoint -q /mnt/ur0 2>/dev/null; then
+        # Secondary fallback: Internal eMMC (ur0)
+        IMG_FILE="/mnt/ur0/alpine.img"
+    else
+        echo "Notice: Neither /mnt/ux0 nor /mnt/ur0 storage detected. Falling back to RAM mode."
+        USE_RAM=1
+        TARGET="/tmp/alpine"
+    fi
+fi
+
+if [ $USE_RAM -eq 0 ]; then
+    TARGET="${MOUNT_POINT}"
     mkdir -p "${TARGET}"
 
+    # Parse and convert size argument (supports 2G / 2g or direct MB integer)
+    SIZE_MB=${CUSTOM_SIZE_MB:-$DEFAULT_SIZE_MB}
+    case "${SIZE_MB}" in
+        *G|*g)
+            NUM=$(echo "${SIZE_MB}" | tr -d 'Gg')
+            SIZE_MB=$((NUM * 1024))
+            ;;
+        *M|*m)
+            SIZE_MB=$(echo "${SIZE_MB}" | tr -d 'Mm')
+            ;;
+    esac
+
+    # Handle recreation request
+    if [ $DO_RECREATE -eq 1 ] && [ -f "${IMG_FILE}" ]; then
+        echo "Removing existing ${IMG_FILE} as requested..."
+        umount "${TARGET}" 2>/dev/null || true
+        rm -f "${IMG_FILE}"
+    fi
+
+    # Create and format image if it does not exist
     if [ ! -f "${IMG_FILE}" ]; then
-        echo "=== Creating Persistent Alpine Linux ext4 image (500MB) on ${PERSISTENT_DIR} ==="
-        echo "Allocating 500MB at ${IMG_FILE}..."
-        dd if=/dev/zero of="${IMG_FILE}" bs=1M count=500 2>/dev/null || {
-            echo "Warning: Not enough storage on ${PERSISTENT_DIR}. Falling back to RAM mode."
-            TARGET="/tmp/alpine"
+        IMG_DIR=$(dirname "${IMG_FILE}")
+        mkdir -p "${IMG_DIR}"
+
+        echo "========================================================="
+        echo " Creating Persistent Alpine Linux ext4 Image             "
+        echo "========================================================="
+        echo " Target Path: ${IMG_FILE}"
+        echo " Image Size:  ${SIZE_MB} MB ($((SIZE_MB / 1024)) GB)"
+        echo " Allocating space (please wait)..."
+
+        dd if=/dev/zero of="${IMG_FILE}" bs=1M count="${SIZE_MB}" 2>/dev/null || {
+            echo "Error: Failed to allocate ${SIZE_MB}MB on ${IMG_DIR}!"
+            echo "Falling back to temporary RAM mode (/tmp/alpine)..."
             USE_RAM=1
+            TARGET="/tmp/alpine"
         }
+
         if [ $USE_RAM -eq 0 ]; then
-            echo "Formatting ext4 filesystem..."
-            mke2fs -F "${IMG_FILE}" >/dev/null 2>&1 || true
+            echo " Formatting ext4 filesystem..."
+            mke2fs -F "${IMG_FILE}" >/dev/null 2>&1 || {
+                echo "Warning: mke2fs returned non-zero. Attempting mount..."
+            }
+            echo " Persistent ext4 image created successfully!"
+            echo ""
         fi
     fi
 
+    # Mount loopback image if not already mounted
     if [ $USE_RAM -eq 0 ]; then
-        if ! mountpoint -q "${TARGET}"; then
+        if ! mountpoint -q "${TARGET}" 2>/dev/null; then
+            echo "Mounting ${IMG_FILE} to ${TARGET}..."
             mount -o loop "${IMG_FILE}" "${TARGET}" 2>/dev/null || {
-                echo "Warning: Loop mount failed. Falling back to RAM mode."
-                TARGET="/tmp/alpine"
+                echo "Error: Failed to mount ${IMG_FILE} via loopback. Falling back to RAM mode."
                 USE_RAM=1
+                TARGET="/tmp/alpine"
             }
         fi
     fi
 fi
 
-# Extract rootfs if not already present
+# Extract Alpine rootfs if not already present
 if [ ! -f "${TARGET}/bin/sh" ]; then
     echo "=== Initializing Alpine Linux rootfs in ${TARGET} ==="
     mkdir -p "${TARGET}"
-    echo "Extracting Alpine mini-rootfs (using zcat)..."
+    echo "Extracting Alpine ARMv7 mini-rootfs (using zcat)..."
     zcat "${TARBALL}" | tar -x -C "${TARGET}"
 
     # Set up DNS resolv.conf
@@ -76,12 +237,13 @@ http://dl-cdn.alpinelinux.org/alpine/v3.20/community
 EOF
 
     echo "Alpine Linux rootfs initialized successfully."
+    echo ""
 fi
 
-# Sync current DNS into chroot
+# Always sync active host DNS into chroot
 [ -f /etc/resolv.conf ] && cp /etc/resolv.conf "${TARGET}/etc/resolv.conf" 2>/dev/null || true
 
-# Ensure all mount point directories exist before mounting
+# Ensure mountpoint subdirectories exist
 mkdir -p "${TARGET}/proc" "${TARGET}/sys" "${TARGET}/dev" "${TARGET}/dev/pts" "${TARGET}/dev/shm"
 
 # Bind system pseudo-filesystems
@@ -91,14 +253,23 @@ mountpoint -q "${TARGET}/dev"  || mount --bind /dev "${TARGET}/dev"
 mountpoint -q "${TARGET}/dev/pts" || mount -t devpts devpts "${TARGET}/dev/pts" -o mode=0620,gid=5,ptmxmode=0666 2>/dev/null || true
 mountpoint -q "${TARGET}/dev/shm" || mount -t tmpfs tmpfs "${TARGET}/dev/shm" -o mode=1777 2>/dev/null || true
 
-echo "Entering Alpine Linux userland (type 'exit' to return)..."
-echo "Try running: apk update && apk add fastfetch htop python3"
+echo "========================================================="
+echo " 🏔️  Welcome to Alpine Linux Userland (chroot)           "
+echo "========================================================="
+if [ $USE_RAM -eq 1 ]; then
+    echo " Mode:     Volatile RAM (changes lost on reboot)"
+else
+    echo " Storage:  ${IMG_FILE}"
+fi
+echo " Commands: Type 'apk update && apk add <pkg>' to install"
+echo " Exit:     Type 'exit' to return to Vita host shell"
+echo "========================================================="
 echo ""
 
-# Enter chroot
+# Execute login shell inside Alpine chroot
 chroot "${TARGET}" /bin/sh -l
 
-# Cleanup bind mounts on exit
+# Clean up bind mounts on exit
 umount "${TARGET}/dev/shm" 2>/dev/null || true
 umount "${TARGET}/dev/pts" 2>/dev/null || true
 umount "${TARGET}/dev" 2>/dev/null || true
