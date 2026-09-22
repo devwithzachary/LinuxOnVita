@@ -1,4 +1,4 @@
-# LinuxOnVita — Complete Handheld Linux Toolkit for PS Vita
+# LinuxOnVita - Complete Handheld Linux Toolkit for PS Vita
 
 [![PS Vita](https://img.shields.io/badge/Platform-PlayStation%20Vita-blue.svg)](https://en.wikipedia.org/wiki/PlayStation_Vita)
 [![Kernel](https://img.shields.io/badge/Kernel-Linux%206.12-orange.svg)](https://kernel.org)
