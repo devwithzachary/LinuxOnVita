@@ -1,0 +1,7 @@
+# Vita Linux OpenSSH Server Configuration
+PermitRootLogin yes
+PermitEmptyPasswords yes
+PasswordAuthentication yes
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+Subsystem sftp /usr/libexec/sftp-server

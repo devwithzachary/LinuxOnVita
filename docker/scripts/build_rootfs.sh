@@ -38,6 +38,17 @@ if [ ! -f "${FIRMWARE_BIN}" ]; then
         https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/mrvl/sd8787_uapsta.bin
 fi
 
+# Ensure wireless regulatory database is present
+REG_DB="${ROOTFS_OVERLAY}/lib/firmware/regulatory.db"
+if [ ! -f "${REG_DB}" ]; then
+    echo "Downloading wireless regulatory database (wireless-regdb)..."
+    mkdir -p "${ROOTFS_OVERLAY}/lib/firmware"
+    curl -fsSL -o "${REG_DB}" \
+        https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git/plain/regulatory.db
+    curl -fsSL -o "${REG_DB}.p7s" \
+        https://git.kernel.org/pub/scm/linux/kernel/git/sforshee/wireless-regdb.git/plain/regulatory.db.p7s
+fi
+
 # Ensure Alpine Linux mini-rootfs is present in overlay
 ALPINE_TAR="${ROOTFS_OVERLAY}/usr/share/alpine/alpine-minirootfs-armv7.tar.gz"
 if [ ! -f "${ALPINE_TAR}" ]; then

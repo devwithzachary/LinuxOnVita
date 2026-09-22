@@ -38,10 +38,12 @@ tools/fbkeyboard/fbkeyboard
 tools/vita-input-mapper/vita-input-mapper
 rootfs-overlay/usr/bin/fbkeyboard
 rootfs-overlay/usr/bin/vita-input-mapper
+rootfs-overlay/lib/
 
 # Sensitive local configurations
 configs/wifi.conf
 rootfs-overlay/etc/wpa_supplicant.conf
+rootfs-overlay/root/.ssh/
 
 # Object files & dependency lists
 *.o

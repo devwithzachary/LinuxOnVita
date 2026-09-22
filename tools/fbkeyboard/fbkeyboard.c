@@ -16,6 +16,8 @@
 #include <linux/input.h>
 #include <linux/uinput.h>
 #include <stdint.h>
+#include <poll.h>
+#include <time.h>
 
 #define FB_DEV "/dev/fb0"
 #define KB_HEIGHT 220
@@ -418,7 +420,29 @@ int main(int argc, char **argv) {
     int is_touching = 0;
     Key *active_key = NULL;
 
-    while (read(touch_fd, &ev, sizeof(ev)) > 0) {
+    struct pollfd pfd;
+    pfd.fd = touch_fd;
+    pfd.events = POLLIN;
+
+    time_t last_redraw = time(NULL);
+
+    while (1) {
+        int poll_res = poll(&pfd, 1, 1000);
+        time_t now = time(NULL);
+
+        if (keyboard_visible && (now - last_redraw >= 2)) {
+            draw_keyboard();
+            last_redraw = now;
+        }
+
+        if (poll_res <= 0) {
+            continue;
+        }
+
+        if (read(touch_fd, &ev, sizeof(ev)) <= 0) {
+            break;
+        }
+
         if (ev.type == EV_ABS) {
             if (ev.code == ABS_MT_POSITION_X) {
                 // Front touch digitizer is 0-1920 -> scale to screen_w (960)
@@ -430,6 +454,7 @@ int main(int argc, char **argv) {
         } else if (ev.type == EV_KEY && ev.code == BTN_TOUCH) {
             is_touching = ev.value;
             if (is_touching) {
+                last_redraw = now;
                 // If keyboard was hidden, tap near bottom unhides it
                 if (!keyboard_visible) {
                     if (cur_touch_y > screen_h - 60) {
@@ -437,6 +462,8 @@ int main(int argc, char **argv) {
                         draw_keyboard();
                     }
                     continue;
+                } else {
+                    draw_keyboard();
                 }
 
                 // Check key hit
