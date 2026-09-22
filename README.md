@@ -2,7 +2,7 @@
 
 [![PS Vita](https://img.shields.io/badge/Platform-PlayStation%20Vita-blue.svg)](https://en.wikipedia.org/wiki/PlayStation_Vita)
 [![Architecture](https://img.shields.io/badge/Architecture-ARMv7--A%20(Cortex--A9)-green.svg)](https://developer.arm.com/Processors/Cortex-A9)
-[![License](https://img.shields.io/badge/License-GPL%20v2%20%2F%20MIT-orange.svg)](#credits--upstream-sources)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A complete toolkit, automated downloader, and containerized Docker build environment for compiling and running Linux on hacked PlayStation Vita consoles ([HENlo](https://vita.hacks.guide/using-henlo) / HENkaku / Ensō).
 
@@ -23,6 +23,7 @@ This repository bridges the gap between [xerpi's](https://github.com/xerpi) foun
   - [Customizing the RootFS Overlay](#customizing-the-rootfs-overlay)
 - [6. Troubleshooting](#6-troubleshooting)
 - [7. Credits & Upstream Sources](#7-credits--upstream-sources)
+- [8. License](#8-license)
 
 ---
 
@@ -189,3 +190,14 @@ This toolkit builds upon the work of the PS Vita homebrew and reverse engineerin
 - **[VitaSDK](https://vitasdk.org/)** - Open-source PlayStation Vita software development kit
 - **[Bootlin](https://toolchains.bootlin.com/)** - Precompiled ARMv7 cross-compilation toolchains
 - **[postmarketOS](https://wiki.postmarketos.org/wiki/Sony_PlayStation_Vita_(sony-psvita))** - PlayStation Vita device documentation
+
+---
+
+## 8. License
+
+This project and its build scripts are licensed under the [MIT License](LICENSE).
+
+Upstream projects and source repositories retain their respective licenses:
+- **Linux Kernel:** GNU General Public License v2.0 ([GPL-2.0](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html))
+- **Buildroot:** GNU General Public License v2.0 ([GPL-2.0](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html))
+- **VitaSDK & taiHEN:** MIT / BSD / GPL (see respective repositories)
