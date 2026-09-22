@@ -22,9 +22,24 @@ start)
 
         if [ -n "$IFACE" ]; then
             echo "[WiFi] $IFACE interface detected. Starting association..."
-            if [ -f /etc/wpa_supplicant.conf ]; then
+
+            # Priority 1: user-supplied config on SD card (supports pre-built release installs)
+            # Priority 2: credentials baked into the initramfs at build time
+            WPA_CONF=""
+            for candidate in \
+                /mnt/ux0/linux/wpa_supplicant.conf \
+                /mnt/ux0/wpa_supplicant.conf \
+                /etc/wpa_supplicant.conf; do
+                if [ -f "$candidate" ]; then
+                    WPA_CONF="$candidate"
+                    break
+                fi
+            done
+
+            if [ -n "$WPA_CONF" ]; then
+                echo "[WiFi] Using config: $WPA_CONF"
                 # Defensive check: remove any ctrl_interface lines that cause wpa_supplicant to exit
-                sed -i '/^ctrl_interface/d' /etc/wpa_supplicant.conf 2>/dev/null || true
+                sed -i '/^ctrl_interface/d' "${WPA_CONF}" 2>/dev/null || true
 
                 # Kill any previous/stale instances
                 killall wpa_supplicant 2>/dev/null || true
@@ -32,8 +47,8 @@ start)
 
                 ip link set "$IFACE" up 2>/dev/null || true
 
-                echo "[WiFi] Launching wpa_supplicant on $IFACE..."
-                wpa_supplicant -B -i "$IFACE" -c /etc/wpa_supplicant.conf
+                echo "[WiFi] Launching wpa_supplicant on $IFACE using $WPA_CONF..."
+                wpa_supplicant -B -i "$IFACE" -c "${WPA_CONF}"
 
                 # Wait up to 15s for 802.11 association (carrier state)
                 echo "[WiFi] Waiting for $IFACE association..."
@@ -76,7 +91,9 @@ start)
                     echo "[WiFi] $IFACE associated. Waiting for background DHCP..."
                 fi
             else
-                echo "[WiFi] /etc/wpa_supplicant.conf missing. Please configure Wi-Fi."
+                echo "[WiFi] No wpa_supplicant.conf found. Wi-Fi not configured."
+                echo "[WiFi] For pre-built releases: add wpa_supplicant.conf to ux0:linux/ on your memory card."
+                echo "[WiFi] For builds from source: add credentials to configs/wifi.conf before building."
             fi
         else
             echo "[WiFi] Wireless interface not detected after ${TIMEOUT}s."
