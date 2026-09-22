@@ -1,0 +1,35 @@
+#!/bin/sh
+# Start input drivers & on-screen keyboard daemons
+
+case "$1" in
+start)
+    echo "Starting PS Vita input daemons..."
+    # Set console loglevel to emergency only so driver messages don't print onto screen
+    dmesg -n 1 2>/dev/null || true
+    echo "1 4 1 7" > /proc/sys/kernel/printk 2>/dev/null || true
+
+    # Restrict console scrolling on tty1 to lines 1-21 so text never scrolls into keyboard
+    printf '\033[1;21r\033[1;1H' > /dev/tty1 2>/dev/null || true
+
+    # Ensure uinput module is loaded or dev node exists
+    [ -e /dev/uinput ] || mknod /dev/uinput c 10 223 2>/dev/null || true
+
+    if [ -x /usr/bin/vita-input-mapper ]; then
+        /usr/bin/vita-input-mapper > /dev/null 2>&1 &
+        echo "vita-input-mapper started."
+    fi
+
+    if [ -x /usr/bin/fbkeyboard ]; then
+        /usr/bin/fbkeyboard > /dev/null 2>&1 &
+        echo "fbkeyboard started."
+    fi
+    ;;
+stop)
+    killall fbkeyboard 2>/dev/null
+    killall vita-input-mapper 2>/dev/null
+    echo "Input daemons stopped."
+    ;;
+*)
+    echo "Usage: $0 {start|stop}"
+    ;;
+esac

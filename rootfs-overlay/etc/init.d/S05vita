@@ -1,0 +1,27 @@
+#!/bin/sh
+# Create stable /dev/vita/ symlinks for eMMC partitions.
+# The SCE partition parser creates 12 partitions — find the mmcblk with p12.
+
+case "$1" in
+start)
+    EMMC=""
+    for dev in /dev/mmcblk[0-9]; do
+        [ -b "${dev}p12" ] && EMMC=$dev && break
+    done
+    [ -z "$EMMC" ] && exit 0
+
+    mkdir -p /dev/vita
+    ln -sf ${EMMC}p1  /dev/vita/idstorage
+    ln -sf ${EMMC}p2  /dev/vita/slb2-backup
+    ln -sf ${EMMC}p3  /dev/vita/slb2
+    ln -sf ${EMMC}p4  /dev/vita/os0-backup
+    ln -sf ${EMMC}p5  /dev/vita/os0
+    ln -sf ${EMMC}p6  /dev/vita/sa0
+    ln -sf ${EMMC}p7  /dev/vita/tm0
+    ln -sf ${EMMC}p8  /dev/vita/vs0
+    ln -sf ${EMMC}p9  /dev/vita/vd0
+    ln -sf ${EMMC}p10 /dev/vita/ud0
+    ln -sf ${EMMC}p11 /dev/vita/pd0
+    ln -sf ${EMMC}p12 /dev/vita/ur0
+    ;;
+esac

@@ -1,0 +1,75 @@
+#!/bin/sh
+# Wait for mlan0 or wlan0 (mwifiex SDIO async probe) and bring up Wi-Fi networking.
+# Runs in background so it does not block early console boot.
+
+TIMEOUT=60
+
+case "$1" in
+start)
+    (
+        i=0
+        IFACE=""
+        while [ $i -lt $TIMEOUT ]; do
+            for candidate in mlan0 wlan0; do
+                if [ -d "/sys/class/net/$candidate" ]; then
+                    IFACE="$candidate"
+                    break 2
+                fi
+            done
+            sleep 1
+            i=$((i + 1))
+        done
+
+        if [ -n "$IFACE" ]; then
+            echo "[WiFi] $IFACE interface detected. Starting association..."
+            if [ -f /etc/wpa_supplicant.conf ]; then
+                ip link set "$IFACE" up 2>/dev/null || true
+                /sbin/ifup "$IFACE" 2>/dev/null || {
+                    wpa_supplicant -B -i "$IFACE" -c /etc/wpa_supplicant.conf 2>/dev/null || true
+                    udhcpc -i "$IFACE" -b -R 2>/dev/null || true
+                }
+
+                # Wait for DHCP lease
+                j=0
+                IP=""
+                while [ $j -lt 15 ]; do
+                    IP=$(ip -4 addr show "$IFACE" 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2)
+                    [ -n "$IP" ] && break
+                    sleep 1
+                    j=$((j + 1))
+                done
+
+                if [ -n "$IP" ]; then
+                    echo "=================================================="
+                    echo "  Wi-Fi Connected! IP Address: $IP"
+                    echo "  SSH Ready: ssh root@$IP"
+                    echo "=================================================="
+                    logger -t wifi "$IFACE connected with IP $IP"
+                    # Ensure SSH daemon is active on the new interface
+                    /etc/init.d/S50sshd restart 2>/dev/null || /usr/sbin/sshd 2>/dev/null || true
+                else
+                    echo "[WiFi] $IFACE associated. Waiting for background DHCP..."
+                fi
+            else
+                echo "[WiFi] /etc/wpa_supplicant.conf missing. Please configure Wi-Fi."
+            fi
+        else
+            echo "[WiFi] Wireless interface not detected after ${TIMEOUT}s."
+            logger -t wifi "No wireless interface found after ${TIMEOUT}s"
+        fi
+    ) &
+    echo "Starting Wi-Fi daemon in background..."
+    ;;
+stop)
+    killall wpa_supplicant 2>/dev/null
+    killall udhcpc 2>/dev/null
+    for iface in mlan0 wlan0; do
+        /sbin/ifdown "$iface" 2>/dev/null
+        ip link set "$iface" down 2>/dev/null
+    done
+    echo "Wi-Fi stopped."
+    ;;
+*)
+    echo "Usage: $0 {start|stop}"
+    ;;
+esac

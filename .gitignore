@@ -49,7 +49,10 @@ rootfs-overlay/root/.ssh/
 *.o
 *.a
 *.so
-*.d
+tools/**/*.d
+!*.d/
+!rootfs-overlay/etc/init.d/
+!rootfs-overlay/etc/profile.d/
 
 # Editor and IDE directories
 .vscode/
