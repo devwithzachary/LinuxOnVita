@@ -40,10 +40,14 @@ start)
                 done
 
                 if [ -n "$IP" ]; then
-                    echo "=================================================="
-                    echo "  Wi-Fi Connected! IP Address: $IP"
-                    echo "  SSH Ready: ssh root@$IP"
-                    echo "=================================================="
+                    BANNER="
+==================================================
+  Wi-Fi Connected! IP Address: $IP
+  SSH Ready: ssh root@$IP
+=================================================="
+                    echo "$BANNER"
+                    echo "$BANNER" > /dev/tty1 2>/dev/null || true
+                    echo "$BANNER" > /dev/kmsg 2>/dev/null || true
                     logger -t wifi "$IFACE connected with IP $IP"
                     # Ensure SSH daemon is active on the new interface
                     /etc/init.d/S50sshd restart 2>/dev/null || /usr/sbin/sshd 2>/dev/null || true
