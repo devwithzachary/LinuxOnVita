@@ -98,16 +98,22 @@ static void emit_key(int uinput_fd, int keycode, int value) {
     ev.type = EV_KEY;
     ev.code = keycode;
     ev.value = value;
-    write(uinput_fd, &ev, sizeof(ev));
+    if (write(uinput_fd, &ev, sizeof(ev)) < 0) {
+        // Ignored
+    }
 
     memset(&ev, 0, sizeof(ev));
     ev.type = EV_SYN;
     ev.code = SYN_REPORT;
     ev.value = 0;
-    write(uinput_fd, &ev, sizeof(ev));
+    if (write(uinput_fd, &ev, sizeof(ev)) < 0) {
+        // Ignored
+    }
 }
 
 int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
     printf("[InputMapper] Starting Vita Gamepad-to-Keystroke Mapper...\n");
 
     int buttons_fd = -1;

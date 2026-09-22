@@ -13,11 +13,10 @@ usage() {
     echo "Usage: $0 <command>"
     echo ""
     echo "Commands:"
-    echo "  prebuilts    - Fetch and stage verified prebuilt binaries (fastest, no build needed)"
     echo "  image        - Build the Docker build environment image (${IMAGE_NAME})"
-    echo "  all          - Build RootFS, Kernel, and Loaders inside Docker"
-    echo "  rootfs       - Build only Buildroot rootfs inside Docker"
-    echo "  kernel       - Build only Linux kernel inside Docker"
+    echo "  all          - Build RootFS, Linux 6.12 Kernel, and Loaders inside Docker"
+    echo "  rootfs       - Build only RootFS with Wi-Fi & input tools inside Docker"
+    echo "  kernel       - Build only Linux 6.12 kernel inside Docker"
     echo "  loaders      - Build VitaSDK loaders and bootstrapper VPK inside Docker"
     echo "  shell        - Open an interactive shell inside the build container"
     echo "  clean        - Clean build artifacts"
@@ -53,16 +52,20 @@ run_in_docker() {
         "$@"
 }
 
-case "$1" in
-    prebuilts|fetch-prebuilts)
-        "${ROOT_DIR}/scripts/fetch_prebuilts.sh"
-        ;;
+CMD="$1"
+shift
+
+case "${CMD}" in
     image|build-image)
         build_docker_image
         ;;
     shell)
         ensure_image
-        run_in_docker /bin/bash
+        if [ $# -eq 0 ]; then
+            run_in_docker /bin/bash
+        else
+            run_in_docker /bin/bash "$@"
+        fi
         ;;
     rootfs)
         run_in_docker /build/docker/scripts/build_rootfs.sh

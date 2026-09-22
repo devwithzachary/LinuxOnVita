@@ -62,6 +62,12 @@ rm -rf build && mkdir build && cd build
 cmake ..
 make
 cp *.vpk "${VPK_OUT}/vita-linux-bootstrapper.vpk"
+
+# Pre-extract VPK for direct folder deployment (avoids LiveArea corrupt file errors)
+APP_DIR="${OUTPUT_DIR}/ux0/app/VITALINUX"
+mkdir -p "${APP_DIR}"
+unzip -qo "${VPK_OUT}/vita-linux-bootstrapper.vpk" -d "${APP_DIR}"
+
 cd "${SRC_DIR}"
 
 echo "All loaders and VPK built successfully!"

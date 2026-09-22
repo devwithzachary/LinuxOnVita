@@ -68,34 +68,19 @@ PSK="YourWiFiPassword"
 
 ---
 
-### Step 3: Choose Your Build Path
+### Step 3: Build Linux 6.12 from Source with Docker
 
-You have two choices to obtain the boot files:
-
-#### Option A: Fast-Track (Prebuilt Binaries — Takes 1 Minute)
-If you want to test booting Linux immediately without running Docker or compiling from source:
+Build the complete Linux 6.12 system with your configured Wi-Fi network, on-screen touch keyboard, and Alpine Linux userland:
 
 ```bash
-./build.sh prebuilts
-```
-
-This script automatically downloads the verified binaries and extracts the LiveArea app folder into `output/`.
-
-#### Option B: Build Modern Linux 6.12 from Source (Custom Wi-Fi + Touch Keyboard + Alpine)
-If you want the full modern setup with your custom Wi-Fi network, on-screen touch keyboard, and Alpine Linux userland:
-
-```bash
-# 1. Build the Docker environment image
+# 1. Build the Docker environment image (one-time setup)
 ./build.sh image
 
-# 2. Build the rootfs (compiles input tools, injects Wi-Fi config, builds rootfs)
-./build.sh rootfs
-
-# 3. Build the Linux 6.12 kernel (embeds rootfs into zImage and compiles DTBs)
-./build.sh kernel
+# 2. Build the complete system (RootFS, Linux 6.12 Kernel, and Loaders)
+./build.sh all
 ```
 
-*(Or simply run `./build.sh all` to build everything end-to-end).*
+*(You can also build individual components if preferred: `./build.sh rootfs`, `./build.sh kernel`, or `./build.sh loaders`)*.
 
 ---
 

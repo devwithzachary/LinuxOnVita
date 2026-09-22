@@ -15,6 +15,7 @@
 #include <linux/fb.h>
 #include <linux/input.h>
 #include <linux/uinput.h>
+#include <stdint.h>
 
 #define FB_DEV "/dev/fb0"
 #define KB_HEIGHT 220
@@ -47,8 +48,6 @@ static uint32_t *fb_mem = NULL;
 static long fb_size = 0;
 static int screen_w = 960;
 static int screen_h = 544;
-
-static uint32_t *saved_screen = NULL;
 
 // 8x16 Basic Console Font Bitmaps for ASCII 32 to 126
 // Using compact procedural 8x16 character rendering
@@ -361,15 +360,21 @@ static void emit_key(int uinput_fd, int keycode, int press) {
     ev.type = EV_KEY;
     ev.code = keycode;
     ev.value = press;
-    write(uinput_fd, &ev, sizeof(ev));
+    if (write(uinput_fd, &ev, sizeof(ev)) < 0) {
+        // Ignored
+    }
 
     memset(&ev, 0, sizeof(ev));
     ev.type = EV_SYN;
     ev.code = SYN_REPORT;
-    write(uinput_fd, &ev, sizeof(ev));
+    if (write(uinput_fd, &ev, sizeof(ev)) < 0) {
+        // Ignored
+    }
 }
 
 int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
     printf("[fbkeyboard] Starting PlayStation Vita On-Screen Touch Keyboard...\n");
 
     fb_fd = open(FB_DEV, O_RDWR);

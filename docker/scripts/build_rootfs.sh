@@ -15,8 +15,12 @@ mkdir -p "${SRC_DIR}" "${OUTPUT_DIR}/ux0/linux" "${ROOTFS_OVERLAY}/usr/bin"
 # 1. Compile native input tools (fbkeyboard & vita-input-mapper)
 echo "=== Compiling native input tools for ARMv7 ==="
 if [ -d "${TOOLS_DIR}" ]; then
+    TARGET_CC="arm-linux-gnueabihf-gcc"
+    if ! command -v "${TARGET_CC}" >/dev/null 2>&1; then
+        TARGET_CC="arm-linux-gcc"
+    fi
     make -C "${TOOLS_DIR}" clean
-    make -C "${TOOLS_DIR}" CROSS_COMPILE=arm-linux-
+    make -C "${TOOLS_DIR}" CC="${TARGET_CC}"
     cp "${TOOLS_DIR}/fbkeyboard/fbkeyboard" "${ROOTFS_OVERLAY}/usr/bin/"
     cp "${TOOLS_DIR}/vita-input-mapper/vita-input-mapper" "${ROOTFS_OVERLAY}/usr/bin/"
     echo "Input tools compiled and staged to ${ROOTFS_OVERLAY}/usr/bin/"
