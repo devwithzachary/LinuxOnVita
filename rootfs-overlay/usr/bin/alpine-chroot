@@ -1,0 +1,68 @@
+#!/bin/sh
+# alpine-chroot
+# Launch an interactive Alpine Linux environment with apk package manager.
+
+TARGET="/mnt/ur0/alpine"
+TARBALL="/usr/share/alpine/alpine-minirootfs-armv7.tar.gz"
+
+# Fallback to /tmp/alpine if eMMC ur0 is not available
+if [ ! -d "/mnt/ur0" ]; then
+    TARGET="/tmp/alpine"
+fi
+
+# Initialize Alpine rootfs if not already extracted
+if [ ! -f "${TARGET}/bin/sh" ]; then
+    echo "=== Initializing Alpine Linux rootfs in ${TARGET} ==="
+    
+    # Try mounting ur0 as read-write if target is on ur0
+    if [ "$TARGET" = "/mnt/ur0/alpine" ]; then
+        if [ -b "/dev/vita/ur0" ]; then
+            mount -o remount,rw /mnt/ur0 2>/dev/null || mount -t exfat -o rw /dev/vita/ur0 /mnt/ur0 2>/dev/null || true
+        fi
+    fi
+
+    mkdir -p "${TARGET}"
+
+    if [ -f "${TARBALL}" ]; then
+        echo "Extracting Alpine mini-rootfs..."
+        tar -xzf "${TARBALL}" -C "${TARGET}"
+    else
+        echo "Error: ${TARBALL} not found!"
+        echo "You can manually place an Alpine ARMv7 rootfs in ${TARGET}"
+        exit 1
+    fi
+
+    # Set up DNS resolv.conf
+    echo "nameserver 1.1.1.1" > "${TARGET}/etc/resolv.conf"
+    echo "nameserver 8.8.8.8" >> "${TARGET}/etc/resolv.conf"
+
+    # Set up APK repositories
+    mkdir -p "${TARGET}/etc/apk"
+    cat << 'EOF' > "${TARGET}/etc/apk/repositories"
+http://dl-cdn.alpinelinux.org/alpine/v3.20/main
+http://dl-cdn.alpinelinux.org/alpine/v3.20/community
+EOF
+
+    echo "Alpine Linux rootfs initialized successfully."
+fi
+
+# Ensure DNS matches host
+[ -f /etc/resolv.conf ] && cp /etc/resolv.conf "${TARGET}/etc/resolv.conf"
+
+# Bind system pseudo-filesystems
+mountpoint -q "${TARGET}/proc" || mount -t proc proc "${TARGET}/proc"
+mountpoint -q "${TARGET}/sys"  || mount -t sysfs sysfs "${TARGET}/sys"
+mountpoint -q "${TARGET}/dev"  || mount --bind /dev "${TARGET}/dev"
+mountpoint -q "${TARGET}/dev/pts" || mount --bind /dev/pts "${TARGET}/dev/pts" 2>/dev/null || true
+
+echo "Entering Alpine Linux userland (type 'exit' to return)..."
+echo "Try running: apk update && apk add fastfetch htop python3"
+echo ""
+
+chroot "${TARGET}" /bin/sh -l
+
+# Cleanup mounts on exit (optional / best effort)
+umount "${TARGET}/dev/pts" 2>/dev/null || true
+umount "${TARGET}/dev" 2>/dev/null || true
+umount "${TARGET}/sys" 2>/dev/null || true
+umount "${TARGET}/proc" 2>/dev/null || true

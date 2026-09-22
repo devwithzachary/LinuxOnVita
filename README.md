@@ -1,203 +1,180 @@
 # PS Vita Linux Toolkit & Docker Build Environment
 
 [![PS Vita](https://img.shields.io/badge/Platform-PlayStation%20Vita-blue.svg)](https://en.wikipedia.org/wiki/PlayStation_Vita)
+[![Kernel](https://img.shields.io/badge/Kernel-Linux%206.12-orange.svg)](https://kernel.org)
 [![Architecture](https://img.shields.io/badge/Architecture-ARMv7--A%20(Cortex--A9)-green.svg)](https://developer.arm.com/Processors/Cortex-A9)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A complete toolkit, automated downloader, and containerized Docker build environment for compiling and running Linux on hacked PlayStation Vita consoles ([HENlo](https://vita.hacks.guide/using-henlo) / HENkaku / Ensō).
+A complete toolkit, automated downloader, and containerized Docker build environment for compiling and running **Linux 6.12** on hacked PlayStation Vita consoles ([HENlo](https://vita.hacks.guide/using-henlo) / HENkaku / Ensō 3.60 & 3.65).
 
-This repository bridges the gap between [xerpi's](https://github.com/xerpi) foundational Linux port and modern developer setups, providing:
-1. **Fast-Track (5 Minutes):** An automated script that fetches verified, working prebuilt releases (`zImage`, `vita.dtb`, `payload.bin`, `baremetal-loader.skprx`, and `vita-linux-bootstrapper.vpk`) ready for instant transfer.
-2. **Reproducible Docker Environment:** A containerized build system that avoids the friction of cross-compiling ARMv7 Linux kernels, Buildroot root filesystems, and VitaSDK plugins natively on macOS or non-Linux hosts.
+Now featuring **on-device Marvell 88W8787 Wi-Fi auto-connect**, **SSH server access**, an **on-screen framebuffer touch keyboard**, **gamepad button navigation**, and **Alpine Linux (`apk`) package manager support**.
 
 ---
 
-## Table of Contents
+## Key Features in Linux 6.12
 
-- [1. Architecture: How Linux Boots on the Vita](#1-architecture-how-linux-boots-on-the-vita)
-- [2. Hardware Support & Status](#2-hardware-support--status)
-- [3. Critical Gotchas (Read Before Booting!)](#3-critical-gotchas-read-before-booting)
-- [4. Quick Start: Using Prebuilt Binaries (5 Minutes)](#4-quick-start-using-prebuilt-binaries-5-minutes)
-- [5. Building from Source with Docker](#5-building-from-source-with-docker)
-  - [Build Commands](#build-commands)
-  - [Customizing the RootFS Overlay](#customizing-the-rootfs-overlay)
-- [6. Troubleshooting](#6-troubleshooting)
-- [7. Credits & Upstream Sources](#7-credits--upstream-sources)
-- [8. License](#8-license)
+- 📶 **On-Device Wi-Fi & SSH:** Powered by Marvell Avastar 88W8787 (`mwifiex_sdio`) with custom Syscon power sequencing (`pwrseq_vita_wlan.c`). Automatically joins your Wi-Fi and starts OpenSSH.
+- ⚡ **High-Res Clocksource (144 MHz):** Enabled the ARM Global Timer, eliminating the 140-second kernel CRNG entropy delay. **SSH is accessible ~12 seconds after boot.**
+- ⌨️ **On-Screen Touch Keyboard (`fbkeyboard`):** High-performance framebuffer virtual keyboard on the OLED/LCD display with direct `/dev/uinput` keystroke injection.
+- 🎮 **Physical Button Navigation (`vita-input-mapper`):** D-Pad arrows, Cross (Enter), Square (Space), Circle (Backspace), Triangle (Tab), and L-Trigger (Ctrl+C).
+- 📦 **Alpine Linux Userland (`apk`):** Run `alpine-chroot` to access the lightweight Alpine Linux distribution and install packages over the live Wi-Fi connection with `apk add`.
+- 💾 **eMMC Storage Access:** Auto-detects the Vita's 12 SCE partitions (`/dev/mmcblk*p1`–`p12`), allowing you to mount internal storage (`os0`, `vs0`, `ur0`).
+- 🔄 **Clean Hardware Reboot & Poweroff:** Clean cold reset back to VitaOS or full hardware poweroff via Syscon.
 
 ---
 
-## 1. Architecture: How Linux Boots on the Vita
+## Hardware Support Matrix
 
-The PlayStation Vita runs Sony's proprietary microkernel-based operating system. You cannot run Linux in a container *within* the Sony OS. Instead, the Linux boot chain takes over the hardware bare-metal:
-
-```
-[ HENlo / HENkaku / Ensō ]
-          │
-          ▼
-[ Vita Linux Bootstrapper VPK ]  (User-facing launcher & file validator)
-          │
-          ▼
-[ taiHEN Kernel Plugin: baremetal-loader.skprx ]  (Disables Sony OS MMU & interrupts)
-          │
-          ▼
-[ Baremetal Payload: payload.bin ]  (Initializes OLED/LCD screen & storage)
-          │
-          ▼
-[ Linux Kernel: zImage + Device Tree: vita.dtb ]  (Boots Linux on ARM Cortex-A9 bare-metal)
-          │
-          ▼
-[ Embedded Initramfs RootFS: Buildroot / BusyBox console ]
-```
-
----
-
-## 2. Hardware Support & Status
-
-| Hardware Component | Status | Notes |
+| Hardware Component | Status | Implementation Details |
 | :--- | :--- | :--- |
-| **CPU** | **Working** | Quad-core ARM Cortex-A9 MPCore SMP boots up to 444MHz |
-| **Display / Framebuffer** | **Working** | Framebuffer console (`fbcon`) renders on OLED (Vita 1000) and LCD (Vita 2000) |
-| **UART0 Serial Console** | **Working** | 115200 baud; accessible via test pads on motherboard or multi-use port |
-| **Official Memory Card (MSIF)** | **Working** | Used by baremetal loader to fetch kernel and DTB |
-| **SD2Vita (GCD/SDIF)** | Kernel WIP | Game card slot storage is not initialized in the baremetal loader |
-| **Buttons / Gamepad** | Basic | Handled via syscon driver |
-| **Touchscreen** | WIP | Drivers present in experimental branches |
-| **3D GPU Acceleration** | **Not Working** | PowerVR SGX543MP4+ has no open-source driver; software rendering only |
-| **WiFi / Bluetooth** | Experimental | In development, not ready out-of-the-box |
+| **CPU** | **Working** | Quad-core ARM Cortex-A9 MPCore (SMP active across all 4 cores) |
+| **Display / Framebuffer** | **Working** | 960x544 OLED (Vita 1000) and LCD (Vita 2000) |
+| **Wi-Fi (Marvell SD8787)** | **Working** | `mwifiex_sdio` on SDIF2 with custom Ernie power sequencing |
+| **Front Touchscreen** | **Working** | `vita-syscon-ts.c` multi-touch digitizer mapped via `evdev` |
+| **Buttons & D-Pad** | **Working** | `vita-buttons.c` mapped via `vita-input-mapper` daemon |
+| **Internal eMMC Storage** | **Working** | Auto-detected partitions (`/dev/vita/{os0,ur0,vs0,...}`) |
+| **Official Memory Card** | **Working** | Used by baremetal loader to load kernel & DTB |
+| **UART0 Serial Console** | **Working** | 115200 baud serial debug console |
+| **Bluetooth** | Working | Marvell SD8787 via `btmrvl` |
+| **Audio** | Working | Vita audio codec via ALSA & PipeWire |
+| **3D GPU Acceleration** | Not Working | SGX543MP4+ lacks open-source drivers (software rendering) |
+| **USB Gadget (`g_ether`)** | Not Working | SoC UDC controller unmapped (use Wi-Fi + SSH instead) |
 
 ---
 
-## 3. Critical Gotchas (Read Before Booting!)
+## Button & Touch Controls
 
-> [!WARNING]
-> **SD2Vita vs. Official Sony Memory Card:**
-> The baremetal payload (`payload.bin`) currently only contains a driver for the official Sony Memory Card interface (MSIF). It **does not** initialize the SD2Vita adapter (gamecard slot) at baremetal boot.
-> - If you use an **SD2Vita** as `ux0:`, you **must** copy `zImage` and `vita.dtb` to your official Sony memory card (which usually mounts as `uma0:` in VitaShell).
-> - On PS Vita 2000 (Slim) or PSTV without a memory card, the internal storage is used.
+When booted on the Vita without a keyboard:
 
-> [!IMPORTANT]
-> **Enable Unsafe Homebrew:**
-> On your PS Vita, navigate to **Settings** → **HENkaku Settings** → ensure **Enable Unsafe Homebrew** is checked. If this is disabled, taiHEN will reject the kernel plugin with error `0x8002D003`.
+| Vita Control | Synthesized Key / Action | Purpose |
+| :--- | :--- | :--- |
+| **Touch Screen (Bottom Area)** | Virtual QWERTY Keyboard | Type commands directly on screen |
+| **D-Pad Up / Down** | `Arrow Up` / `Arrow Down` | Browse command history in shell |
+| **D-Pad Left / Right** | `Arrow Left` / `Arrow Right`| Move text cursor |
+| **Cross (✕)** | `Enter` | Execute command |
+| **Circle (○)** | `Backspace` | Delete character |
+| **Square (□)** | `Space` | Space bar |
+| **Triangle (△)** | `Tab` | Command / filename auto-completion |
+| **L Trigger** | `Ctrl + C` | Cancel current command (SIGINT) |
+| **R Trigger** | `Page Up` | Scroll terminal buffer |
+| **[Hide] on touch keyboard** | Toggle Keyboard | Hide keyboard overlay to see full screen |
 
 ---
 
-## 4. Quick Start: Using Prebuilt Binaries (5 Minutes)
+## Quick Setup: Wi-Fi Configuration
 
-### Step 1: Download & Stage the Files
-Run the included prebuilt fetcher script on your host computer:
+Before building or booting Linux, configure your Wi-Fi network credentials:
+
+1. Copy the example configuration:
+   ```bash
+   cp configs/wifi.conf.example configs/wifi.conf
+   ```
+2. Edit `configs/wifi.conf`:
+   ```bash
+   SSID="YourWiFiNetworkName"
+   PSK="YourWiFiPassword"
+   ```
+3. When Linux boots on the Vita, it connects automatically. Once connected, open a terminal on your computer and SSH into the Vita:
+   ```bash
+   ssh root@vita.local
+   # Or find the IP printed on the Vita screen:
+   ssh root@<VITA_IP>
+   ```
+
+---
+
+## Installing Packages with Alpine Linux
+
+Vita Linux includes an Alpine Linux mini-rootfs integration with the `apk` package manager:
+
+1. In the console or over SSH, run:
+   ```bash
+   alpine-chroot
+   ```
+2. You will enter the Alpine Linux environment. Update the repository index and install software:
+   ```bash
+   apk update
+   apk add fastfetch htop python3 nano git curl
+   ```
+3. Run `fastfetch` to see your system specs and PS Vita hardware information!
+
+---
+
+## Building from Source with Docker
+
+This repository provides a containerized Ubuntu build environment with the ARMv7-eabihf toolchain and VitaSDK.
+
+### Commands
 
 ```bash
-./build.sh prebuilts
+# 1. Build the Docker environment image
+./build.sh image
+
+# 2. Build the RootFS (compiles input tools, applies Wi-Fi config, builds Buildroot rootfs)
+./build.sh rootfs
+
+# 3. Build the Linux 6.12 Kernel & Device Trees (outputs to output/ux0/linux/)
+./build.sh kernel
+
+# 4. Build everything end-to-end
+./build.sh all
+
+# 5. Open an interactive shell inside the build container
+./build.sh shell
 ```
 
-This downloads verified releases ([xerpi's 5.9.0-rc5](https://github.com/xerpi/linux_vita/releases/tag/5.9.0-rc5) kernel/payload and [DvaMishkiLapa's bootstrapper](https://github.com/DvaMishkiLapa/vita_plugin_linux_loader/releases/tag/v0.1.0-alpha)) and stages them into `output/`:
+### Build Artifacts Output
 
+After compilation, files are placed in `output/`:
 ```
 output/
 ├── vpk/
-│   └── vita-linux-bootstrapper.vpk
+│   └── vita-linux-bootstrapper.vpk    # LiveArea launcher bubble
 └── ux0/
+    ├── app/
+    │   └── VITALINUX/                 # Pre-extracted LiveArea bubble folder
     └── linux/
-        ├── baremetal-loader.skprx
-        ├── payload.bin
-        ├── zImage
-        ├── vita.dtb
-        ├── vita1000.dtb
-        └── vita2000.dtb
+        ├── baremetal-loader.skprx     # taiHEN kernel payload
+        ├── payload.bin                # Bare-metal screen/storage init
+        ├── zImage                     # Linux 6.12 kernel + embedded rootfs
+        ├── vita.dtb                   # Device tree (Vita 1000 OLED fallback)
+        ├── vita1000.dtb               # Device tree for OLED model
+        ├── vita2000.dtb               # Device tree for Slim LCD model
+        └── pstv.dtb                   # Device tree for PlayStation TV
 ```
 
-### Step 2: Transfer to PS Vita
-1. Launch **VitaShell** on your PS Vita and press **SELECT** to start USB or FTP transfer mode.
-2. Copy all files from `output/ux0/linux/` to `ux0:linux/` on your Vita.
-3. *(If using SD2Vita)*: In VitaShell, also copy `zImage` and `vita.dtb` to `uma0:linux/` (or your official memory card's mount).
-4. Copy `output/vpk/vita-linux-bootstrapper.vpk` to `ux0:data/` (or root of `ux0:`).
+---
 
-### Step 3: Install & Launch
-1. In VitaShell, browse to `vita-linux-bootstrapper.vpk`, press **X**, and confirm installation.
-2. Return to the LiveArea and launch **Vita Linux Bootstrapper**.
-3. The app automatically checks that all required files exist on `ux0:linux/`.
-4. Press **X** to trigger the baremetal payload.
-5. The console will take over the display, mount the memory card, load `zImage`, and jump into Linux!
+## Deploying to the PS Vita
+
+1. Launch **VitaShell** on your Vita and press **SELECT** (USB or FTP mode).
+2. Copy `output/ux0/linux/*` to `ux0:linux/` on your memory card.
+3. *(If using SD2Vita)*: Also copy `zImage` and `vita.dtb` to `uma0:linux/` (or your official memory card).
+4. If you haven't installed the bubble yet:
+   - Copy `output/ux0/app/VITALINUX` to `ux0:app/VITALINUX`
+   - In VitaShell, press **TRIANGLE** on `ux0:` and select **Refresh LiveArea**.
+5. Launch **Vita Linux Bootstrapper** from the LiveArea and press **X** to boot!
 
 ---
 
-## 5. Building from Source with Docker
+## Credits & Upstream Sources
 
-Cross-compiling an ARMv7 Linux kernel, Buildroot root filesystem, and VitaSDK plugins on macOS or non-Linux hosts is difficult due to APFS case-insensitivity, BSD vs. GNU coreutils, and toolchain incompatibilities. 
+This toolkit builds upon the research of the PS Vita homebrew and Linux reverse-engineering community:
 
-This repository provides an automated Docker environment configured with:
-- Ubuntu 22.04 LTS
-- [Bootlin](https://toolchains.bootlin.com/) ARMv7-eabihf bleeding-edge toolchain (in `/opt`)
-- [VitaSDK](https://vitasdk.org/) (`arm-vita-eabi`) toolchain (in `/usr/local/vitasdk`)
-- Xerpi's Buildroot and kernel configurations
-
-### Build Commands
-
-```bash
-# 1. Build the Docker environment image (psvita-linux-builder)
-./build.sh image
-
-# 2. Enter an interactive container shell (useful for make menuconfig or manual inspection)
-./build.sh shell
-
-# 3. Build only the Buildroot RootFS (generates output/rootfs.cpio.xz)
-./build.sh rootfs
-
-# 4. Build only the Linux Kernel & Device Trees (generates zImage and .dtb files)
-./build.sh kernel
-
-# 5. Build Vita baremetal loaders and the Bootstrapper VPK
-./build.sh loaders
-
-# 6. Build everything end-to-end from scratch
-./build.sh all
-```
-
-### Customizing the RootFS Overlay
-Any files or scripts placed in the `rootfs-overlay/` directory on your host will automatically be copied into the root filesystem when running `./build.sh rootfs` or `./build.sh all`. This is ideal for adding custom scripts, shell configurations, or test binaries to your Linux environment.
-
----
-
-## 6. Troubleshooting
-
-- **Error `0x8002D003` when launching the bootstrapper:**
-  Unsafe Homebrew is disabled. Open the Vita **Settings** application, open **HENkaku Settings**, and enable **Enable Unsafe Homebrew**.
-- **`Memory card not inserted` error on screen:**
-  The baremetal loader could not find an official Sony Memory card. If you are using SD2Vita, you must also copy `zImage` and `vita.dtb` to the official Sony memory card (`uma0:linux/`).
-- **Screen freezes at `Uncompressing Linux... done, booting the kernel`:**
-  Occasionally the L2 cache contains stale data after soft reset, or the Device Tree Blob (DTB) does not match your specific Vita model. Ensure you have copied both `vita1000.dtb` (for OLED models) or `vita2000.dtb` (for Slim models) as `vita.dtb`.
-
----
-
-## 7. Credits & Upstream Sources
-
-This toolkit builds upon the work of the PS Vita homebrew and reverse engineering community:
-
+- **[incognitojam](https://github.com/incognitojam)**:
+  - [vita-linux-port](https://github.com/incognitojam/vita-linux-port) - Linux 6.12 port, Marvell Wi-Fi custom power sequencing (`pwrseq_vita_wlan.c`), High-Res timer fix, SCE eMMC partition driver, and Buildroot integration.
+  - [linux_vita (6.12)](https://github.com/incognitojam/linux_vita) - Modernized Linux 6.12 kernel tree for PS Vita.
 - **[xerpi (Sergi Granell)](https://github.com/xerpi)**:
-  - [linux_vita](https://github.com/xerpi/linux_vita) - Linux kernel port for PlayStation Vita
-  - [PSVita Linux build instructions Gist](https://gist.github.com/xerpi/5c60ce951caf263fcafffb48562fe50f)
-  - [Buildroot .config Gist](https://gist.github.com/xerpi/ef487ec59a8246cb2823d007f5e8dfcb)
-  - [vita-baremetal-loader](https://github.com/xerpi/vita-baremetal-loader) - taiHEN kernel plugin for launching baremetal payloads
-  - [vita-libbaremetal](https://github.com/xerpi/vita-libbaremetal) - Bare-metal library for PS Vita hardware initialization
-  - [vita-baremetal-linux-loader](https://github.com/xerpi/vita-baremetal-linux-loader) - Bare-metal Linux loader payload
-  - [vita-linux-loader](https://github.com/xerpi/vita-linux-loader) - Original Linux loader
+  - Original Linux on PS Vita pioneer: [linux_vita](https://github.com/xerpi/linux_vita), [vita-baremetal-loader](https://github.com/xerpi/vita-baremetal-loader), [vita-libbaremetal](https://github.com/xerpi/vita-libbaremetal).
 - **[DvaMishkiLapa](https://github.com/DvaMishkiLapa)**:
-  - [vita_plugin_linux_loader](https://github.com/DvaMishkiLapa/vita_plugin_linux_loader) - Enhanced Bootstrapper VPK with file checks
-  - [vita-baremetal-loader fork](https://github.com/DvaMishkiLapa/vita-baremetal-loader) - Updated baremetal loader supporting firmware >= 3.63
-- **[CreepNT](https://github.com/xerpi/vita-linux-loader/pull/2)** - UI checks and Linux bootstrapper styling
-- **[Team Molecule & taiHEN](https://github.com/henkaku)** - HENkaku jailbreak and taiHEN kernel hooking framework
-- **[VitaSDK](https://vitasdk.org/)** - Open-source PlayStation Vita software development kit
-- **[Bootlin](https://toolchains.bootlin.com/)** - Precompiled ARMv7 cross-compilation toolchains
-- **[postmarketOS](https://wiki.postmarketos.org/wiki/Sony_PlayStation_Vita_(sony-psvita))** - PlayStation Vita device documentation
+  - [vita_plugin_linux_loader](https://github.com/DvaMishkiLapa/vita_plugin_linux_loader) - Enhanced Bootstrapper VPK with file integrity checks.
+- **[Team Molecule & taiHEN](https://github.com/henkaku)** - HENkaku jailbreak and taiHEN kernel framework.
+- **[VitaSDK](https://vitasdk.org/)** - Open-source PlayStation Vita software development kit.
+- **[Bootlin](https://toolchains.bootlin.com/)** - Precompiled ARMv7 cross-compilation toolchains.
 
 ---
 
-## 8. License
+## License
 
-This project and its build scripts are licensed under the [MIT License](LICENSE).
-
-Upstream projects and source repositories retain their respective licenses:
-- **Linux Kernel:** GNU General Public License v2.0 ([GPL-2.0](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html))
-- **Buildroot:** GNU General Public License v2.0 ([GPL-2.0](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html))
-- **VitaSDK & taiHEN:** MIT / BSD / GPL (see respective repositories)
+This project and its orchestration scripts are licensed under the [MIT License](LICENSE).
+Upstream source trees (Linux kernel, Buildroot, VitaSDK) retain their respective licenses (GPLv2, MIT, BSD).

@@ -26,9 +26,15 @@ output/*
 *.skprx
 *.vpk
 *.cpio.xz
+*.cpio.zst
+*.zst
+*.tar.gz
 *.dtb
 zImage
 uImage
+
+# Sensitive local configurations
+configs/wifi.conf
 
 # Object files & dependency lists
 *.o

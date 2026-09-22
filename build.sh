@@ -42,7 +42,11 @@ ensure_image() {
 
 run_in_docker() {
     ensure_image
-    docker run --rm -it \
+    local tty_flags="-i"
+    if [ -t 0 ] && [ -t 1 ]; then
+        tty_flags="-it"
+    fi
+    docker run --rm ${tty_flags} \
         -v "${ROOT_DIR}:/build" \
         -w /build \
         "${IMAGE_NAME}" \

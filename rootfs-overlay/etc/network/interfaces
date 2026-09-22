@@ -1,0 +1,7 @@
+auto lo
+iface lo inet loopback
+
+# Marvell 88W8787 Wi-Fi (brought up by S45wifi)
+iface mlan0 inet dhcp
+    pre-up wpa_supplicant -B -i mlan0 -c /etc/wpa_supplicant.conf
+    post-down killall wpa_supplicant 2>/dev/null

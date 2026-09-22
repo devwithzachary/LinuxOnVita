@@ -1,0 +1,14 @@
+# /etc/inittab
+# System initialization
+::sysinit:/etc/init.d/rcS
+
+# Framebuffer console (Vita screen) - Auto-login as root directly to shell
+tty1::respawn:/sbin/getty -n -l /bin/sh 115200 tty1
+
+# Serial console (UART / debug) - Auto-login as root
+ttyS0::respawn:/sbin/getty -n -l /bin/sh 115200 ttyS0
+
+# Actions on reboot / shutdown
+::shutdown:/etc/init.d/rcK
+::shutdown:/sbin/swapoff -a
+::shutdown:/bin/umount -a -r

@@ -21,6 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     bzip2 \
     xz-utils \
+    zstd \
+    libelf-dev \
     pkg-config \
     file \
     ca-certificates \

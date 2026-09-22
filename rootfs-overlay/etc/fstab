@@ -1,0 +1,21 @@
+# <file system>	<mount pt>	<type>	<options>	<dump>	<pass>
+/dev/root	/		ext2	rw,noauto	0	1
+proc		/proc		proc	defaults	0	0
+devpts		/dev/pts	devpts	defaults,gid=5,mode=620,ptmxmode=0666	0	0
+tmpfs		/dev/shm	tmpfs	mode=1777	0	0
+tmpfs		/tmp		tmpfs	mode=1777	0	0
+tmpfs		/run		tmpfs	mode=0755,nosuid,nodev	0	0
+sysfs		/sys		sysfs	defaults	0	0
+debugfs		/sys/kernel/debug	debugfs	defaults		0	0
+
+# PlayStation Vita eMMC partitions
+# /dev/vita/ symlinks created by S05vita init script
+# Read-only by default to protect VitaOS data. Example: mount /mnt/ur0
+/dev/vita/os0     /mnt/os0     vfat   ro,noauto     0  0
+/dev/vita/sa0     /mnt/sa0     vfat   ro,noauto     0  0
+/dev/vita/tm0     /mnt/tm0     vfat   ro,noauto     0  0
+/dev/vita/vs0     /mnt/vs0     vfat   ro,noauto     0  0
+/dev/vita/vd0     /mnt/vd0     vfat   ro,noauto     0  0
+/dev/vita/ud0     /mnt/ud0     vfat   ro,noauto     0  0
+/dev/vita/pd0     /mnt/pd0     exfat  ro,noauto     0  0
+/dev/vita/ur0     /mnt/ur0     exfat  ro,noauto     0  0

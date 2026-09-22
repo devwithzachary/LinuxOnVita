@@ -1,0 +1,5 @@
+# PS Vita Linux - Wi-Fi Configuration
+# Copy this file to configs/wifi.conf and enter your Wi-Fi network credentials.
+
+SSID="YourWiFiSSID"
+PSK="YourWiFiPassword"
