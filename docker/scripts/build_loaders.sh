@@ -75,6 +75,12 @@ APP_DIR="${OUTPUT_DIR}/ux0/app/VITALINUX"
 mkdir -p "${APP_DIR}"
 unzip -qo "${VPK_OUT}/vita-linux-bootstrapper.vpk" -d "${APP_DIR}"
 
+# Also mirror payload to ux0/baremetal for compatibility
+BAREMETAL_OUT="${OUTPUT_DIR}/ux0/baremetal"
+mkdir -p "${BAREMETAL_OUT}"
+cp "${LINUX_OUT}/payload.bin" "${BAREMETAL_OUT}/payload.bin"
+cp "${LINUX_OUT}/baremetal-loader.skprx" "${BAREMETAL_OUT}/baremetal-loader.skprx"
+
 cd "${SRC_DIR}"
 
 echo "All loaders and VPK built successfully!"
