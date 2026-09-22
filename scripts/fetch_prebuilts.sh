@@ -43,6 +43,10 @@ echo "[3/3] Downloading Vita Linux Bootstrapper VPK..."
 curl -sSL -o "${VPK_DIR}/vita-linux-bootstrapper.vpk" \
     "https://github.com/DvaMishkiLapa/vita_plugin_linux_loader/releases/download/v0.1.0-alpha/vita-linux-bootstrapper.vpk"
 
+# Also unpack directly into ux0/app/VITALINUX for direct folder transfer
+mkdir -p "${OUT_DIR}/ux0/app/VITALINUX"
+unzip -q -o "${VPK_DIR}/vita-linux-bootstrapper.vpk" -d "${OUT_DIR}/ux0/app/VITALINUX"
+
 # Cleanup
 rm -rf "${TMP_DIR}"
 
