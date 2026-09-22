@@ -495,10 +495,22 @@ static void PollVitaGamepad(void)
                 D_PostEvent(&doom_ev);
             }
         } else if (ev.type == EV_ABS) {
+            static int analog_checked = 0;
+            static int analog_enabled = 1;
+            if (!analog_checked) {
+                if (getenv("DOOM_NO_ANALOG") || M_CheckParm("-noanalog")) {
+                    analog_enabled = 0;
+                    printf("I_InitInput: Analog sticks disabled.\n");
+                }
+                analog_checked = 1;
+            }
+            if (!analog_enabled) continue;
+
             /* Left Analog: Y-axis (move) and X-axis (turn) */
+            /* Safe threshold: neutral is ~128. Require deliberate deflection (< 40 or > 215) */
             if (ev.code == ABS_Y) {
-                int new_up = (ev.value < 80);
-                int new_down = (ev.value > 175);
+                int new_up = (ev.value > 0 && ev.value < 40);
+                int new_down = (ev.value > 215 && ev.value < 255);
                 if (new_up != stick_up) {
                     stick_up = new_up;
                     doom_ev.type = stick_up ? ev_keydown : ev_keyup;
@@ -514,8 +526,8 @@ static void PollVitaGamepad(void)
                     D_PostEvent(&doom_ev);
                 }
             } else if (ev.code == ABS_X) {
-                int new_left = (ev.value < 80);
-                int new_right = (ev.value > 175);
+                int new_left = (ev.value > 0 && ev.value < 40);
+                int new_right = (ev.value > 215 && ev.value < 255);
                 if (new_left != stick_left) {
                     stick_left = new_left;
                     doom_ev.type = stick_left ? ev_keydown : ev_keyup;
@@ -533,8 +545,8 @@ static void PollVitaGamepad(void)
             }
             /* Right Analog: Strafe Left / Right */
             else if (ev.code == ABS_RX) {
-                int new_sl = (ev.value < 80);
-                int new_sr = (ev.value > 175);
+                int new_sl = (ev.value > 0 && ev.value < 40);
+                int new_sr = (ev.value > 215 && ev.value < 255);
                 if (new_sl != stick_strafe_l) {
                     stick_strafe_l = new_sl;
                     doom_ev.type = stick_strafe_l ? ev_keydown : ev_keyup;
@@ -592,7 +604,6 @@ void I_GetEvent(void)
             {
                 D_PostEvent(&event);
             }
-            break;
         }
     }
 }

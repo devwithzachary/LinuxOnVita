@@ -82,5 +82,16 @@ echo " Starting DOOM on Linux Framebuffer (/dev/fb0)..."
 echo " Active WAD: $SELECTED_WAD"
 echo "======================================================="
 
+# Temporarily suspend background input mapper & touch keyboard
+# so they don't produce duplicate keystrokes or draw over fb0
+killall -STOP vita-input-mapper 2>/dev/null || true
+killall -STOP fbkeyboard 2>/dev/null || true
+
+cleanup() {
+    killall -CONT vita-input-mapper 2>/dev/null || true
+    killall -CONT fbkeyboard 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
 # Run fbdoom with the found WAD
-exec /usr/bin/fbdoom -iwad "$SELECTED_WAD" "$@"
+/usr/bin/fbdoom -iwad "$SELECTED_WAD" "$@"

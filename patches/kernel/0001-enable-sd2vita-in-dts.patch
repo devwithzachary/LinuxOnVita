@@ -26,15 +26,19 @@ index ec05ab2a0..a473f61ad 100644
 +	status = "okay";
 +};
 diff --git a/arch/arm/boot/dts/vita2000.dts b/arch/arm/boot/dts/vita2000.dts
-index 04e833fc2..d03b741d9 100644
+index 04e833fc2..0e4925f90 100644
 --- a/arch/arm/boot/dts/vita2000.dts
 +++ b/arch/arm/boot/dts/vita2000.dts
-@@ -25,3 +25,23 @@ framebuffer0: framebuffer@20000000 {
+@@ -25,3 +25,27 @@ framebuffer0: framebuffer@20000000 {
  		};
  	};
  };
 +
 +&i2c0 {
++	status = "okay";
++};
++
++&i2c1 {
 +	status = "okay";
 +};
 +

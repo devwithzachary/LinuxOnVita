@@ -1,0 +1,25 @@
+diff --git a/drivers/input/joystick/vita-buttons.c b/drivers/input/joystick/vita-buttons.c
+index 55ff4fd76..3468a0a0c 100644
+--- a/drivers/input/joystick/vita-buttons.c
++++ b/drivers/input/joystick/vita-buttons.c
+@@ -47,7 +47,7 @@ static void vita_syscon_buttons_poll(struct input_dev *input)
+ 		return;
+ 
+ 	buttons = (data[4] | (data[5] << 8) | (data[6] << 16) |
+-		  (data[6] << 24)) ^ 0x4037fcf9;
++		  (data[6] << 24)) ^ 0x4037ffff;
+ 
+ 	input_report_abs(input, ABS_X, data[8]);
+ 	input_report_abs(input, ABS_Y, data[9]);
+@@ -122,6 +122,11 @@ static int vita_syscon_buttons_probe(struct platform_device *pdev)
+ 	input_set_capability(idev, EV_KEY, KEY_VOLUMEDOWN);
+ 	input_set_capability(idev, EV_KEY, KEY_POWER);
+ 
++	if (syscon->short_command_write) {
++		u8 analog_data = (syscon->baryon_version < 0x90202) ? 1 : 3;
++		syscon->short_command_write(syscon, 0x180, analog_data, 1);
++	}
++
+ 	err = input_setup_polling(idev, vita_syscon_buttons_poll);
+ 	if (err) {
+ 		dev_err(pad->dev, "failed to set up polling: %d\n", err);
