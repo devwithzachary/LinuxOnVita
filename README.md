@@ -1,13 +1,18 @@
-# PS Vita Linux Distribution & Complete Handheld Toolkit
+# LinuxOnVita — Complete Handheld Linux Toolkit for PS Vita
 
 [![PS Vita](https://img.shields.io/badge/Platform-PlayStation%20Vita-blue.svg)](https://en.wikipedia.org/wiki/PlayStation_Vita)
 [![Kernel](https://img.shields.io/badge/Kernel-Linux%206.12-orange.svg)](https://kernel.org)
 [![Architecture](https://img.shields.io/badge/Architecture-ARMv7--A%20(Cortex--A9)-green.svg)](https://developer.arm.com/Processors/Cortex-A9)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+<div align="center">
+  <a href="https://www.patreon.com/DevWithZachary"><img src="https://img.shields.io/badge/Patreon-Support%20the%20Project-F96854.svg?logo=patreon&logoColor=white" alt="Patreon" /></a>
+  <a href="https://buymeacoffee.com/linuxonandroid"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support%20Development-FFDD00.svg?logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee" /></a>
+</div>
+
 A complete distribution, automated build environment, and handheld userland for running **Linux 6.12** on hacked PlayStation Vita consoles ([HENlo](https://vita.hacks.guide/using-henlo) / HENkaku / Ensō 3.60 & 3.65).
 
-While the original upstream projects proved that modern Linux can boot on the PS Vita SoC, they functioned primarily as developer proof-of-concepts requiring specialized hardware (such as soldered UART debug cables). This toolkit bridges the gap into a **fully standalone, interactive handheld Linux device** with out-of-the-box touch typing, physical gamepad navigation, automated Wi-Fi, battery monitoring, package management (`apk`), and native framebuffer gaming.
+While the original upstream projects proved that modern Linux can boot on the PS Vita SoC, they functioned primarily as developer proof-of-concepts requiring specialized hardware (such as soldered UART debug cables). LinuxOnVita bridges the gap into a **fully standalone, interactive handheld Linux device** with out-of-the-box touch typing, physical gamepad navigation, automated Wi-Fi, battery monitoring, package management (`apk`), and native framebuffer gaming.
 
 ---
 
@@ -47,7 +52,7 @@ Follow these steps to build and install Linux on your PlayStation Vita:
 ### Step 1: Clone the Repository
 Clone this repository to your computer (macOS or Linux):
 ```bash
-git clone https://github.com/devwithzachary/vita-linux.git
+git clone https://github.com/devwithzachary/LinuxOnVita.git
 cd vita-linux
 ```
 
@@ -275,6 +280,26 @@ This toolkit builds upon the groundbreaking research and development of the PS V
 - **[Team Molecule & taiHEN](https://github.com/henkaku)** - HENkaku jailbreak and taiHEN kernel framework.
 - **[VitaSDK](https://vitasdk.org/)** - Open-source PlayStation Vita software development kit.
 - **[Bootlin](https://toolchains.bootlin.com/)** - Precompiled ARMv7 cross-compilation toolchains.
+
+---
+
+## 🤝 Contributing & AI Policy
+
+Contributions, bug reports, and feature requests are welcome! Feel free to check out the [issues page](https://github.com/devwithzachary/LinuxOnVita/issues) or submit a pull request.
+
+Please review our **[AI Usage Policy](AI.md)** for guidelines on using AI coding assistants when contributing to this project. All code submitted must be thoroughly reviewed and personally owned by the human author; automated bot PRs are not accepted.
+
+---
+
+## ☕ Support the Project
+
+If LinuxOnVita has been useful to you, consider supporting continued development:
+
+<div align="center">
+  <a href="https://www.patreon.com/DevWithZachary"><img src="https://img.shields.io/badge/Patreon-Become%20a%20Patron-F96854.svg?logo=patreon&logoColor=white&style=for-the-badge" alt="Patreon" /></a>
+  &nbsp;
+  <a href="https://buymeacoffee.com/linuxonandroid"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Tip%20the%20Dev-FFDD00.svg?logo=buymeacoffee&logoColor=black&style=for-the-badge" alt="Buy Me a Coffee" /></a>
+</div>
 
 ---
 
