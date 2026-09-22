@@ -1,40 +1,72 @@
 #!/bin/sh
-# alpine-chroot
-# Launch an interactive Alpine Linux environment with apk package manager.
+# alpine-chroot: Launch an interactive Alpine Linux environment with apk package manager.
 
-TARGET="/mnt/ur0/alpine"
 TARBALL="/usr/share/alpine/alpine-minirootfs-armv7.tar.gz"
 
-# Fallback to /tmp/alpine if eMMC ur0 is not available
-if [ ! -d "/mnt/ur0" ]; then
-    TARGET="/tmp/alpine"
+if [ ! -f "${TARBALL}" ]; then
+    echo "Error: ${TARBALL} not found."
+    exit 1
 fi
 
-# Initialize Alpine rootfs if not already extracted
-if [ ! -f "${TARGET}/bin/sh" ]; then
-    echo "=== Initializing Alpine Linux rootfs in ${TARGET} ==="
-    
-    # Try mounting ur0 as read-write if target is on ur0
-    if [ "$TARGET" = "/mnt/ur0/alpine" ]; then
-        if [ -b "/dev/vita/ur0" ]; then
-            mount -o remount,rw /mnt/ur0 2>/dev/null || mount -t exfat -o rw /dev/vita/ur0 /mnt/ur0 2>/dev/null || true
+# Detect storage for persistent Alpine installation
+PERSISTENT_DIR=""
+if mountpoint -q /mnt/ux0 2>/dev/null; then
+    PERSISTENT_DIR="/mnt/ux0"
+elif mountpoint -q /mnt/ur0 2>/dev/null; then
+    PERSISTENT_DIR="/mnt/ur0"
+fi
+
+USE_RAM=0
+if [ "$1" = "--ram" ] || [ -z "$PERSISTENT_DIR" ]; then
+    USE_RAM=1
+fi
+
+if [ $USE_RAM -eq 1 ]; then
+    TARGET="/tmp/alpine"
+    echo "=== Running Alpine Linux in RAM (tmpfs) ==="
+else
+    IMG_FILE="${PERSISTENT_DIR}/alpine.img"
+    TARGET="/mnt/alpine"
+    mkdir -p "${TARGET}"
+
+    if [ ! -f "${IMG_FILE}" ]; then
+        echo "=== Creating Persistent Alpine Linux ext4 image (500MB) on ${PERSISTENT_DIR} ==="
+        echo "Allocating 500MB at ${IMG_FILE}..."
+        dd if=/dev/zero of="${IMG_FILE}" bs=1M count=500 2>/dev/null || {
+            echo "Warning: Not enough storage on ${PERSISTENT_DIR}. Falling back to RAM mode."
+            TARGET="/tmp/alpine"
+            USE_RAM=1
+        }
+        if [ $USE_RAM -eq 0 ]; then
+            echo "Formatting ext4 filesystem..."
+            mke2fs -F "${IMG_FILE}" >/dev/null 2>&1 || true
         fi
     fi
 
-    mkdir -p "${TARGET}"
-
-    if [ -f "${TARBALL}" ]; then
-        echo "Extracting Alpine mini-rootfs..."
-        tar -xzf "${TARBALL}" -C "${TARGET}"
-    else
-        echo "Error: ${TARBALL} not found!"
-        echo "You can manually place an Alpine ARMv7 rootfs in ${TARGET}"
-        exit 1
+    if [ $USE_RAM -eq 0 ]; then
+        if ! mountpoint -q "${TARGET}"; then
+            mount -o loop "${IMG_FILE}" "${TARGET}" 2>/dev/null || {
+                echo "Warning: Loop mount failed. Falling back to RAM mode."
+                TARGET="/tmp/alpine"
+                USE_RAM=1
+            }
+        fi
     fi
+fi
+
+# Extract rootfs if not already present
+if [ ! -f "${TARGET}/bin/sh" ]; then
+    echo "=== Initializing Alpine Linux rootfs in ${TARGET} ==="
+    mkdir -p "${TARGET}"
+    echo "Extracting Alpine mini-rootfs (using zcat)..."
+    zcat "${TARBALL}" | tar -x -C "${TARGET}"
 
     # Set up DNS resolv.conf
-    echo "nameserver 1.1.1.1" > "${TARGET}/etc/resolv.conf"
-    echo "nameserver 8.8.8.8" >> "${TARGET}/etc/resolv.conf"
+    mkdir -p "${TARGET}/etc"
+    cp /etc/resolv.conf "${TARGET}/etc/resolv.conf" 2>/dev/null || {
+        echo "nameserver 1.1.1.1" > "${TARGET}/etc/resolv.conf"
+        echo "nameserver 8.8.8.8" >> "${TARGET}/etc/resolv.conf"
+    }
 
     # Set up APK repositories
     mkdir -p "${TARGET}/etc/apk"
@@ -46,22 +78,28 @@ EOF
     echo "Alpine Linux rootfs initialized successfully."
 fi
 
-# Ensure DNS matches host
-[ -f /etc/resolv.conf ] && cp /etc/resolv.conf "${TARGET}/etc/resolv.conf"
+# Sync current DNS into chroot
+[ -f /etc/resolv.conf ] && cp /etc/resolv.conf "${TARGET}/etc/resolv.conf" 2>/dev/null || true
+
+# Ensure all mount point directories exist before mounting
+mkdir -p "${TARGET}/proc" "${TARGET}/sys" "${TARGET}/dev" "${TARGET}/dev/pts" "${TARGET}/dev/shm"
 
 # Bind system pseudo-filesystems
 mountpoint -q "${TARGET}/proc" || mount -t proc proc "${TARGET}/proc"
 mountpoint -q "${TARGET}/sys"  || mount -t sysfs sysfs "${TARGET}/sys"
 mountpoint -q "${TARGET}/dev"  || mount --bind /dev "${TARGET}/dev"
-mountpoint -q "${TARGET}/dev/pts" || mount --bind /dev/pts "${TARGET}/dev/pts" 2>/dev/null || true
+mountpoint -q "${TARGET}/dev/pts" || mount -t devpts devpts "${TARGET}/dev/pts" -o mode=0620,gid=5,ptmxmode=0666 2>/dev/null || true
+mountpoint -q "${TARGET}/dev/shm" || mount -t tmpfs tmpfs "${TARGET}/dev/shm" -o mode=1777 2>/dev/null || true
 
 echo "Entering Alpine Linux userland (type 'exit' to return)..."
 echo "Try running: apk update && apk add fastfetch htop python3"
 echo ""
 
+# Enter chroot
 chroot "${TARGET}" /bin/sh -l
 
-# Cleanup mounts on exit (optional / best effort)
+# Cleanup bind mounts on exit
+umount "${TARGET}/dev/shm" 2>/dev/null || true
 umount "${TARGET}/dev/pts" 2>/dev/null || true
 umount "${TARGET}/dev" 2>/dev/null || true
 umount "${TARGET}/sys" 2>/dev/null || true
