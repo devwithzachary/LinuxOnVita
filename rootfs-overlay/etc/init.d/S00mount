@@ -1,0 +1,21 @@
+#!/bin/sh
+# S00mount: Mount essential pseudo-filesystems and process /etc/fstab
+
+case "$1" in
+    start)
+        mkdir -p /dev/pts /dev/shm /run /tmp /proc /sys
+        mount -t proc proc /proc 2>/dev/null || true
+        mount -t sysfs sysfs /sys 2>/dev/null || true
+        mount -t devpts devpts /dev/pts -o mode=0620,gid=5,ptmxmode=0666 2>/dev/null || true
+        chmod 666 /dev/ptmx 2>/dev/null || true
+        mount -t tmpfs tmpfs /dev/shm -o mode=1777 2>/dev/null || true
+        mount -t tmpfs tmpfs /run -o mode=0755,nosuid,nodev 2>/dev/null || true
+        mount -t tmpfs tmpfs /tmp -o mode=1777 2>/dev/null || true
+        mount -a 2>/dev/null || true
+        ;;
+    stop)
+        ;;
+    *)
+        echo "Usage: $0 {start|stop}"
+        ;;
+esac

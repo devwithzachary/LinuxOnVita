@@ -1,9 +1,15 @@
 # /etc/inittab
 # System initialization
+::sysinit:/bin/mkdir -p /dev/pts /dev/shm /run /tmp /proc /sys
+::sysinit:/bin/mount -t proc proc /proc
+::sysinit:/bin/mount -t sysfs sysfs /sys
+::sysinit:/bin/mount -t devpts devpts /dev/pts -o mode=0620,gid=5,ptmxmode=0666
+::sysinit:/bin/chmod 666 /dev/ptmx
+::sysinit:/bin/mount -a
 ::sysinit:/etc/init.d/rcS
 
-# Framebuffer console (Vita screen) - Auto-login as root directly to shell
-tty1::respawn:/sbin/getty -n -l /bin/sh 115200 tty1
+# Framebuffer console (Vita screen) - Clear boot log & auto-login as root with welcome banner
+tty1::respawn:/sbin/getty -n -l /usr/bin/vita-login 115200 tty1
 
 # Serial console (UART / debug) - Auto-login as root
 ttyS0::respawn:/sbin/getty -n -l /bin/sh 115200 ttyS0

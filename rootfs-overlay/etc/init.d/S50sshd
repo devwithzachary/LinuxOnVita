@@ -1,0 +1,86 @@
+#!/bin/sh
+# S50sshd: Starts OpenSSH server with guaranteed PTY support
+
+DAEMON="sshd"
+PIDFILE="/var/run/$DAEMON.pid"
+
+[ -f /usr/bin/ssh-keygen ] || exit 0
+
+umask 077
+
+start() {
+    # Ensure devpts is mounted and /dev/ptmx is accessible for SSH PTY allocation
+    mkdir -p /dev/pts /var/run /var/empty
+    if ! mountpoint -q /dev/pts 2>/dev/null; then
+        mount -t devpts devpts /dev/pts -o mode=0620,gid=5,ptmxmode=0666 2>/dev/null || true
+    fi
+    chmod 666 /dev/ptmx 2>/dev/null || true
+    chmod 755 /var/empty 2>/dev/null || true
+
+    # Create any missing host keys
+    /usr/bin/ssh-keygen -A
+
+    printf "Starting %s: " "$DAEMON"
+    start-stop-daemon --start --pidfile "$PIDFILE" \
+        --exec "/usr/sbin/$DAEMON"
+    status=$?
+    if [ "$status" -eq 0 ]; then
+        echo "OK"
+    else
+        echo "FAIL"
+    fi
+    return "$status"
+}
+
+stop() {
+    printf "Stopping %s: " "$DAEMON"
+    start-stop-daemon --stop --pidfile "$PIDFILE" \
+        --exec "/usr/sbin/$DAEMON"
+    status=$?
+    if [ "$status" -eq 0 ]; then
+        echo "OK"
+    else
+        echo "FAIL"
+    fi
+    while [ -f "$PIDFILE" ]; do
+        sleep 0.1
+    done
+    return "$status"
+}
+
+restart() {
+    stop
+    start
+}
+
+reload() {
+    printf "Reloading %s config: " "$DAEMON"
+    start-stop-daemon --stop --signal HUP -q --pidfile "$PIDFILE" \
+        --exec "/usr/sbin/$DAEMON"
+    status=$?
+    if [ "$status" -eq 0 ]; then
+        echo "OK"
+    else
+        echo "FAIL"
+    fi
+    return "$status"
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        restart
+        ;;
+    reload)
+        reload
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|reload}"
+        exit 1
+        ;;
+esac

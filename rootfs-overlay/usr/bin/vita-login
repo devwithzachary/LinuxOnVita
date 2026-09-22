@@ -1,0 +1,9 @@
+#!/bin/sh
+# Vita Linux console auto-login wrapper
+# Clears the boot messages and starts an interactive login shell
+
+if [ "$(tty 2>/dev/null)" = "/dev/tty1" ]; then
+    clear 2>/dev/null || printf '\033[2J\033[H'
+fi
+
+exec /bin/sh -l

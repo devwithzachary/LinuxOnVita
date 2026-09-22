@@ -3,9 +3,10 @@
 
 if [ -t 0 ]; then
     if [ "$(tty 2>/dev/null)" = "/dev/tty1" ]; then
-        # Limit console scrolling to rows 1-21 so text never touches the keyboard (rows 22-34)
-        printf '\033[2J\033[1;21r\033[1;1H'
+        clear 2>/dev/null || printf '\033[2J\033[H'
     fi
+
+    export PS1='\[\033[01;32m\]root@vita\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]# '
 
     echo "  ========================================================"
     echo "   🎮 Welcome to PlayStation Vita Linux 6.12!             "
