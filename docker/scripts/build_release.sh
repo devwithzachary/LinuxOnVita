@@ -86,19 +86,41 @@ LinuxOnVita ${VERSION} - Installation Instructions
 Full documentation: https://github.com/devwithzachary/LinuxOnVita
 EOF
 
-# Step 3: Zip everything
-echo "[3/3] Creating release zip: ${RELEASE_ZIP}"
-rm -f "${RELEASE_ZIP}"
-cd "${RELEASE_DIR}"
-zip -r "${RELEASE_ZIP}" . -x "*.DS_Store"
+# Step 3: Package release archive
+# Ensure 'zip' is available (may not be in older image builds; Dockerfile now includes it)
+if ! command -v zip >/dev/null 2>&1; then
+    echo "[3/3] 'zip' not found — installing..."
+    apt-get install -y --no-install-recommends zip >/dev/null 2>&1 || true
+fi
 
-echo ""
-echo "========================================================="
-echo " Release package ready!"
-echo " File: ${RELEASE_ZIP}"
-SIZE=$(du -sh "${RELEASE_ZIP}" | cut -f1)
-echo " Size: ${SIZE}"
-echo ""
-echo " Contents:"
-unzip -l "${RELEASE_ZIP}" | tail -n +4 | head -n -2
-echo "========================================================="
+if command -v zip >/dev/null 2>&1; then
+    echo "[3/3] Creating release zip: ${RELEASE_ZIP}"
+    rm -f "${RELEASE_ZIP}"
+    cd "${RELEASE_DIR}"
+    zip -r "${RELEASE_ZIP}" . -x "*.DS_Store"
+
+    echo ""
+    echo "========================================================="
+    echo " Release package ready!"
+    echo " File: ${RELEASE_ZIP}"
+    SIZE=$(du -sh "${RELEASE_ZIP}" | cut -f1)
+    echo " Size: ${SIZE}"
+    echo ""
+    echo " Contents:"
+    unzip -l "${RELEASE_ZIP}" | tail -n +4 | head -n -2
+    echo "========================================================="
+else
+    # Fallback: tar.gz (always available)
+    RELEASE_TAR="${OUTPUT_DIR}/${RELEASE_NAME}.tar.gz"
+    echo "[3/3] 'zip' unavailable — falling back to tar.gz: ${RELEASE_TAR}"
+    cd "${RELEASE_DIR}"
+    tar -czf "${RELEASE_TAR}" .
+    echo ""
+    echo "========================================================="
+    echo " Release package ready (tar.gz fallback)!"
+    echo " File: ${RELEASE_TAR}"
+    SIZE=$(du -sh "${RELEASE_TAR}" | cut -f1)
+    echo " Size: ${SIZE}"
+    echo " Note: Rebuild the Docker image ('./build.sh image') to get .zip output next time."
+    echo "========================================================="
+fi

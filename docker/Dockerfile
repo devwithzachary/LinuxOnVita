@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     rsync \
     cpio \
     unzip \
+    zip \
     wget \
     curl \
     cmake \
