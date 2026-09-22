@@ -57,19 +57,20 @@ start)
                     echo "--- Kernel Messages (dmesg) ---"
                     dmesg
                     echo ""
-                    echo "--- Input Devices (/proc/bus/input/devices) ---"
+                    echo "--- Input Devices (/proc/bus/input/devices & /dev/input) ---"
                     cat /proc/bus/input/devices 2>/dev/null || true
+                    ls -la /dev/input 2>/dev/null || true
                     echo ""
                     echo "--- Storage Block Devices and Mounts ---"
                     ls -l /dev/mmcblk* /dev/vita/* 2>/dev/null || true
                     echo ""
-                    mount
+                    mount 2>/dev/null || true
                     echo ""
                     echo "--- Network Interfaces & IP Addresses ---"
                     ip addr show 2>/dev/null || ifconfig 2>/dev/null || true
                     echo ""
                     echo "--- Running Processes ---"
-                    ps aux 2>/dev/null || ps 2>/dev/null || true
+                    ps -ef 2>/dev/null || ps 2>/dev/null || true
                     echo ""
                     echo "--- Input Mapper Log (/tmp/vita-input-mapper.log) ---"
                     [ -f /tmp/vita-input-mapper.log ] && cat /tmp/vita-input-mapper.log

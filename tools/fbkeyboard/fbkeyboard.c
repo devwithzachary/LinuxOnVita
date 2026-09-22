@@ -401,6 +401,8 @@ static void emit_key_or_tty(int uinput_fd, int tty_fd, int keycode, const char *
 int main(int argc, char **argv) {
     (void)argc;
     (void)argv;
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
     printf("[fbkeyboard] Starting PlayStation Vita On-Screen Touch Keyboard...\n");
 
     fb_fd = open(FB_DEV, O_RDWR);

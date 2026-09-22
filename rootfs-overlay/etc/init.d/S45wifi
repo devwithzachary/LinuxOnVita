@@ -11,7 +11,7 @@ start)
         IFACE=""
         while [ $i -lt $TIMEOUT ]; do
             for candidate in mlan0 wlan0; do
-                if [ -d "/sys/class/net/$candidate" ]; then
+                if ip link show "$candidate" >/dev/null 2>&1 || [ -e "/sys/class/net/$candidate" ]; then
                     IFACE="$candidate"
                     break 2
                 fi

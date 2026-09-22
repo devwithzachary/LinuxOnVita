@@ -117,6 +117,8 @@ static void emit_key(int uinput_fd, int keycode, int value) {
 int main(int argc, char **argv) {
     (void)argc;
     (void)argv;
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
     printf("[InputMapper] Starting Vita Gamepad-to-Keystroke Mapper...\n");
 
     int buttons_fd = -1;
