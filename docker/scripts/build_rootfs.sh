@@ -44,15 +44,15 @@ if [ ! -f "${ALPINE_TAR}" ]; then
         https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/armv7/alpine-minirootfs-3.20.0-armv7.tar.gz
 fi
 
-# 2. Clone or update vita-linux-port
+# 2. Clone or update vita-linux-port (shallow submodules to avoid OOM memory limits)
 cd "${SRC_DIR}"
 if [ ! -d "vita-linux-port" ]; then
-    echo "Cloning incognitojam/vita-linux-port..."
-    git clone --recurse-submodules https://github.com/incognitojam/vita-linux-port.git
+    echo "Cloning incognitojam/vita-linux-port (shallow clone with depth 1)..."
+    git clone --depth 1 --shallow-submodules --recurse-submodules https://github.com/incognitojam/vita-linux-port.git
 else
     echo "vita-linux-port already exists. Updating submodules..."
     cd vita-linux-port
-    git submodule update --init --recursive
+    git submodule update --init --recursive --depth 1
     cd ..
 fi
 
