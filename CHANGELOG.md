@@ -11,6 +11,9 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
 - **Official Sony Memory Card Requirement:** Clarified that an official physical Sony memory card is strictly required on all hardware models (both 1000 and 2000 consoles) to boot Linux. Corrected misleading documentation that previously suggested PS Vita 2000 Slim could boot using internal 1GB storage without an official memory card.
 - **SD2Vita Setup Guide:** Expanded troubleshooting and setup guidance explaining that SD2Vita users must also copy `zImage` and `vita.dtb` to their official Sony memory card (`uma0:linux/`) because the baremetal payload only interfaces with MSIF.
 
+### Removed
+- **Static Battery Telemetry (`vita-battery`):** Removed the static bootloader handoff and `vita-battery` command. Because the hardware fuel gauge (TI bq27520) is isolated on the Syscon companion microcontroller's private I2C bus and live streaming is not yet reverse-engineered, the static snapshot did not reflect runtime battery state or charging changes and caused confusion.
+
 ---
 
 ## [v1.0.0] - 2026-09-22 - First Public Release

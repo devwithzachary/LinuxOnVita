@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: DevWithZachary <devwithzachary@pm.me>
+Date: Wed, 23 Sep 2026 15:55:00 +0100
+Subject: [PATCH] Updated branding and 3.60 fallback loader
+
+---
+ main.c | 14 +++++++++++---
+ 1 file changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/main.c b/main.c
+index 808271c..b5aedd8 100644
+--- a/main.c
++++ b/main.c
+@@ -25,9 +25,8 @@ int main(int argc, char *argv[])
+ 
+ 	psvDebugScreenInit();
+ 
+-	printf("Plugin Loader by xerpi\n");
+-	printf("Linux theming and 'enhancements' by CreepNT\n");
+-	printf("(he's the one to blame if it breaks :p)\n\n");
++	printf("PlayStation Vita Linux Bootstrapper\n");
++	printf("Port by xerpi, CreepNT, and community\n\n");
+ 
+ 	if (are_keyfiles_present() == 0)//A file required to run Linux is not present.
+ 	{
+@@ -45,6 +44,15 @@ int main(int argc, char *argv[])
+ 	argg.flags = 0;
+ 	mod_id = taiLoadStartKernelModuleForUser(MOD_PATH, &argg);
+ 
++	if (mod_id < 0) {
++		SceUID fd360 = sceIoOpen("ux0:linux/baremetal-loader_360.skprx", SCE_O_RDONLY, 0);
++		if (fd360 >= 0) {
++			sceIoClose(fd360);
++			printf("Retrying with 3.60 loader variant...\n");
++			mod_id = taiLoadStartKernelModuleForUser("ux0:linux/baremetal-loader_360.skprx", &argg);
++		}
++	}
++
+ 	if (mod_id < 0)
+ 		printf("Error loading " MOD_PATH ": 0x%08X\n", mod_id);
+ 	else
+-- 

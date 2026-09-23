@@ -1,12 +1,12 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Vita Linux Port <dev@vita-linux.org>
+From: DevWithZachary <devwithzachary@pm.me>
 Date: Tue, 22 Sep 2026 16:36:00 +0100
-Subject: [PATCH] Multi-path payload loading, 100% display brightness, and battery state persistence
+Subject: [PATCH] Multi-path payload loading and 100% display brightness
 
 ---
  config.h |  2 +-
- main.c   | 46 ++++++++++++++++++++++++++++++++++++++++++++--
- 2 files changed, 45 insertions(+), 3 deletions(-)
+ main.c   | 21 ++++++++++++++++++++-
+ 2 files changed, 21 insertions(+), 2 deletions(-)
 
 diff --git a/config.h b/config.h
 index e823b0a..c768aa0 100644
@@ -17,7 +17,7 @@ index e823b0a..c768aa0 100644
 +#define PAYLOAD_PATH	"ux0:linux/payload.bin"
  #define PAYLOAD_PADDR	0x40300000
 diff --git a/main.c b/main.c
-index ffa2a2c..9dafee9 100644
+index ffa2a2c..bcc98a9 100644
 --- a/main.c
 +++ b/main.c
 @@ -179,9 +179,27 @@ int module_start(SceSize argc, const void *args)
@@ -50,35 +50,12 @@ index ffa2a2c..9dafee9 100644
  		return SCE_KERNEL_START_FAILED;
  	}
  
-@@ -236,6 +254,32 @@ int module_start(SceSize argc, const void *args)
+@@ -236,6 +254,9 @@ int module_start(SceSize argc, const void *args)
  	ksceKernelGetPaddr(&resume_ctx, &resume_ctx_paddr);
  	LOG("Resume context pa: 0x%08X\n", resume_ctx_paddr);
  
 +	/* Set display to 100% full brightness */
 +	kscePowerSetDisplayBrightness(65535);
-+
-+	/* Capture hardware battery state */
-+	int batt_percent = kscePowerGetBatteryLifePercent();
-+	int batt_charging = kscePowerIsBatteryCharging();
-+	int batt_volt = kscePowerGetBatteryVolt();
-+	LOG("Battery: %d%%, charging: %d, volt: %dmV\n", batt_percent, batt_charging, batt_volt);
-+
-+	static const char * const batt_paths[] = {
-+		"ux0:linux/battery.txt",
-+		"ur0:linux/battery.txt",
-+		"ux0:/linux/battery.txt",
-+		"ur0:/linux/battery.txt"
-+	};
-+	for (unsigned int b = 0; b < sizeof(batt_paths)/sizeof(batt_paths[0]); b++) {
-+		SceUID bfd = ksceIoOpen(batt_paths[b], SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
-+		if (bfd >= 0) {
-+			char bbuf[128];
-+			int blen = snprintf(bbuf, sizeof(bbuf), "PERCENT=%d\nCHARGING=%d\nVOLTAGE_MV=%d\n",
-+				batt_percent, batt_charging, batt_volt);
-+			ksceIoWrite(bfd, bbuf, blen);
-+			ksceIoClose(bfd);
-+		}
-+	}
 +
  	LOG("Requesting standby...\n");
  

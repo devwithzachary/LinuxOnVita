@@ -26,7 +26,7 @@ If you build the raw upstream projects by default, you get a bare-bones Linux ke
 | **Boot Delay / SSH Ready Time** | ⚠️ **~2.5 minute delay:** Linux kernel blocked waiting on CRNG random entropy due to missing hardware timer. | ✅ **~12 seconds to SSH:** Enabled the 144 MHz ARM Global Timer clocksource, completely eliminating entropy stalls. |
 | **Package Management** | ❌ **Read-only / Ephemeral:** Buildroot initramfs has no package manager (`apt`/`apk`); any downloaded binaries vanish on reboot. | ✅ **Alpine Linux (`alpine-chroot`):** Run `alpine-chroot` to create a persistent ext4 userland on SD/internal storage with live `apk add` package management. |
 | **Storage & SD2Vita** | ⚠️ Only official Sony memory cards or internal eMMC mounted manually. | ✅ **Auto-Mounting:** Automatic mounting of `/mnt/ux0` (SD2Vita / memory card), `/mnt/ur0` (internal storage), and `/mnt/uma0` on boot. |
-| **Battery & Power Telemetry** | ❌ Unknown; battery fuel gauge is isolated on Ernie's private I2C bus. | ✅ **Hardware Battery Telemetry:** Captured during bootloader handover, printed on login banner, and accessible via `vita-battery` CLI. |
+| **Battery & Power Management** | ❌ Unknown; battery fuel gauge is isolated on Ernie's private I2C bus. | ⚠️ **Isolated on Ernie PMIC:** The battery fuel gauge (TI bq27520) communicates over a private I2C bus with the Syscon microcontroller; live runtime battery streaming is not yet supported in Linux. |
 | **Gaming Demonstration** | ❌ None out of the box. | ✅ **Framebuffer DOOM (`vita-doom`):** Native pure-C `fbdoom` with twin-stick and button controls, analog deadzones, and input isolation. |
 | **Build System & Toolchains** | ⚠️ Complex multi-step host compilation across separate repos and cross-compilers. | ✅ **One-Command Docker Build:** `./build.sh all` handles toolchains, kernel patches, Buildroot overlays, and VPK packaging automatically. |
 
@@ -217,24 +217,7 @@ vita-brightness set 80     # Adjust brightness (0-100%)
 vita-brightness max        # Jump straight to 100% full bright
 ```
 
-### 4. Hardware Battery Check (`vita-battery`)
-Inspect your Vita's hardware battery telemetry at any time:
-```bash
-vita-battery
-```
-```
-======================================================
-               PlayStation Vita Battery               
-======================================================
- Battery Level:   87% [================>   ]
- Power State:     Discharging (Battery Power)
- Battery Voltage: 3920 mV
- Battery Health:  Good
-======================================================
-```
-*(Also supports `--percent` and `--short` flags for status scripts).*
-
-### 5. Playing Framebuffer DOOM (`vita-doom`)
+### 4. Playing Framebuffer DOOM (`vita-doom`)
 A pure-C standalone framebuffer DOOM engine (`fbdoom`) is pre-installed.
 1. Place any standard DOOM WAD (e.g. `DOOM1.WAD`, `DOOM.WAD`, `DOOM2.WAD`) into `ux0:doom/` (available in Linux at `/mnt/ux0/doom/`).
 2. Run `vita-doom` from the terminal:
@@ -254,7 +237,7 @@ vita-doom
 
 *(Note: Background input daemons and the touch keyboard are automatically suspended while DOOM is running and resumed when you exit).*
 
-### 6. Installing Packages with Alpine Linux (`alpine-chroot`)
+### 5. Installing Packages with Alpine Linux (`alpine-chroot`)
 Vita Linux includes an integrated Alpine Linux environment. Run `alpine-chroot` to launch a persistent Alpine rootfs:
 ```bash
 # Initialize/enter Alpine Linux (stored persistently as an ext4 image)
@@ -268,14 +251,14 @@ apk add fastfetch htop python3 git curl nano gcc musl-dev
 fastfetch
 ```
 
-### 7. Remote SSH Access
+### 6. Remote SSH Access
 Within ~12 seconds of boot, your Vita connects to Wi-Fi and starts OpenSSH. Connect from your computer:
 ```bash
 ssh root@vita.local
 ```
 *(If mDNS does not resolve on your network, use the IP address shown on the login banner: `ssh root@<VITA_IP>`)*.
 
-### 8. Returning to VitaOS or Powering Down
+### 7. Returning to VitaOS or Powering Down
 ```bash
 reboot      # Clean cold reset straight back to official Sony OS
 poweroff    # Full hardware poweroff via Syscon
@@ -295,7 +278,7 @@ poweroff    # Full hardware poweroff via Syscon
 | **Analog Sticks** | **Working** | Syscon `0x180` analog sampling enabled with deadzone filtering |
 | **Storage (eMMC)** | **Working** | Auto-detected SCE partitions (`/dev/mmcblk*p1`–`p12`) |
 | **Storage (SD2Vita / Sony)** | **Working** | Automatically mounted at `/mnt/ux0`, `/mnt/ur0`, and `/mnt/uma0` |
-| **Battery Fuel Gauge** | **Working** | Handoff telemetry reporting percentage, voltage, and charging state |
+| **Battery Fuel Gauge** | **Not yet supported** | Isolated on Syscon (Ernie) private I2C bus; runtime streaming unsupported |
 | **UART0 Serial Console** | **Working** | 115200 baud serial debug console |
 | **Bluetooth** | Working | Marvell SD8787 via `btmrvl` |
 | **Audio** | Working | Vita audio codec via ALSA & PipeWire |

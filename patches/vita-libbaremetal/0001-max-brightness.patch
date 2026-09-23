@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Vita Linux Port <dev@vita-linux.org>
+From: DevWithZachary <devwithzachary@pm.me>
 Date: Tue, 22 Sep 2026 16:35:00 +0100
 Subject: [PATCH] Set OLED and LCD displays to 100% full brightness and fix button mask
 

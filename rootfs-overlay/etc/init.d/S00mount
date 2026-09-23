@@ -22,7 +22,7 @@ case "$1" in
 
         # Mount ur0 (Vita internal storage) if available
         mkdir -p /mnt/ur0 /mnt/ux0 /mnt/alpine
-        for ur_dev in /dev/vita/ur0 /dev/mmcblk0p12; do
+        for ur_dev in /dev/vita/ur0 /dev/mmcblk0p12 /dev/mmcblk1p12 /dev/mmcblk2p12; do
             if [ -b "$ur_dev" ] && ! mountpoint -q /mnt/ur0 2>/dev/null; then
                 mount -t exfat -o rw "$ur_dev" /mnt/ur0 2>/dev/null || \
                 mount -t vfat -o rw "$ur_dev" /mnt/ur0 2>/dev/null || \

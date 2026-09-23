@@ -29,15 +29,9 @@ if [ -t 0 ]; then
     else
         echo "   * Wi-Fi IP:   Connecting in background...             "
     fi
-
-    BATT=$(vita-battery --short 2>/dev/null)
-    if [ -n "$BATT" ]; then
-        echo "   * Battery:    $BATT                                   "
-    fi
     echo ""
     echo "   Useful Commands:"
     echo "     - vita-doom       : Play DOOM under Linux Framebuffer (/dev/fb0)"
-    echo "     - vita-battery    : Check battery percentage and charging state"
     echo "     - vita-brightness : Control screen brightness / backlight"
     echo "     - alpine-chroot   : Enter Alpine Linux with 'apk' package manager"
     echo "     - reboot          : Clean hardware reset back to VitaOS"

@@ -28,9 +28,9 @@ if [ ! -d "vita-baremetal-loader" ]; then
     git clone https://github.com/xerpi/vita-baremetal-loader.git
 fi
 cd vita-baremetal-loader
+git checkout . 2>/dev/null || true
 if [ -f "${BUILD_DIR}/patches/vita-baremetal-loader/0001-loader-features.patch" ]; then
-    git apply --check "${BUILD_DIR}/patches/vita-baremetal-loader/0001-loader-features.patch" 2>/dev/null && \
-        git apply "${BUILD_DIR}/patches/vita-baremetal-loader/0001-loader-features.patch" || true
+    git apply "${BUILD_DIR}/patches/vita-baremetal-loader/0001-loader-features.patch" || true
 fi
 make clean || true
 make CFLAGS="-std=gnu17 -Wl,-q -Wall -O0 -nostartfiles -mcpu=cortex-a9 -mthumb-interwork"
@@ -48,9 +48,9 @@ if [ ! -d "vita-libbaremetal" ]; then
     git clone https://github.com/xerpi/vita-libbaremetal.git
 fi
 cd vita-libbaremetal
+git checkout . 2>/dev/null || true
 if [ -f "${BUILD_DIR}/patches/vita-libbaremetal/0001-max-brightness.patch" ]; then
-    git apply --check "${BUILD_DIR}/patches/vita-libbaremetal/0001-max-brightness.patch" 2>/dev/null && \
-        git apply "${BUILD_DIR}/patches/vita-libbaremetal/0001-max-brightness.patch" || true
+    git apply "${BUILD_DIR}/patches/vita-libbaremetal/0001-max-brightness.patch" || true
 fi
 cd libbaremetal
 make clean || true
@@ -63,6 +63,7 @@ if [ ! -d "vita-baremetal-linux-loader" ]; then
     git clone https://github.com/xerpi/vita-baremetal-linux-loader.git
 fi
 cd vita-baremetal-linux-loader
+git checkout . 2>/dev/null || true
 make clean || true
 make CFLAGS="-std=gnu17 -Iinclude -IFatFs -mcpu=cortex-a9 -mthumb-interwork -O0 -g3 -Wall -Wno-unused-const-variable -ffreestanding"
 cp vita-baremetal-linux-loader.bin "${LINUX_OUT}/payload.bin"
@@ -74,6 +75,10 @@ if [ ! -d "vita_plugin_linux_loader" ]; then
     git clone https://github.com/DvaMishkiLapa/vita_plugin_linux_loader.git
 fi
 cd vita_plugin_linux_loader
+git checkout . 2>/dev/null || true
+if [ -f "${BUILD_DIR}/patches/vita_plugin_linux_loader/0001-bootstrapper-features.patch" ]; then
+    git apply "${BUILD_DIR}/patches/vita_plugin_linux_loader/0001-bootstrapper-features.patch" || true
+fi
 rm -rf build && mkdir build && cd build
 cmake ..
 make
