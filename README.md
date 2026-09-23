@@ -3,6 +3,7 @@
 [![PS Vita](https://img.shields.io/badge/Platform-PlayStation%20Vita-blue.svg)](https://en.wikipedia.org/wiki/PlayStation_Vita)
 [![Kernel](https://img.shields.io/badge/Kernel-Linux%206.12-orange.svg)](https://kernel.org)
 [![Architecture](https://img.shields.io/badge/Architecture-ARMv7--A%20(Cortex--A9)-green.svg)](https://developer.arm.com/Processors/Cortex-A9)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2.svg?logo=discord&logoColor=white)](https://discord.gg/BrzdmHu8Am)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A complete distribution, automated build environment, and handheld userland for running **Linux 6.12** on hacked PlayStation Vita consoles ([HENlo](https://vita.hacks.guide/using-henlo) / HENkaku / Ensō 3.60 & 3.65).
@@ -343,9 +344,11 @@ This toolkit builds upon the groundbreaking research and development of the PS V
 
 ---
 
-## 🤝 Contributing & AI Policy
+## 🤝 Community, Contributing & AI Policy
 
-Contributions, bug reports, and feature requests are welcome! Feel free to check out the [issues page](https://github.com/devwithzachary/LinuxOnVita/issues) or submit a pull request.
+Have questions, need help troubleshooting, or want to share photos and clips of Linux running on your Vita? Join our **[Discord Community](https://discord.gg/BrzdmHu8Am)**!
+
+Contributions, bug reports, and feature requests are welcome! Feel free to join the discussion on Discord, check out the [issues page](https://github.com/devwithzachary/LinuxOnVita/issues), or submit a pull request.
 
 Please review our **[AI Usage Policy](AI.md)** for guidelines on using AI coding assistants when contributing to this project. All code submitted must be thoroughly reviewed and personally owned by the human author; automated bot PRs are not accepted.
 
