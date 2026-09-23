@@ -45,8 +45,15 @@ cp "${OUTPUT_DIR}/ux0/linux/"*.bin     "${RELEASE_DIR}/ux0/linux/" 2>/dev/null |
 cp "${OUTPUT_DIR}/ux0/linux/"zImage    "${RELEASE_DIR}/ux0/linux/" 2>/dev/null || true
 cp "${OUTPUT_DIR}/ux0/linux/"*.dtb     "${RELEASE_DIR}/ux0/linux/" 2>/dev/null || true
 
-# Copy LiveArea launcher app folder
+# Copy LiveArea launcher app folder (unpacked)
 cp -r "${OUTPUT_DIR}/ux0/app/VITALINUX" "${RELEASE_DIR}/ux0/app/" 2>/dev/null || true
+
+# Copy standalone VitaLinux.vpk into the release package for easy 1-click VitaShell installation
+if [ -f "${OUTPUT_DIR}/vpk/VitaLinux.vpk" ]; then
+    cp "${OUTPUT_DIR}/vpk/VitaLinux.vpk" "${RELEASE_DIR}/VitaLinux.vpk"
+elif [ -f "${OUTPUT_DIR}/vpk/vita-linux-bootstrapper.vpk" ]; then
+    cp "${OUTPUT_DIR}/vpk/vita-linux-bootstrapper.vpk" "${RELEASE_DIR}/VitaLinux.vpk"
+fi
 
 # Include the wpa_supplicant template so users know what to edit
 cat > "${RELEASE_DIR}/ux0/linux/wpa_supplicant.conf" << 'EOF'
@@ -70,18 +77,31 @@ cat > "${RELEASE_DIR}/INSTALL.txt" << EOF
 LinuxOnVita ${VERSION} - Installation Instructions
 ==========================================================
 
-1. BEFORE FLASHING: Edit ux0/linux/wpa_supplicant.conf with your Wi-Fi
-   network name and password. Without this step Wi-Fi and SSH will not work,
-   but Linux will still boot.
+METHOD 1: Install via VitaLinux.vpk (Recommended & Easiest!)
+------------------------------------------------------------
+1. Copy the 'ux0/linux/' folder to 'ux0:linux/' on your PS Vita memory card
+   using VitaShell (via USB or FTP mode).
 
-2. Copy the contents of the ux0/ folder to your Vita memory card (ux0:)
-   using VitaShell (USB or FTP mode).
+2. (Optional) Edit 'ux0:linux/wpa_supplicant.conf' with your Wi-Fi network
+   name and password before booting Linux.
 
-3. In VitaShell, highlight ux0: and press TRIANGLE > Refresh LiveArea.
+3. Copy 'VitaLinux.vpk' to your Vita (e.g. 'ux0:VitaLinux.vpk').
 
-4. Return to the LiveArea home screen and launch the VitaLinux bubble.
+4. In VitaShell, navigate to 'VitaLinux.vpk', press CROSS (X) to install,
+   and confirm prompts (including unsafe permissions).
 
-5. Press CROSS to start the baremetal loader and boot Linux!
+5. Return to the LiveArea home screen, tap the 'VitaLinux' bubble, and press
+   CROSS (X) to boot into Linux!
+
+METHOD 2: Manual Folder Copy
+----------------------------
+1. Copy the contents of the 'ux0/' folder to the root of your memory card ('ux0:')
+   so that 'ux0:app/VITALINUX/' and 'ux0:linux/' exist.
+   IMPORTANT: Do not copy the 'ux0' folder itself into ux0 (avoid 'ux0:ux0/...').
+
+2. In VitaShell, highlight 'ux0:' on the main partition list, press
+   TRIANGLE (△), and select 'Refresh LiveArea'.
+   Note: If the bubble does not appear, use Method 1 above (install VitaLinux.vpk).
 
 Full documentation: https://github.com/devwithzachary/LinuxOnVita
 EOF

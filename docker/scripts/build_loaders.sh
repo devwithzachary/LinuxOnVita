@@ -78,11 +78,12 @@ rm -rf build && mkdir build && cd build
 cmake ..
 make
 cp *.vpk "${VPK_OUT}/vita-linux-bootstrapper.vpk"
+cp *.vpk "${VPK_OUT}/VitaLinux.vpk"
 
 # Pre-extract VPK for direct folder deployment (avoids LiveArea corrupt file errors)
 APP_DIR="${OUTPUT_DIR}/ux0/app/VITALINUX"
 mkdir -p "${APP_DIR}"
-unzip -qo "${VPK_OUT}/vita-linux-bootstrapper.vpk" -d "${APP_DIR}"
+unzip -qo "${VPK_OUT}/VitaLinux.vpk" -d "${APP_DIR}"
 
 # Also mirror payload to ux0/baremetal for compatibility
 BAREMETAL_OUT="${OUTPUT_DIR}/ux0/baremetal"
@@ -93,4 +94,4 @@ cp "${LINUX_OUT}/baremetal-loader.skprx" "${BAREMETAL_OUT}/baremetal-loader.skpr
 cd "${SRC_DIR}"
 
 echo "All loaders and VPK built successfully!"
-ls -lh "${LINUX_OUT}/baremetal-loader.skprx" "${LINUX_OUT}/payload.bin" "${VPK_OUT}/vita-linux-bootstrapper.vpk"
+ls -lh "${LINUX_OUT}/baremetal-loader.skprx" "${LINUX_OUT}/payload.bin" "${VPK_OUT}/VitaLinux.vpk"

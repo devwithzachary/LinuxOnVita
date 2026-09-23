@@ -33,7 +33,13 @@ If you build the raw upstream projects by default, you get a bare-bones Linux ke
 
 ## 📦 Pre-Built Releases (Quick Install)
 
-Don't want to compile from source? Download the latest pre-built release from the [GitHub Releases page](https://github.com/devwithzachary/LinuxOnVita/releases).
+Don't want to compile from source? Download the latest pre-built release zip (`LinuxOnVita-release-*.zip`) from the [GitHub Releases page](https://github.com/devwithzachary/LinuxOnVita/releases).
+
+The release zip is an all-in-one package that contains:
+* **`VitaLinux.vpk`:** Standalone homebrew installer package (easiest way to install the LiveArea bubble via VitaShell).
+* **`ux0/linux/`:** Linux 6.12 kernel (`zImage`), Device Tree blobs (`*.dtb`), baremetal loaders (`baremetal-loader.skprx`, `payload.bin`), and sample Wi-Fi config.
+* **`ux0/app/VITALINUX/`:** Pre-extracted app folder (for users who prefer manual folder deployment).
+* **`INSTALL.txt`:** Quick setup instructions.
 
 > [!IMPORTANT]
 > **Pre-built releases do NOT include Wi-Fi credentials.** The release zip is intentionally built without a `wpa_supplicant.conf` so you must add your own network details before the Vita can connect to Wi-Fi or SSH.
@@ -46,7 +52,7 @@ Don't want to compile from source? Download the latest pre-built release from th
 > ```
 > Without this step the system **will still boot into Linux** but Wi-Fi and SSH will not be available.
 
-The release zip contains a pre-structured `ux0/` folder — simply copy its contents onto your Vita's memory card (`ux0:`) and follow Steps 4 and 5 below.
+To install, simply follow [Step 4](#step-4-transfer-files-to-your-ps-vita) and [Step 5](#step-5-install--launch-linux) below.
 
 ---
 
@@ -112,7 +118,18 @@ Run the automated Docker build system:
 ### Step 4: Transfer Files to Your PS Vita
 1. Connect your PS Vita to your computer via USB cable (or FTP).
 2. Open **VitaShell** and press **SELECT** to enable USB/FTP storage.
-3. Copy the following folders from `output/` to your Vita's memory card (`ux0:`):
+3. Choose your preferred installation method below:
+
+#### Option A: Install via `VitaLinux.vpk` (Recommended & Easiest!)
+Copy the following files to your memory card (`ux0:`):
+
+| Source on Computer | Destination on PS Vita (`ux0:`) | Description |
+| :--- | :--- | :--- |
+| `VitaLinux.vpk` (from release zip or `output/vpk/`) | `ux0:VitaLinux.vpk` | Standard Vita homebrew installer package |
+| `ux0/linux/*` (from release zip or `output/ux0/linux/`) | `ux0:linux/` | Kernel (`zImage`), Device Trees (`*.dtb`), and Loaders |
+
+#### Option B: Manual Folder Copy
+Copy the pre-extracted application folder directly:
 
 | Source on Computer | Destination on PS Vita (`ux0:`) | Description |
 | :--- | :--- | :--- |
@@ -122,8 +139,9 @@ Run the automated Docker build system:
 Your Vita's file structure should look like this:
 ```
 ux0:
+├── VitaLinux.vpk               (if using Option A to install)
 ├── app/
-│   └── VITALINUX/
+│   └── VITALINUX/             (installed by VPK, or copied manually)
 │       ├── eboot.bin
 │       ├── sce_sys/
 │       │   ├── icon0.png
@@ -135,7 +153,8 @@ ux0:
     ├── vita.dtb
     ├── vita1000.dtb
     ├── vita2000.dtb
-    └── pstv.dtb
+    ├── pstv.dtb
+    └── wpa_supplicant.conf     (edit with your Wi-Fi details)
 ```
 
 > [!IMPORTANT]
@@ -146,10 +165,22 @@ ux0:
 
 ---
 
-### Step 5: Refresh LiveArea & Launch
+### Step 5: Install & Launch Linux
+
+#### If you used Option A (`VitaLinux.vpk`):
+1. Disconnect USB / exit VitaShell server mode.
+2. In VitaShell, navigate to `ux0:VitaLinux.vpk`.
+3. Press **CROSS (✕)** to install the package.
+4. When prompted that the package requires extended/unsafe permissions, press **CROSS (✕)** to accept.
+5. Once installation finishes, press the **PS Button** to return to the LiveArea home screen.
+6. Tap the new **VitaLinux** bubble and select **Start**.
+7. Press **CROSS (✕)** to initiate the baremetal loader handover.
+
+#### If you used Option B (Manual Folder Copy):
 1. Disconnect USB / exit VitaShell server mode.
 2. In VitaShell, navigate to the partition list (`ux0:`, `ur0:`, etc.).
 3. Highlight `ux0:`, press **TRIANGLE (△)** to open the menu, and select **Refresh LiveArea**.
+   *(Note: If the bubble does not appear, see [Troubleshooting](#livearea-bubble-does-not-appear-after-refresh-livearea-refreshed-0-items) or simply install `VitaLinux.vpk`).*
 4. Press the **PS Button** to return to the LiveArea home screen.
 5. Tap the new **VitaLinux** bubble and select **Start**.
 6. Press **CROSS (✕)** to initiate the baremetal loader handover.
@@ -272,9 +303,14 @@ poweroff    # Full hardware poweroff via Syscon
 
 ## ❓ Troubleshooting
 
+### LiveArea bubble does not appear after "Refresh LiveArea" ("Refreshed 0 items")
+- **Cause 1 (Nested Directory):** If you extracted the release zip on your PC/Mac and dragged the `ux0` folder straight into `ux0:`, the files ended up at `ux0:ux0/app/VITALINUX/`. VitaShell only scans the top-level `ux0:app/` folder.
+- **Cause 2 (VitaShell Homebrew Detection):** VitaShell's "Refresh LiveArea" was originally designed for NoNpDrm game dumps that contain license files (`work.bin`). Raw homebrew folders without license files can be skipped depending on your VitaShell or HENkaku version.
+- **Fix:** Install via **`VitaLinux.vpk`**! In VitaShell, highlight `VitaLinux.vpk` and press **CROSS (✕)** to install it directly. The installer registers the application directly into the PS Vita's system database and creates the bubble reliably every time.
+
 ### "The file is corrupt" error when launching the LiveArea bubble
 - **Cause:** Sony OS reports this if `eboot.bin` does not physically exist inside `ux0:app/VITALINUX/` on the current `ux0:` partition.
-- **Fix:** Copy the entire `output/ux0/app/VITALINUX` folder into `ux0:app/VITALINUX` and run **Refresh LiveArea** from VitaShell.
+- **Fix:** Install **`VitaLinux.vpk`** via VitaShell, or copy the entire `output/ux0/app/VITALINUX` folder into `ux0:app/VITALINUX` and run **Refresh LiveArea** from VitaShell.
 
 ### Error `0x8002D003` when launching the bootstrapper
 - **Cause:** Unsafe homebrew is disabled in HENkaku settings.
