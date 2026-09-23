@@ -103,6 +103,13 @@ METHOD 2: Manual Folder Copy
    TRIANGLE (△), and select 'Refresh LiveArea'.
    Note: If the bubble does not appear, use Method 1 above (install VitaLinux.vpk).
 
+NOTE FOR SD2VITA USERS:
+An official physical Sony memory card is strictly required on all consoles
+(both 1000 and 2000 models). The baremetal loader initializes storage using
+Sony's proprietary memory card interface (MSIF). If your SD2Vita adapter is
+mounted as ux0:, you must also copy 'zImage' and 'vita.dtb' to your official
+Sony memory card (which typically mounts as 'uma0:linux/').
+
 Full documentation: https://github.com/devwithzachary/LinuxOnVita
 EOF
 

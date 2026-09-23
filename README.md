@@ -159,10 +159,11 @@ ux0:
 ```
 
 > [!IMPORTANT]
-> **For SD2Vita Users:**
+> **Hardware Requirement: Official Sony Memory Card Required**
 > The early baremetal payload initializes storage using Sony's proprietary memory card interface (MSIF).
-> - If you use an **SD2Vita** adapter as `ux0:`, you **must also copy** `zImage` and `vita.dtb` to your official Sony memory card (which mounts as `uma0:linux/` in VitaShell).
-> - If using a PS Vita 2000 Slim without a Sony memory card, the internal 1GB storage is used.
+> - **All models (1000 and 2000):** An official physical Sony memory card is **strictly required** to boot Linux.
+> - **For SD2Vita Users:** If your SD2Vita adapter is configured as `ux0:`, you **must also copy** `zImage` and `vita.dtb` to your official Sony memory card (which typically mounts as `uma0:linux/` in VitaShell).
+> - **Internal Storage Note:** The baremetal loader runs directly on bare metal hardware without VitaOS and cannot read from internal eMMC storage (`imc0:`/`uma0:`) or SD2Vita. Booting without an official Sony memory card is currently not supported.
 
 ---
 
@@ -318,8 +319,10 @@ poweroff    # Full hardware poweroff via Syscon
 - **Fix:** Go to Vita **Settings** → **HENkaku Settings** → check **Enable Unsafe Homebrew**.
 
 ### "Memory card not inserted" on screen
-- **Cause:** The baremetal loader could not locate an official Sony memory card.
-- **Fix:** If you use an SD2Vita adapter, copy `zImage` and `vita.dtb` to your official memory card (which mounts as `uma0:linux/` in VitaShell).
+- **Cause:** The baremetal loader could not locate an official Sony memory card in the memory card slot.
+- **Fix:**
+  - An official Sony memory card is required on all consoles (both 1000 OLED and 2000 Slim). The baremetal loader only includes drivers for Sony's proprietary memory card interface (MSIF). It cannot read `zImage` or `vita.dtb` from internal eMMC storage (`imc0:`/`uma0:`) or SD2Vita.
+  - If you use an SD2Vita adapter as `ux0:`, insert an official Sony memory card, copy `zImage` and `vita.dtb` to it (it typically mounts as `uma0:linux/` in VitaShell), and then launch the bootstrapper.
 
 ### Screen freezes at `Uncompressing Linux... done, booting the kernel`
 - **Cause:** The Device Tree Blob (`vita.dtb`) does not match your specific console model.
