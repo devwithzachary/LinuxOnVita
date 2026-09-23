@@ -1,6 +1,6 @@
 # AI Usage Policy & Guidelines
 
-We view Artificial Intelligence (AI) coding assistants as standard, modern developer tools — much like IDEs, linters, compilers, and debuggers.
+We view Artificial Intelligence (AI) coding assistants as standard, modern developer tools - much like IDEs, linters, compilers, and debuggers.
 
 When used responsibly, AI tools accelerate development, eliminate tedious tasks, and allow contributors to focus on core architecture and user experience.
 
@@ -39,4 +39,4 @@ While AI is a powerful aid, **human accountability is absolute**.
 
 ## 💡 Summary
 
-> **TL;DR**: Use AI to work faster, write boilerplate, and learn APIs — but **always review every line**, **test your changes on real hardware**, and **take full personal ownership** of your PRs.
+> **TL;DR**: Use AI to work faster, write boilerplate, and learn APIs - but **always review every line**, **test your changes on real hardware**, and **take full personal ownership** of your PRs.

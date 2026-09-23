@@ -282,7 +282,7 @@ mountpoint -q "${TARGET}/dev"  || mount --bind /dev "${TARGET}/dev"
 mountpoint -q "${TARGET}/dev/pts" || mount -t devpts devpts "${TARGET}/dev/pts" -o mode=0620,gid=5,ptmxmode=0666 2>/dev/null || true
 mountpoint -q "${TARGET}/dev/shm" || mount -t tmpfs tmpfs "${TARGET}/dev/shm" -o mode=1777 2>/dev/null || true
 
-# Clean up all bind mounts — always runs on exit, Ctrl+C, or kill
+# Clean up all bind mounts - always runs on exit, Ctrl+C, or kill
 cleanup_chroot() {
     umount "${TARGET}/dev/shm" 2>/dev/null || true
     umount "${TARGET}/dev/pts" 2>/dev/null || true

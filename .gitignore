@@ -62,3 +62,10 @@ tools/**/*.d
 .idea/
 *.swp
 *~
+
+# Antigravity & AI workspace local rules and customizations
+.antigravity/
+.agents/
+.gemini/
+AGENTS.md
+GEMINI.md

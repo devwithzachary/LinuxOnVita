@@ -109,7 +109,7 @@ EOF
 # Step 3: Package release archive
 # Ensure 'zip' is available (may not be in older image builds; Dockerfile now includes it)
 if ! command -v zip >/dev/null 2>&1; then
-    echo "[3/3] 'zip' not found — installing..."
+    echo "[3/3] 'zip' not found - installing..."
     apt-get install -y --no-install-recommends zip >/dev/null 2>&1 || true
 fi
 
@@ -132,7 +132,7 @@ if command -v zip >/dev/null 2>&1; then
 else
     # Fallback: tar.gz (always available)
     RELEASE_TAR="${OUTPUT_DIR}/${RELEASE_NAME}.tar.gz"
-    echo "[3/3] 'zip' unavailable — falling back to tar.gz: ${RELEASE_TAR}"
+    echo "[3/3] 'zip' unavailable - falling back to tar.gz: ${RELEASE_TAR}"
     cd "${RELEASE_DIR}"
     tar -czf "${RELEASE_TAR}" .
     echo ""

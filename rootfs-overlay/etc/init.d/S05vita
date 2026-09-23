@@ -1,6 +1,6 @@
 #!/bin/sh
 # Create stable /dev/vita/ symlinks for eMMC partitions.
-# The SCE partition parser creates 12 partitions — find the mmcblk with p12.
+# The SCE partition parser creates 12 partitions - find the mmcblk with p12.
 
 case "$1" in
 start)

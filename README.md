@@ -81,7 +81,7 @@ cd LinuxOnVita
 ### Step 2: Configure Your Wi-Fi Credentials
 
 > [!IMPORTANT]
-> **Wi-Fi must be configured before building.** Pre-built release downloads do **not** include Wi-Fi credentials — you must add them yourself before flashing. Without this step the Vita will boot into Linux but will **not** connect to your network and SSH will not be available.
+> **Wi-Fi must be configured before building.** Pre-built release downloads do **not** include Wi-Fi credentials - you must add them yourself before flashing. Without this step the Vita will boot into Linux but will **not** connect to your network and SSH will not be available.
 
 If you want your Vita to automatically join your Wi-Fi network and start SSH on boot:
 ```bash

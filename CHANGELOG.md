@@ -5,7 +5,7 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
 
 ---
 
-## [v1.0.0] - 2026-09-22 — First Public Release
+## [v1.0.0] - 2026-09-22 - First Public Release
 
 ### Added (vs. raw upstream projects)
 
@@ -19,7 +19,7 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
 
 #### Display
 - **100% full brightness on boot:** Patched both OLED (Vita 1000) and LCD (Vita 2000) baremetal loaders to initialize at maximum brightness. Upstream defaults to gamma level 0 (OLED) / 50% PWM (LCD).
-- **`vita-brightness` CLI:** Runtime brightness control from 0–100% via I²C for LCD models. OLED models hardwired to max.
+- **`vita-brightness` CLI:** Runtime brightness control from 0-100% via I²C for LCD models. OLED models hardwired to max.
 
 #### Networking
 - **Zero-config Wi-Fi auto-connect:** Drop credentials into `configs/wifi.conf` before building. System auto-joins WPA2 networks and starts OpenSSH on boot.
@@ -47,10 +47,10 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
 - Alpine chroot pseudo-filesystems now unmount correctly on SIGINT (Ctrl+C)
 
 ### Upstream Projects This Builds Upon
-- [vita-linux-port](https://github.com/incognitojam/vita-linux-port) by **incognitojam** — Linux 6.12 port, Wi-Fi power sequencing, eMMC driver, Buildroot integration
-- [linux_vita](https://github.com/incognitojam/linux_vita) by **incognitojam** — Modernized Linux 6.12 kernel tree
-- [linux_vita](https://github.com/xerpi/linux_vita), [vita-baremetal-loader](https://github.com/xerpi/vita-baremetal-loader), [vita-libbaremetal](https://github.com/xerpi/vita-libbaremetal) by **xerpi** — Original Linux on PS Vita pioneer
-- [vita_plugin_linux_loader](https://github.com/DvaMishkiLapa/vita_plugin_linux_loader) by **DvaMishkiLapa** — Bootstrapper VPK
+- [vita-linux-port](https://github.com/incognitojam/vita-linux-port) by **incognitojam**: Linux 6.12 port, Wi-Fi power sequencing, eMMC driver, Buildroot integration
+- [linux_vita](https://github.com/incognitojam/linux_vita) by **incognitojam**: Modernized Linux 6.12 kernel tree
+- [linux_vita](https://github.com/xerpi/linux_vita), [vita-baremetal-loader](https://github.com/xerpi/vita-baremetal-loader), [vita-libbaremetal](https://github.com/xerpi/vita-libbaremetal) by **xerpi**: Original Linux on PS Vita pioneer
+- [vita_plugin_linux_loader](https://github.com/DvaMishkiLapa/vita_plugin_linux_loader) by **DvaMishkiLapa**: Bootstrapper VPK
 
 ---
 
