@@ -560,7 +560,7 @@ int main(int argc, char *argv[]) {
     psvDebugScreenSetFgColor(COLOR_CYAN);
     printf("========================================================\n");
     printf(" PlayStation Vita Linux Bootstrapper & Installer\n");
-    printf(" Project LinuxOnVita (v1.1.0)\n");
+    printf(" Project LinuxOnVita (v1.2.0)\n");
     printf("========================================================\n");
     psvDebugScreenSetFgColor(COLOR_WHITE);
     printf(" Port by xerpi, CreepNT, DvaMishkiLapa, DevWithZachary\n\n");

@@ -5,6 +5,10 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
 
 ---
 
+## [v1.2.0] - Unreleased
+
+---
+
 ## [v1.1.0] - 2026-09-24
 
 ### Added
