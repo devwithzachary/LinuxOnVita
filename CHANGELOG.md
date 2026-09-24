@@ -5,7 +5,7 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
 
 ---
 
-## [1.1.0] - Unreleased
+## [v1.1.0] - 2026-09-24
 
 ### Added
 - **All-in-One Application (`app/LinuxOnVita`):** Rebuilt the bootstrapper into a native, tracked project under `app/` (Title ID `LNXONVITA`, named `LinuxOnVita.vpk`).
@@ -27,6 +27,14 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
 - **Dynamic Wi-Fi Service Daemon (`S45wifi`):** Enhanced init script to auto-create control interface sockets (`/var/run/wpa_supplicant`), load multi-mount configurations (`ux0:`, `xmc0:`, `uma0:`), and start an idle fallback supplicant if no network profile exists, allowing immediate zero-configuration onboarding with `vita-wifi`.
 - **Buildroot Source Compilation of `wpa_cli` and `wpa_passphrase`:** Configured Buildroot (`BR2_PACKAGE_WPA_SUPPLICANT_CLI=y`, `BR2_PACKAGE_WPA_SUPPLICANT_PASSPHRASE=y`, and `BR2_PACKAGE_WPA_SUPPLICANT_CTRL_IFACE=y`) and added `patches/vita-linux-port/0002-enable-wpa-cli.patch` to compile both utilities natively from official upstream source code during the build process, eliminating pre-built binary blobs from the repository.
 
+### Changed
+- **Dual Release Packaging:** Updated release packaging to distribute both the standalone `LinuxOnVita.vpk` (for quick 1-click on-device installs) and `LinuxOnVita-release-*.zip` (full archive with manual payloads and installation guides) as separate release assets.
+- **Streamlined Wi-Fi Setup Flow:** Updated the main documentation and quick start guides to highlight `vita-wifi` as the primary on-device connection workflow, eliminating the manual `wpa_supplicant.conf` or `wifi.conf` editing step while keeping it documented as an optional headless alternative.
+- **Official Sony Memory Card Requirement:** Clarified that an official physical Sony memory card is strictly required on all hardware models (both 1000 and 2000 consoles) to boot Linux. Corrected misleading documentation that previously suggested PS Vita 2000 Slim could boot using internal 1GB storage without an official memory card.
+- **SD2Vita Setup Guide:** Expanded troubleshooting and setup guidance explaining that SD2Vita users must target their official Sony memory card (typically `xmc0:` or `uma0:`) because the baremetal payload only interfaces with MSIF hardware and cannot read from SD2Vita.
+- **License Unification (GPL-3.0):** Unified the project under the GNU General Public License v3.0 (GPL-3.0). This aligns the repository license with upstream component requirements, specifically the native `app/` bootstrapper (derived from GPL-3.0 `vita_plugin_linux_loader`) and `fbdoom` (GPL-2.0+).
+- **Dynamic Wireless Interface Support (`mlan0` / `wlan0`):** Enhanced all wireless networking scripts, `vita-wifi`, and `network/interfaces` to auto-detect both `mlan0` (native Marvell `mwifiex` hardware driver interface on PS Vita) and standard `wlan0`, ensuring consistent detection and connectivity across any network stack.
+
 ### Fixed
 - **`wpa_cli` control interface (`CONFIG_CTRL_IFACE`):** Added `BR2_PACKAGE_WPA_SUPPLICANT_CTRL_IFACE=y` to the vita_defconfig. Without this flag the build produced a non-functional `wpa_cli` reporting `CONFIG_CTRL_IFACE not defined - wpa_cli disabled`. With the fix, `wpa_cli` can open its Unix domain socket at `/var/run/wpa_supplicant` and exchange commands with the running `wpa_supplicant` daemon, enabling `vita-wifi scan`, `vita-wifi connect`, and `vita-wifi status` to function correctly.
 - **`udhcpc` DHCP client daemon backgrounding:** Fixed conflicting flags (`-b -n -t 5`) in `vita-wifi` where `-n` overrode `-b` and caused the DHCP client to terminate immediately if not answered within 5 seconds, rather than staying active in the background.
@@ -35,17 +43,6 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
 - **I/O read error handling in `app/main.c` (`copy_file`):** Added explicit validation of negative return codes from `sceIoRead` to ensure storage read failures are accurately reported as critical errors instead of reporting false `[OK]` status.
 - **`build_kernel.sh` fallback branch parity:** Added missing defconfig copying, kernel patch application (`patches/kernel/*.patch`), and EXT4 filesystem configuration to the standalone fallback branch of `build_kernel.sh`.
 - **Wi-Fi privacy guarantee in release builds:** Isolated local Wi-Fi configurations during `build_release.sh` (`IS_RELEASE_BUILD=1`) and ensured `build_loaders.sh` always bundles a clean generic template, preventing developer credentials from being packaged into `rootfs.cpio.zst` or `LinuxOnVita.vpk`.
-
-
-### Documentation & Hardware Requirements
-- **Official Sony Memory Card Requirement:** Clarified that an official physical Sony memory card is strictly required on all hardware models (both 1000 and 2000 consoles) to boot Linux. Corrected misleading documentation that previously suggested PS Vita 2000 Slim could boot using internal 1GB storage without an official memory card.
-- **SD2Vita Setup Guide:** Expanded troubleshooting and setup guidance explaining that SD2Vita users must target their official Sony memory card (typically `xmc0:` or `uma0:`) because the baremetal payload only interfaces with MSIF hardware and cannot read from SD2Vita.
-- **Streamlined Wi-Fi Setup Flow:** Updated the main documentation and quick start guides to highlight `vita-wifi` as the primary on-device connection workflow, eliminating the manual `wpa_supplicant.conf` or `wifi.conf` editing step while keeping it documented as an optional headless alternative.
-
-### Changed
-- **Dual Release Packaging:** Updated release packaging to distribute both the standalone `LinuxOnVita.vpk` (for quick 1-click on-device installs) and `LinuxOnVita-release-*.zip` (full archive with manual payloads and installation guides) as separate release assets.
-- **License Unification (GPL-3.0):** Unified the project under the GNU General Public License v3.0 (GPL-3.0). This aligns the repository license with upstream component requirements, specifically the native `app/` bootstrapper (derived from GPL-3.0 `vita_plugin_linux_loader`) and `fbdoom` (GPL-2.0+).
-- **Dynamic Wireless Interface Support (`mlan0` / `wlan0`):** Enhanced all wireless networking scripts, `vita-wifi`, and `network/interfaces` to auto-detect both `mlan0` (native Marvell `mwifiex` hardware driver interface on PS Vita) and standard `wlan0`, ensuring consistent detection and connectivity across any network stack.
 
 ### Removed
 - **Static Battery Telemetry (`vita-battery`):** Removed the static bootloader handoff and `vita-battery` command. Because the hardware fuel gauge (TI bq27520) is isolated on the Syscon companion microcontroller's private I2C bus and live streaming is not yet reverse-engineered, the static snapshot did not reflect runtime battery state or charging changes and caused confusion.

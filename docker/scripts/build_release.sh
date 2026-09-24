@@ -15,10 +15,11 @@ BUILD_DIR="/build"
 OUTPUT_DIR="${BUILD_DIR}/output"
 RELEASE_DIR="${OUTPUT_DIR}/release"
 
-# Determine version: use git tag if available, otherwise date-based
-VERSION=$(git -C "${BUILD_DIR}" describe --tags --exact-match 2>/dev/null \
+# Determine version: check VERSION env var, exact git tag, git branch, or date
+VERSION="${VERSION:-$(git -C "${BUILD_DIR}" describe --tags --exact-match 2>/dev/null \
+    || git -C "${BUILD_DIR}" branch --show-current 2>/dev/null \
     || git -C "${BUILD_DIR}" describe --tags --abbrev=4 2>/dev/null \
-    || date +"%Y%m%d")
+    || date +"%Y%m%d")}"
 
 RELEASE_NAME="LinuxOnVita-release-${VERSION}"
 RELEASE_ZIP="${OUTPUT_DIR}/${RELEASE_NAME}.zip"
@@ -95,6 +96,10 @@ LinuxOnVita ${VERSION} - Installation Instructions
    - If files were previously placed on 'ux0:', press TRIANGLE to copy them.
 
 5. Press CROSS (X) to boot into Linux!
+
+6. (Optional) Connect to Wi-Fi on-device:
+   Tap the screen to toggle the virtual keyboard and run 'vita-wifi scan' to connect
+   directly from your handheld. Network credentials are saved permanently to your card!
 
 NOTE FOR SD2VITA USERS:
 An official physical Sony memory card is strictly required on all consoles
