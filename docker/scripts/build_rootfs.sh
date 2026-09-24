@@ -98,11 +98,12 @@ mkdir -p "${LOCAL_OVERLAY}/etc" "${LOCAL_OVERLAY}/etc/ssh" "${LOCAL_OVERLAY}/roo
 
 WIFI_CONF="${BUILD_DIR}/configs/wifi.conf"
 WPA_TARGET="${LOCAL_OVERLAY}/etc/wpa_supplicant.conf"
-if [ -f "${WIFI_CONF}" ]; then
+if [ "${IS_RELEASE_BUILD:-0}" != "1" ] && [ -f "${WIFI_CONF}" ]; then
     echo "Applying Wi-Fi credentials from configs/wifi.conf..."
     # shellcheck source=/dev/null
     source "${WIFI_CONF}"
     cat << EOF > "${WPA_TARGET}"
+ctrl_interface=/var/run/wpa_supplicant
 update_config=1
 
 network={
@@ -112,23 +113,29 @@ network={
 EOF
     echo "Wi-Fi network '${SSID}' configured."
 else
-    echo "Notice: configs/wifi.conf not found. Using placeholder credentials."
+    if [ "${IS_RELEASE_BUILD:-0}" = "1" ]; then
+        echo "Release build active: Wi-Fi credentials omitted (zero-config template)."
+    else
+        echo "Notice: configs/wifi.conf not found. Using zero-config template."
+    fi
     cat << 'EOF' > "${WPA_TARGET}"
+ctrl_interface=/var/run/wpa_supplicant
 update_config=1
-
-network={
-    ssid="YourNetworkName"
-    psk="YourPassword"
-}
 EOF
 fi
-cp "${WPA_TARGET}" "${ROOTFS_OVERLAY}/etc/wpa_supplicant.conf" 2>/dev/null || true
 
 # 4. Inject rootfs-overlay into buildroot-vita overlay
-echo "Copying rootfs-overlay files into buildroot-vita overlay..."
+echo "Cleaning stale binaries and copying rootfs-overlay files into buildroot-vita overlay..."
+rm -rf "${PORT_DIR}/buildroot-vita/board/vita/overlay/usr/sbin"
+rm -f "${PORT_DIR}/buildroot-vita/board/vita/overlay/usr/bin/wpa_cli"
+rm -f "${PORT_DIR}/buildroot-vita/board/vita/overlay/usr/bin/wpa_passphrase"
+rm -f "${PORT_DIR}/buildroot-vita/board/vita/overlay/usr/bin/vita-battery"
 cp -r "${ROOTFS_OVERLAY}/." "${PORT_DIR}/buildroot-vita/board/vita/overlay/"
 
 # 5. Build rootfs via Buildroot
+echo "Syncing buildroot configuration with vita_defconfig..."
+make rootfs-config
+
 echo "Building rootfs via Buildroot (this may take several minutes on first build)..."
 make rootfs
 

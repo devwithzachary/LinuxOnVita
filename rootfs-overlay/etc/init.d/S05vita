@@ -23,5 +23,13 @@ start)
     ln -sf ${EMMC}p10 /dev/vita/ud0
     ln -sf ${EMMC}p11 /dev/vita/pd0
     ln -sf ${EMMC}p12 /dev/vita/ur0
+
+    # Mount ur0 (internal eMMC storage) so user configuration is immediately accessible
+    mkdir -p /mnt/ur0
+    if ! mountpoint -q /mnt/ur0 2>/dev/null; then
+        mount -t exfat -o rw /dev/vita/ur0 /mnt/ur0 2>/dev/null || \
+        mount -t vfat -o rw /dev/vita/ur0 /mnt/ur0 2>/dev/null || \
+        mount /dev/vita/ur0 /mnt/ur0 2>/dev/null || true
+    fi
     ;;
 esac

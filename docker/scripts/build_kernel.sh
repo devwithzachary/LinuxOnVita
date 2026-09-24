@@ -80,9 +80,29 @@ else
     fi
     cd linux_vita
     cp "${ROOTFS_ZST}" ./rootfs.cpio.zst
+
+    # Apply tracked kernel defconfig if present in repository
+    if [ -f "${BUILD_DIR}/configs/kernel/vita_defconfig" ]; then
+        echo "Using tracked configs/kernel/vita_defconfig..."
+        cp "${BUILD_DIR}/configs/kernel/vita_defconfig" "arch/arm/configs/vita_defconfig"
+    fi
+
+    # Apply tracked kernel patches (DTS SD2Vita support, button mask, etc.)
+    if [ -d "${BUILD_DIR}/patches/kernel" ]; then
+        for p in "${BUILD_DIR}/patches/kernel/"*.patch; do
+            if [ -f "$p" ] && git apply --check "$p" >/dev/null 2>&1; then
+                echo "Applying kernel patch: $p"
+                git apply "$p" || true
+            fi
+        done
+    fi
+
     make ARCH=arm vita_defconfig
     ./scripts/config --file .config --enable CONFIG_INPUT_MISC
     ./scripts/config --file .config --enable CONFIG_INPUT_UINPUT
+    ./scripts/config --file .config --enable CONFIG_EXT4_FS
+    ./scripts/config --file .config --enable CONFIG_EXT4_FS_POSIX_ACL
+    ./scripts/config --file .config --enable CONFIG_EXT4_FS_SECURITY
     make ARCH=arm CROSS_COMPILE="${CROSS_COMPILE}" -j"$(nproc)" zImage
     make ARCH=arm CROSS_COMPILE="${CROSS_COMPILE}" sony/vita1000.dtb sony/vita2000.dtb sony/pstv.dtb
     

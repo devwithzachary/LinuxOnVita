@@ -7,7 +7,6 @@ IMAGE_NAME="psvita-linux-builder"
 mkdir -p "${ROOT_DIR}/output" "${ROOT_DIR}/sources" "${ROOT_DIR}/rootfs-overlay"
 
 chmod +x "${ROOT_DIR}/docker/scripts/"*.sh 2>/dev/null || true
-chmod +x "${ROOT_DIR}/scripts/"*.sh 2>/dev/null || true
 
 usage() {
     echo "Usage: $0 <command>"

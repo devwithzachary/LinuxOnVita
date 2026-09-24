@@ -8,24 +8,28 @@ set -euo pipefail
 # Users must add their own wpa_supplicant.conf to ux0:linux/ after flashing.
 
 export FORCE_UNSAFE_CONFIGURE=1
+export IS_RELEASE_BUILD=1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="/build"
 OUTPUT_DIR="${BUILD_DIR}/output"
 RELEASE_DIR="${OUTPUT_DIR}/release"
 
-# Determine version: use git tag if available, otherwise date-based
-VERSION=$(git -C "${BUILD_DIR}" describe --tags --exact-match 2>/dev/null \
+# Determine version: check VERSION env var, exact git tag, git branch, or date
+VERSION="${VERSION:-$(git -C "${BUILD_DIR}" describe --tags --exact-match 2>/dev/null \
+    || git -C "${BUILD_DIR}" branch --show-current 2>/dev/null \
     || git -C "${BUILD_DIR}" describe --tags --abbrev=4 2>/dev/null \
-    || date +"%Y%m%d")
+    || date +"%Y%m%d")}"
 
 RELEASE_NAME="LinuxOnVita-release-${VERSION}"
 RELEASE_ZIP="${OUTPUT_DIR}/${RELEASE_NAME}.zip"
+RELEASE_VPK="${OUTPUT_DIR}/LinuxOnVita.vpk"
 
 echo "========================================================="
 echo " LinuxOnVita Public Release Build"
 echo " Version: ${VERSION}"
-echo " Output:  ${RELEASE_ZIP}"
+echo " Assets:  ${RELEASE_ZIP}"
+echo "          ${RELEASE_VPK}"
 echo "========================================================="
 echo ""
 
@@ -39,31 +43,30 @@ echo "[2/3] Assembling release package..."
 rm -rf "${RELEASE_DIR}"
 mkdir -p "${RELEASE_DIR}/ux0/linux" "${RELEASE_DIR}/ux0/app"
 
-# Copy kernel, DTBs, and loaders
+# Copy kernel, DTBs, and loaders (rootfs is embedded directly inside zImage)
 cp "${OUTPUT_DIR}/ux0/linux/"*.skprx   "${RELEASE_DIR}/ux0/linux/" 2>/dev/null || true
 cp "${OUTPUT_DIR}/ux0/linux/"*.bin     "${RELEASE_DIR}/ux0/linux/" 2>/dev/null || true
 cp "${OUTPUT_DIR}/ux0/linux/"zImage    "${RELEASE_DIR}/ux0/linux/" 2>/dev/null || true
 cp "${OUTPUT_DIR}/ux0/linux/"*.dtb     "${RELEASE_DIR}/ux0/linux/" 2>/dev/null || true
 
 # Copy LiveArea launcher app folder (unpacked)
-cp -r "${OUTPUT_DIR}/ux0/app/VITALINUX" "${RELEASE_DIR}/ux0/app/" 2>/dev/null || true
+cp -r "${OUTPUT_DIR}/ux0/app/LNXONVITA" "${RELEASE_DIR}/ux0/app/" 2>/dev/null || true
 
-# Copy standalone VitaLinux.vpk into the release package for easy 1-click VitaShell installation
-if [ -f "${OUTPUT_DIR}/vpk/VitaLinux.vpk" ]; then
-    cp "${OUTPUT_DIR}/vpk/VitaLinux.vpk" "${RELEASE_DIR}/VitaLinux.vpk"
-elif [ -f "${OUTPUT_DIR}/vpk/vita-linux-bootstrapper.vpk" ]; then
-    cp "${OUTPUT_DIR}/vpk/vita-linux-bootstrapper.vpk" "${RELEASE_DIR}/VitaLinux.vpk"
+# Copy standalone LinuxOnVita.vpk into the release package and to output/
+if [ -f "${OUTPUT_DIR}/vpk/LinuxOnVita.vpk" ]; then
+    cp "${OUTPUT_DIR}/vpk/LinuxOnVita.vpk" "${RELEASE_DIR}/LinuxOnVita.vpk"
+    cp "${OUTPUT_DIR}/vpk/LinuxOnVita.vpk" "${RELEASE_VPK}"
 fi
 
-# Include the wpa_supplicant template so users know what to edit
+# Include the clean wpa_supplicant template so users know what to edit
 cat > "${RELEASE_DIR}/ux0/linux/wpa_supplicant.conf" << 'EOF'
 # LinuxOnVita Wi-Fi Configuration
 # ================================
-# Edit this file with your Wi-Fi credentials before booting Linux.
-# Copy it to ux0:linux/wpa_supplicant.conf on your Vita memory card.
-#
-# Tip: You can also drop configs/wifi.conf in the repository before building
-# to have credentials baked in automatically (it is gitignored).
+# Edit this file with your Wi-Fi credentials before booting Linux,
+# or connect directly on-device using 'vita-wifi'.
+
+ctrl_interface=/var/run/wpa_supplicant
+update_config=1
 
 network={
     ssid="YourWiFiNetworkName"
@@ -77,38 +80,34 @@ cat > "${RELEASE_DIR}/INSTALL.txt" << EOF
 LinuxOnVita ${VERSION} - Installation Instructions
 ==========================================================
 
-METHOD 1: Install via VitaLinux.vpk (Recommended & Easiest!)
-------------------------------------------------------------
-1. Copy the 'ux0/linux/' folder to 'ux0:linux/' on your PS Vita memory card
+1. Copy 'LinuxOnVita.vpk' to your PS Vita (e.g. 'ux0:LinuxOnVita.vpk')
    using VitaShell (via USB or FTP mode).
 
-2. (Optional) Edit 'ux0:linux/wpa_supplicant.conf' with your Wi-Fi network
-   name and password before booting Linux.
+2. In VitaShell, navigate to 'LinuxOnVita.vpk', press CROSS (X) to install,
+   and confirm prompts (including extended permissions).
 
-3. Copy 'VitaLinux.vpk' to your Vita (e.g. 'ux0:VitaLinux.vpk').
+3. Return to the LiveArea home screen, tap the 'LinuxOnVita' bubble, and open it.
 
-4. In VitaShell, navigate to 'VitaLinux.vpk', press CROSS (X) to install,
-   and confirm prompts (including unsafe permissions).
+4. In the LinuxOnVita app:
+   - The app displays all detected storage mounts and their capacities.
+   - Use D-PAD UP/DOWN or L/R to select your official Sony Memory Card
+     (e.g. 'xmc0:' or 'uma0:' for SD2Vita setups, or 'ux0:' for standard consoles).
+   - Press CROSS (X) to install all bundled Linux files to your memory card.
+   - If files were previously placed on 'ux0:', press TRIANGLE to copy them.
 
-5. Return to the LiveArea home screen, tap the 'VitaLinux' bubble, and press
-   CROSS (X) to boot into Linux!
+5. Press CROSS (X) to boot into Linux!
 
-METHOD 2: Manual Folder Copy
-----------------------------
-1. Copy the contents of the 'ux0/' folder to the root of your memory card ('ux0:')
-   so that 'ux0:app/VITALINUX/' and 'ux0:linux/' exist.
-   IMPORTANT: Do not copy the 'ux0' folder itself into ux0 (avoid 'ux0:ux0/...').
-
-2. In VitaShell, highlight 'ux0:' on the main partition list, press
-   TRIANGLE (△), and select 'Refresh LiveArea'.
-   Note: If the bubble does not appear, use Method 1 above (install VitaLinux.vpk).
+6. (Optional) Connect to Wi-Fi on-device:
+   Tap the screen to toggle the virtual keyboard and run 'vita-wifi scan' to connect
+   directly from your handheld. Network credentials are saved permanently to your card!
 
 NOTE FOR SD2VITA USERS:
 An official physical Sony memory card is strictly required on all consoles
 (both 1000 and 2000 models). The baremetal loader initializes storage using
-Sony's proprietary memory card interface (MSIF). If your SD2Vita adapter is
-mounted as ux0:, you must also copy 'zImage' and 'vita.dtb' to your official
-Sony memory card (which typically mounts as 'uma0:linux/').
+Sony's proprietary memory card interface (MSIF). It cannot boot Linux from
+SD2Vita or internal storage. If your SD2Vita adapter is mounted as ux0:,
+select your official Sony memory card (typically mounted as 'xmc0:' or
+'uma0:' in VitaShell) inside the app, and install directly to it.
 
 Full documentation: https://github.com/devwithzachary/LinuxOnVita
 EOF
@@ -128,12 +127,17 @@ if command -v zip >/dev/null 2>&1; then
 
     echo ""
     echo "========================================================="
-    echo " Release package ready!"
-    echo " File: ${RELEASE_ZIP}"
+    echo " Release assets ready!"
+    echo " 1. Full Release Zip: ${RELEASE_ZIP}"
     SIZE=$(du -sh "${RELEASE_ZIP}" | cut -f1)
-    echo " Size: ${SIZE}"
+    echo "    Size: ${SIZE}"
+    if [ -f "${RELEASE_VPK}" ]; then
+        VPK_SIZE=$(du -sh "${RELEASE_VPK}" | cut -f1)
+        echo " 2. Standalone VPK:  ${RELEASE_VPK}"
+        echo "    Size: ${VPK_SIZE}"
+    fi
     echo ""
-    echo " Contents:"
+    echo " Contents of ${RELEASE_NAME}.zip:"
     unzip -l "${RELEASE_ZIP}" | tail -n +4 | head -n -2
     echo "========================================================="
 else

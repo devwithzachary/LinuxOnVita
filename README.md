@@ -4,60 +4,62 @@
 [![Kernel](https://img.shields.io/badge/Kernel-Linux%206.12-orange.svg)](https://kernel.org)
 [![Architecture](https://img.shields.io/badge/Architecture-ARMv7--A%20(Cortex--A9)-green.svg)](https://developer.arm.com/Processors/Cortex-A9)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2.svg?logo=discord&logoColor=white)](https://discord.gg/BrzdmHu8Am)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 
 A complete distribution, automated build environment, and handheld userland for running **Linux 6.12** on hacked PlayStation Vita consoles ([HENlo](https://vita.hacks.guide/using-henlo) / HENkaku / Ensō 3.60 & 3.65).
 
-While the original upstream projects proved that modern Linux can boot on the PS Vita SoC, they functioned primarily as developer proof-of-concepts requiring specialized hardware (such as soldered UART debug cables). LinuxOnVita bridges the gap into a **fully standalone, interactive handheld Linux device** with out-of-the-box touch typing, physical gamepad navigation, automated Wi-Fi, battery monitoring, package management (`apk`), and native framebuffer gaming.
+While the original upstream projects proved that modern Linux can boot on the PS Vita SoC, they functioned primarily as developer proof-of-concepts requiring specialized hardware (such as soldered UART debug cables). LinuxOnVita bridges the gap into a **fully standalone, interactive handheld Linux device** with out-of-the-box touch typing, physical gamepad navigation, automated Wi-Fi, package management (`apk`), and native framebuffer gaming.
+
+<p align="center">
+  <img src="screenshot.png" alt="PlayStation Vita Linux 6.12 Running with Framebuffer Touch Keyboard" width="720">
+</p>
 
 ---
 
-## 🌟 What Makes This Project Different: Upstream vs. LinuxOnVita
+## ✨ Features
 
-If you build the raw upstream projects by default, you get a bare-bones Linux kernel that boots to a terminal you cannot interact with without soldering serial wires. Below is a breakdown of what this distribution adds:
+- **Built-in Touch Keyboard (`fbkeyboard`):** Type directly on the console screen with an on-framebuffer virtual keyboard featuring dual ABC / ?123 layouts, special keys, and a hide toggle.
+- **Physical Gamepad Navigation (`vita-input-mapper`):** Complete console shell navigation using the D-Pad, face buttons, and shoulder triggers synthesized through `/dev/uinput`.
+- **Fixed Controller Logic:** Corrected inverted button mask issues and initialized analog sticks via Syscon for smooth twin-stick controls in games.
+- **Full Display Brightness:** Patched baremetal bootloaders to initialize displays at 100% brightness on both OLED and LCD models, plus runtime adjustment via `vita-brightness`.
+- **Interactive On-Device Wi-Fi Manager (`vita-wifi`):** Scan, connect, and switch wireless networks directly on the console with an ASCII signal table. Saves credentials permanently to your memory card without needing to edit config files on a PC. Includes power toggle commands (`vita-wifi off / on`) to extend battery life.
+- **Fast Boot & OpenSSH:** Boots straight into the Linux terminal. Wi-Fi connects automatically with OpenSSH and mDNS (`vita.local`), ready in ~12 seconds. Headless pre-configuration is also supported via `configs/wifi.conf` or `wpa_supplicant.conf`.
+- **Alpine Linux Chroot (`alpine-chroot`):** Run a persistent Alpine Linux userland on storage with live `apk add` package management.
+- **Storage Auto-Mounting:** Automatically mounts SD2Vita (`/mnt/ux0`), internal memory (`/mnt/ur0`), and secondary storage (`/mnt/uma0`) on boot.
+- **Framebuffer DOOM (`vita-doom`):** Pre-installed pure-C `fbdoom` engine with twin-stick controls, analog deadzones, and input isolation.
+- **All-in-One Installer App (`LinuxOnVita.vpk`):** Graphical bootstrapper with real-time partition detection, memory card mount selector, and 1-click on-device installer.
+- **Automated Docker Build:** Build the entire stack (kernel, rootfs, loaders, and VPK) with a single command (`./build.sh all`).
 
-| Feature Area | Upstream Default Experience (Raw Proof-of-Concept) | **LinuxOnVita (This Distribution)** |
-| :--- | :--- | :--- |
-| **Interactive Terminal Input** | ❌ **None.** Requires a custom soldered UART cable or USB-UART interface to type commands. | ✅ **Built-in Touch Keyboard (`fbkeyboard`):** Rendered directly on `/dev/fb0` with dual ABC / ?123 layout, customizable keys, and VT isolation. |
-| **Physical Button Navigation** | ❌ Raw evdev only; buttons do nothing in the console shell. | ✅ **`vita-input-mapper`:** D-Pad, Cross (Enter), Circle (Backspace), Square (Space), Triangle (Tab), and L-Trigger (Ctrl+C) synthesized via `/dev/uinput`. |
-| **Button Driver Correctness** | ⚠️ **Broken Mask:** Legacy XOR mask `0x4037fcf9` inverted D-Pad Right, Down, Select, and L-Trigger (causing D-Pad Right to be permanently stuck ON). | ✅ **Fixed Mask (`0x4037ffff`):** All 12 hardware buttons are decoded with uniform active-low logic. Analog sticks are initialized via Syscon `0x180`. |
-| **Screen Brightness** | ⚠️ **Dim:** Baremetal OLED driver hardcoded to gamma level 0 (dimmest); LCD driver hardcoded to 50% PWM. | ✅ **100% Full Brightness:** Patched baremetal loaders to maximum brightness curve on boot, plus a runtime `vita-brightness` CLI. |
-| **Wi-Fi & SSH Access** | ⚠️ Manual CLI setup or hardcoded supplicant configs required. | ✅ **Zero-Config Auto-Connect:** Drop credentials into `configs/wifi.conf`. Auto-joins WPA2 Wi-Fi on boot and starts OpenSSH with mDNS (`vita.local`). |
-| **Boot Delay / SSH Ready Time** | ⚠️ **~2.5 minute delay:** Linux kernel blocked waiting on CRNG random entropy due to missing hardware timer. | ✅ **~12 seconds to SSH:** Enabled the 144 MHz ARM Global Timer clocksource, completely eliminating entropy stalls. |
-| **Package Management** | ❌ **Read-only / Ephemeral:** Buildroot initramfs has no package manager (`apt`/`apk`); any downloaded binaries vanish on reboot. | ✅ **Alpine Linux (`alpine-chroot`):** Run `alpine-chroot` to create a persistent ext4 userland on SD/internal storage with live `apk add` package management. |
-| **Storage & SD2Vita** | ⚠️ Only official Sony memory cards or internal eMMC mounted manually. | ✅ **Auto-Mounting:** Automatic mounting of `/mnt/ux0` (SD2Vita / memory card), `/mnt/ur0` (internal storage), and `/mnt/uma0` on boot. |
-| **Battery & Power Telemetry** | ❌ Unknown; battery fuel gauge is isolated on Ernie's private I2C bus. | ✅ **Hardware Battery Telemetry:** Captured during bootloader handover, printed on login banner, and accessible via `vita-battery` CLI. |
-| **Gaming Demonstration** | ❌ None out of the box. | ✅ **Framebuffer DOOM (`vita-doom`):** Native pure-C `fbdoom` with twin-stick and button controls, analog deadzones, and input isolation. |
-| **Build System & Toolchains** | ⚠️ Complex multi-step host compilation across separate repos and cross-compilers. | ✅ **One-Command Docker Build:** `./build.sh all` handles toolchains, kernel patches, Buildroot overlays, and VPK packaging automatically. |
+---
+
+> [!IMPORTANT]
+> **Hardware Requirement: Official Sony Memory Card Strictly Required**
+> An official physical Sony memory card is required on **all** PS Vita models (both 1000 OLED and 2000 Slim) to boot Linux.
+> The baremetal loader communicates directly with Sony's proprietary memory card interface (MSIF) and cannot boot Linux from SD2Vita adapters (game card slot) or internal eMMC storage (`imc0:`).
+> - **Standard Consoles (No SD2Vita):** Your Sony Memory Card mounts as `ux0:`.
+> - **SD2Vita Users:** Your SD2Vita mounts as `ux0:`, and your physical Sony Memory Card typically mounts as `xmc0:` (VitaShell/YAMT default) or `uma0:` (StorageMgr). The **LinuxOnVita** app detects all partitions and lets you install directly to your Sony Memory Card.
 
 ---
 
 ## 📦 Pre-Built Releases (Quick Install)
 
-Don't want to compile from source? Download the latest pre-built release zip (`LinuxOnVita-release-*.zip`) from the [GitHub Releases page](https://github.com/devwithzachary/LinuxOnVita/releases).
+Don't want to compile from source? Download the latest release from the [GitHub Releases page](https://github.com/devwithzachary/LinuxOnVita/releases).
 
-The release zip is an all-in-one package that contains:
-* **`VitaLinux.vpk`:** Standalone homebrew installer package (easiest way to install the LiveArea bubble via VitaShell).
-* **`ux0/linux/`:** Linux 6.12 kernel (`zImage`), Device Tree blobs (`*.dtb`), baremetal loaders (`baremetal-loader.skprx`, `payload.bin`), and sample Wi-Fi config.
-* **`ux0/app/VITALINUX/`:** Pre-extracted app folder (for users who prefer manual folder deployment).
-* **`INSTALL.txt`:** Quick setup instructions.
+Release download assets:
+* **`LinuxOnVita.vpk` (Standalone VPK - Recommended for most users):** The all-in-one bootstrapper and on-device installer. Bundles the complete Linux kernel, device tree blobs, and baremetal loaders directly inside the app. Users who just want to run Linux only need to download and install this single VPK!
+* **`LinuxOnVita-release-*.zip` (All-in-One Archive):** Contains `LinuxOnVita.vpk`, extracted boot files (`ux0/linux/`), unpacked LiveArea app (`ux0/app/LNXONVITA/`), and `INSTALL.txt`.
 
-> [!IMPORTANT]
-> **Pre-built releases do NOT include Wi-Fi credentials.** The release zip is intentionally built without a `wpa_supplicant.conf` so you must add your own network details before the Vita can connect to Wi-Fi or SSH.
-> After extracting the release, edit `ux0:linux/wpa_supplicant.conf` directly on your memory card (via VitaShell FTP or USB):
-> ```
-> network={
->     ssid="YourWiFiNetworkName"
->     psk="YourWiFiPassword"
-> }
-> ```
-> Without this step the system **will still boot into Linux** but Wi-Fi and SSH will not be available.
+> [!TIP]
+> **Wi-Fi Setup for Pre-Built Releases**
+> Pre-built releases connect to Wi-Fi directly on the console using `vita-wifi`. Boot into Linux, open the terminal, and run `vita-wifi` to scan for nearby networks and connect directly on your Vita. Your network credentials are automatically saved to your memory card for future boots!
+>
+> *(Optional: For headless setups, you can still drop a pre-configured `wpa_supplicant.conf` into your memory card's `linux/` directory via VitaShell).*
 
-To install, simply follow [Step 4](#step-4-transfer-files-to-your-ps-vita) and [Step 5](#step-5-install--launch-linux) below.
+To install, simply follow [Step 3](#step-3-transfer-linuxonvitavpk-to-your-ps-vita) and [Step 4](#step-4-install--launch-linux) below, then connect using [Step 5](#step-5-connect-to-wi-fi-on-device-vita-wifi).
 
 ---
 
-## 🚀 Complete Step-by-Step Guide: From Clone to Running Linux (Build from Source)
+## 🚀 Complete Step-by-Step Guide
 
 Follow these steps to build and install Linux on your PlayStation Vita:
 
@@ -79,25 +81,7 @@ cd LinuxOnVita
 
 ---
 
-### Step 2: Configure Your Wi-Fi Credentials
-
-> [!IMPORTANT]
-> **Wi-Fi must be configured before building.** Pre-built release downloads do **not** include Wi-Fi credentials - you must add them yourself before flashing. Without this step the Vita will boot into Linux but will **not** connect to your network and SSH will not be available.
-
-If you want your Vita to automatically join your Wi-Fi network and start SSH on boot:
-```bash
-cp configs/wifi.conf.example configs/wifi.conf
-```
-Edit `configs/wifi.conf` with your network details:
-```bash
-SSID="YourWiFiNetworkName"
-PSK="YourWiFiPassword"
-```
-*(Note: `configs/wifi.conf` is ignored by git so your credentials remain private).*
-
----
-
-### Step 3: Build Linux with Docker
+### Step 2: Build Linux with Docker
 Run the automated Docker build system:
 ```bash
 # 1. Build the Docker environment image (one-time setup)
@@ -112,82 +96,74 @@ Run the automated Docker build system:
 *(You can also build individual components: `./build.sh rootfs`, `./build.sh kernel`, or `./build.sh loaders`.)*
 
 > [!NOTE]
-> `./build.sh release` packages everything into `output/LinuxOnVita-release-<version>.zip` ready to share or upload to GitHub Releases. Wi-Fi credentials are **never** included in the release zip.
+> `./build.sh release` packages everything into `output/LinuxOnVita-release-<version>.zip` and produces standalone `output/LinuxOnVita.vpk` ready to share or upload to GitHub Releases. Wi-Fi credentials are **never** included in release assets.
+
+> [!TIP]
+> **Optional: Pre-configure Wi-Fi for Headless Boot**
+> You do **not** need to configure Wi-Fi before building: you can scan and connect directly on the console after boot using `vita-wifi`.
+> However, if you want your Vita to join your network immediately on first boot without any manual interaction:
+> ```bash
+> cp configs/wifi.conf.example configs/wifi.conf
+> # Edit SSID="YourWiFiNetworkName" and PSK="YourWiFiPassword"
+> ```
+> *(Note: `configs/wifi.conf` is ignored by git so your credentials remain private).*
 
 ---
 
-### Step 4: Transfer Files to Your PS Vita
+### Step 3: Transfer LinuxOnVita.vpk to Your PS Vita
 1. Connect your PS Vita to your computer via USB cable (or FTP).
 2. Open **VitaShell** and press **SELECT** to enable USB/FTP storage.
-3. Choose your preferred installation method below:
-
-#### Option A: Install via `VitaLinux.vpk` (Recommended & Easiest!)
-Copy the following files to your memory card (`ux0:`):
-
-| Source on Computer | Destination on PS Vita (`ux0:`) | Description |
-| :--- | :--- | :--- |
-| `VitaLinux.vpk` (from release zip or `output/vpk/`) | `ux0:VitaLinux.vpk` | Standard Vita homebrew installer package |
-| `ux0/linux/*` (from release zip or `output/ux0/linux/`) | `ux0:linux/` | Kernel (`zImage`), Device Trees (`*.dtb`), and Loaders |
-
-#### Option B: Manual Folder Copy
-Copy the pre-extracted application folder directly:
-
-| Source on Computer | Destination on PS Vita (`ux0:`) | Description |
-| :--- | :--- | :--- |
-| `output/ux0/app/VITALINUX/` | `ux0:app/VITALINUX/` | LiveArea launcher bubble folder |
-| `output/ux0/linux/*` | `ux0:linux/` | Kernel (`zImage`), Device Trees (`*.dtb`), and Loaders |
-
-Your Vita's file structure should look like this:
-```
-ux0:
-├── VitaLinux.vpk               (if using Option A to install)
-├── app/
-│   └── VITALINUX/             (installed by VPK, or copied manually)
-│       ├── eboot.bin
-│       ├── sce_sys/
-│       │   ├── icon0.png
-│       │   └── param.sfo
-└── linux/
-    ├── baremetal-loader.skprx
-    ├── payload.bin
-    ├── zImage
-    ├── vita.dtb
-    ├── vita1000.dtb
-    ├── vita2000.dtb
-    ├── pstv.dtb
-    └── wpa_supplicant.conf     (edit with your Wi-Fi details)
-```
+3. Copy **`LinuxOnVita.vpk`** (from GitHub Releases, the release zip, or `output/`) to your memory card root (`ux0:LinuxOnVita.vpk`).
 
 > [!IMPORTANT]
 > **Hardware Requirement: Official Sony Memory Card Required**
 > The early baremetal payload initializes storage using Sony's proprietary memory card interface (MSIF).
 > - **All models (1000 and 2000):** An official physical Sony memory card is **strictly required** to boot Linux.
-> - **For SD2Vita Users:** If your SD2Vita adapter is configured as `ux0:`, you **must also copy** `zImage` and `vita.dtb` to your official Sony memory card (which typically mounts as `uma0:linux/` in VitaShell).
-> - **Internal Storage Note:** The baremetal loader runs directly on bare metal hardware without VitaOS and cannot read from internal eMMC storage (`imc0:`/`uma0:`) or SD2Vita. Booting without an official Sony memory card is currently not supported.
+> - **For SD2Vita Users:** If your SD2Vita adapter is configured as `ux0:`, your official Sony memory card is typically mounted as `xmc0:` (VitaShell/YAMT default) or `uma0:` (StorageMgr). Inside the **LinuxOnVita** app, select your Sony card mount using the D-Pad, and press **CROSS (X)** to install directly to it.
+> - **Internal Storage Note:** The baremetal loader runs directly on bare metal hardware without VitaOS and cannot read from internal eMMC storage (`imc0:`) or SD2Vita adapters. Booting without an official Sony memory card is currently not supported.
 
 ---
 
-### Step 5: Install & Launch Linux
-
-#### If you used Option A (`VitaLinux.vpk`):
+### Step 4: Install & Launch Linux
 1. Disconnect USB / exit VitaShell server mode.
-2. In VitaShell, navigate to `ux0:VitaLinux.vpk`.
-3. Press **CROSS (✕)** to install the package.
-4. When prompted that the package requires extended/unsafe permissions, press **CROSS (✕)** to accept.
-5. Once installation finishes, press the **PS Button** to return to the LiveArea home screen.
-6. Tap the new **VitaLinux** bubble and select **Start**.
-7. Press **CROSS (✕)** to initiate the baremetal loader handover.
-
-#### If you used Option B (Manual Folder Copy):
-1. Disconnect USB / exit VitaShell server mode.
-2. In VitaShell, navigate to the partition list (`ux0:`, `ur0:`, etc.).
-3. Highlight `ux0:`, press **TRIANGLE (△)** to open the menu, and select **Refresh LiveArea**.
-   *(Note: If the bubble does not appear, see [Troubleshooting](#livearea-bubble-does-not-appear-after-refresh-livearea-refreshed-0-items) or simply install `VitaLinux.vpk`).*
-4. Press the **PS Button** to return to the LiveArea home screen.
-5. Tap the new **VitaLinux** bubble and select **Start**.
-6. Press **CROSS (✕)** to initiate the baremetal loader handover.
+2. In VitaShell, navigate to `ux0:LinuxOnVita.vpk`.
+3. Press **CROSS (✕)** to install the package, and accept extended permissions when prompted.
+4. Once installation finishes, press the **PS Button** to return to the LiveArea home screen.
+5. Tap the new **LinuxOnVita** bubble and select **Start**.
+6. **Mount Selection & Setup:**
+   - The app scans all available storage partitions (`xmc0:`, `ux0:`, `uma0:`, `imc0:`) and displays their size and free space.
+   - Use **D-PAD UP / DOWN** or **L / R** to select the mount corresponding to your official Sony Memory Card (e.g. `xmc0:` for SD2Vita users, or `ux0:` for standard consoles). Your choice is saved automatically.
+   - Press **CROSS (✕)** to install the bundled Linux files directly to your Sony Memory Card (`<mount>/linux/`).
+   - If you already have boot files on `ux0:`, you can also press **TRIANGLE (/\\)** to copy them to your selected memory card mount.
+7. Once files are verified on your Sony Memory Card, press **CROSS (✕)** to boot into Linux!
 
 The screen will blank briefly, take over the display, and boot straight into the Linux terminal!
+
+---
+
+### Step 5: Connect to Wi-Fi On-Device (`vita-wifi`)
+Once booted into Linux, connect to your wireless network directly from the handheld:
+
+1. Tap the lower third of the screen to toggle the virtual touch keyboard (or navigate with physical buttons).
+2. Scan for nearby wireless networks:
+   ```bash
+   vita-wifi scan
+   ```
+   Or launch the interactive menu:
+   ```bash
+   vita-wifi
+   ```
+3. Enter the network number from the ASCII table (or connect directly with `vita-wifi connect <SSID>`) and enter your Wi-Fi password when prompted.
+4. `vita-wifi` verifies the connection, obtains a DHCP lease, and automatically saves your configuration to `<mount>/linux/wpa_supplicant.conf` on your memory card so future boots connect automatically without re-entering your password.
+5. OpenSSH and mDNS (`vita.local`) are ready immediately:
+   ```bash
+   ssh root@vita.local
+   # or ssh root@<VITA_IP>
+   ```
+
+> [!NOTE]
+> **Backwards Compatibility / Headless Alternative:**
+> If you prefer headless setup, you can still drop a pre-configured `wpa_supplicant.conf` into `<mount>:linux/` (e.g. `ux0:linux/wpa_supplicant.conf` or `xmc0:linux/wpa_supplicant.conf`) via VitaShell before booting. LinuxOnVita automatically detects existing configuration files on boot and connects seamlessly.
 
 ---
 
@@ -217,24 +193,7 @@ vita-brightness set 80     # Adjust brightness (0-100%)
 vita-brightness max        # Jump straight to 100% full bright
 ```
 
-### 4. Hardware Battery Check (`vita-battery`)
-Inspect your Vita's hardware battery telemetry at any time:
-```bash
-vita-battery
-```
-```
-======================================================
-               PlayStation Vita Battery               
-======================================================
- Battery Level:   87% [================>   ]
- Power State:     Discharging (Battery Power)
- Battery Voltage: 3920 mV
- Battery Health:  Good
-======================================================
-```
-*(Also supports `--percent` and `--short` flags for status scripts).*
-
-### 5. Playing Framebuffer DOOM (`vita-doom`)
+### 4. Playing Framebuffer DOOM (`vita-doom`)
 A pure-C standalone framebuffer DOOM engine (`fbdoom`) is pre-installed.
 1. Place any standard DOOM WAD (e.g. `DOOM1.WAD`, `DOOM.WAD`, `DOOM2.WAD`) into `ux0:doom/` (available in Linux at `/mnt/ux0/doom/`).
 2. Run `vita-doom` from the terminal:
@@ -254,7 +213,7 @@ vita-doom
 
 *(Note: Background input daemons and the touch keyboard are automatically suspended while DOOM is running and resumed when you exit).*
 
-### 6. Installing Packages with Alpine Linux (`alpine-chroot`)
+### 5. Installing Packages with Alpine Linux (`alpine-chroot`)
 Vita Linux includes an integrated Alpine Linux environment. Run `alpine-chroot` to launch a persistent Alpine rootfs:
 ```bash
 # Initialize/enter Alpine Linux (stored persistently as an ext4 image)
@@ -268,12 +227,20 @@ apk add fastfetch htop python3 git curl nano gcc musl-dev
 fastfetch
 ```
 
+### 6. Managing Wi-Fi On-Device (`vita-wifi`)
+Manage wireless connections directly on your PS Vita without needing to edit config files on a PC:
+* **Interactive TUI Menu:** Run `vita-wifi` without arguments for an interactive menu.
+* **Scan for Networks:** `vita-wifi scan` displays an ASCII table of nearby SSIDs, signal strength bars, and security types. Enter the network number to connect immediately.
+* **Connect to Network:** `vita-wifi connect <SSID>` prompts for your passphrase, saves persistently to your memory card (`<mount>/linux/wpa_supplicant.conf`), and acquires a DHCP lease.
+* **View Signal & Status:** `vita-wifi status` displays your active SSID, BSSID, RSSI dBm level, MAC, and assigned IP address.
+* **Power Savings:** `vita-wifi off` and `vita-wifi on` toggle the wireless radio to extend battery runtime.
+
 ### 7. Remote SSH Access
-Within ~12 seconds of boot, your Vita connects to Wi-Fi and starts OpenSSH. Connect from your computer:
+Within ~12 seconds of boot (or after connecting via `vita-wifi`), your Vita starts OpenSSH. Connect from your computer:
 ```bash
 ssh root@vita.local
 ```
-*(If mDNS does not resolve on your network, use the IP address shown on the login banner: `ssh root@<VITA_IP>`)*.
+*(If mDNS does not resolve on your network, use the IP address shown on the login banner or via `vita-wifi status`: `ssh root@<VITA_IP>`)*.
 
 ### 8. Returning to VitaOS or Powering Down
 ```bash
@@ -283,7 +250,7 @@ poweroff    # Full hardware poweroff via Syscon
 
 ---
 
-## 🛠 Hardware Support Matrix
+## 🛠 Hardware Support
 
 | Hardware Component | Status | Implementation Details |
 | :--- | :--- | :--- |
@@ -293,26 +260,26 @@ poweroff    # Full hardware poweroff via Syscon
 | **Touchscreen** | **Working** | `vita-syscon-ts.c` multi-touch digitizer mapped via `evdev` |
 | **Buttons & D-Pad** | **Working** | Patched `vita-buttons.c` driver with uniform active-low mask and `/dev/uinput` mapping |
 | **Analog Sticks** | **Working** | Syscon `0x180` analog sampling enabled with deadzone filtering |
-| **Storage (eMMC)** | **Working** | Auto-detected SCE partitions (`/dev/mmcblk*p1`–`p12`) |
+| **Storage (eMMC)** | **Working** | Auto-detected SCE partitions (`/dev/mmcblk*p1`-`p12`) |
 | **Storage (SD2Vita / Sony)** | **Working** | Automatically mounted at `/mnt/ux0`, `/mnt/ur0`, and `/mnt/uma0` |
-| **Battery Fuel Gauge** | **Working** | Handoff telemetry reporting percentage, voltage, and charging state |
+| **Battery Fuel Gauge** | **Not yet supported** | Isolated on Syscon (Ernie) private I2C bus; runtime streaming unsupported |
 | **UART0 Serial Console** | **Working** | 115200 baud serial debug console |
-| **Bluetooth** | Working | Marvell SD8787 via `btmrvl` |
-| **Audio** | Working | Vita audio codec via ALSA & PipeWire |
-| **3D GPU Acceleration** | Not Working | SGX543MP4+ lacks open-source Linux drivers (software rendering) |
+| **Bluetooth** | **Not yet supported** | Marvell SD8787 Bluetooth driver not enabled in kernel config |
+| **Audio** | **Not yet supported** | Vita audio codec lacks an active Linux ALSA driver |
+| **3D GPU Acceleration** | **Not supported** | PowerVR SGX543MP4+ lacks open-source Linux drivers (software rendering via simplefb) |
 
 ---
 
 ## ❓ Troubleshooting
 
 ### LiveArea bubble does not appear after "Refresh LiveArea" ("Refreshed 0 items")
-- **Cause 1 (Nested Directory):** If you extracted the release zip on your PC/Mac and dragged the `ux0` folder straight into `ux0:`, the files ended up at `ux0:ux0/app/VITALINUX/`. VitaShell only scans the top-level `ux0:app/` folder.
+- **Cause 1 (Nested Directory):** If you extracted the release zip on your PC/Mac and dragged the `ux0` folder straight into `ux0:`, the files ended up at `ux0:ux0/app/LNXONVITA/`. VitaShell only scans the top-level `ux0:app/` folder.
 - **Cause 2 (VitaShell Homebrew Detection):** VitaShell's "Refresh LiveArea" was originally designed for NoNpDrm game dumps that contain license files (`work.bin`). Raw homebrew folders without license files can be skipped depending on your VitaShell or HENkaku version.
-- **Fix:** Install via **`VitaLinux.vpk`**! In VitaShell, highlight `VitaLinux.vpk` and press **CROSS (✕)** to install it directly. The installer registers the application directly into the PS Vita's system database and creates the bubble reliably every time.
+- **Fix:** Install via **`LinuxOnVita.vpk`**! In VitaShell, highlight `LinuxOnVita.vpk` and press **CROSS (✕)** to install it directly. The installer registers the application directly into the PS Vita's system database and creates the bubble reliably every time.
 
 ### "The file is corrupt" error when launching the LiveArea bubble
-- **Cause:** Sony OS reports this if `eboot.bin` does not physically exist inside `ux0:app/VITALINUX/` on the current `ux0:` partition.
-- **Fix:** Install **`VitaLinux.vpk`** via VitaShell, or copy the entire `output/ux0/app/VITALINUX` folder into `ux0:app/VITALINUX` and run **Refresh LiveArea** from VitaShell.
+- **Cause:** Sony OS reports this if `eboot.bin` does not physically exist inside `ux0:app/LNXONVITA/` on the current `ux0:` partition.
+- **Fix:** Reinstall **`LinuxOnVita.vpk`** via VitaShell.
 
 ### Error `0x8002D003` when launching the bootstrapper
 - **Cause:** Unsafe homebrew is disabled in HENkaku settings.
@@ -321,12 +288,12 @@ poweroff    # Full hardware poweroff via Syscon
 ### "Memory card not inserted" on screen
 - **Cause:** The baremetal loader could not locate an official Sony memory card in the memory card slot.
 - **Fix:**
-  - An official Sony memory card is required on all consoles (both 1000 OLED and 2000 Slim). The baremetal loader only includes drivers for Sony's proprietary memory card interface (MSIF). It cannot read `zImage` or `vita.dtb` from internal eMMC storage (`imc0:`/`uma0:`) or SD2Vita.
-  - If you use an SD2Vita adapter as `ux0:`, insert an official Sony memory card, copy `zImage` and `vita.dtb` to it (it typically mounts as `uma0:linux/` in VitaShell), and then launch the bootstrapper.
+  - An official Sony memory card is required on all consoles (both 1000 OLED and 2000 Slim). The baremetal loader only includes drivers for Sony's proprietary memory card interface (MSIF). It cannot read `zImage` or `vita.dtb` from internal eMMC storage (`imc0:`) or SD2Vita adapters.
+  - If you use an SD2Vita adapter as `ux0:`, insert an official Sony memory card, open LinuxOnVita, select your Sony card mount (`xmc0:` or `uma0:`), install or copy the boot files, and then launch Linux.
 
 ### Screen freezes at `Uncompressing Linux... done, booting the kernel`
 - **Cause:** The Device Tree Blob (`vita.dtb`) does not match your specific console model.
-- **Fix:** Copy `vita1000.dtb` (for OLED 1000) or `vita2000.dtb` (for Slim 2000) to `ux0:linux/vita.dtb`.
+- **Fix:** Copy `vita1000.dtb` (for OLED 1000) or `vita2000.dtb` (for Slim 2000) to `<target_mount>:linux/vita.dtb` (on your official Sony Memory Card).
 
 ---
 
@@ -371,5 +338,6 @@ If LinuxOnVita has been useful to you, consider supporting continued development
 
 ## 📄 License
 
-This project and its orchestration scripts are licensed under the [MIT License](LICENSE).
+LinuxOnVita is licensed under the [GNU General Public License v3.0](LICENSE) (GPL-3.0).
 Upstream source trees (Linux kernel, Buildroot, VitaSDK) retain their respective licenses (GPLv2, MIT, BSD).
+

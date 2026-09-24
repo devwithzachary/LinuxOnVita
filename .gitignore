@@ -19,6 +19,11 @@ output/*
 .tmp*
 *.tmp
 *.log
+app/build/
+app/*.vpk
+app/*.self
+app/*.velf
+
 
 # Compiled binaries and kernels
 *.bin

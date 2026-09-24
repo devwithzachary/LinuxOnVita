@@ -28,9 +28,9 @@ if [ ! -d "vita-baremetal-loader" ]; then
     git clone https://github.com/xerpi/vita-baremetal-loader.git
 fi
 cd vita-baremetal-loader
+git checkout . 2>/dev/null || true
 if [ -f "${BUILD_DIR}/patches/vita-baremetal-loader/0001-loader-features.patch" ]; then
-    git apply --check "${BUILD_DIR}/patches/vita-baremetal-loader/0001-loader-features.patch" 2>/dev/null && \
-        git apply "${BUILD_DIR}/patches/vita-baremetal-loader/0001-loader-features.patch" || true
+    git apply "${BUILD_DIR}/patches/vita-baremetal-loader/0001-loader-features.patch" || true
 fi
 make clean || true
 make CFLAGS="-std=gnu17 -Wl,-q -Wall -O0 -nostartfiles -mcpu=cortex-a9 -mthumb-interwork"
@@ -48,9 +48,9 @@ if [ ! -d "vita-libbaremetal" ]; then
     git clone https://github.com/xerpi/vita-libbaremetal.git
 fi
 cd vita-libbaremetal
+git checkout . 2>/dev/null || true
 if [ -f "${BUILD_DIR}/patches/vita-libbaremetal/0001-max-brightness.patch" ]; then
-    git apply --check "${BUILD_DIR}/patches/vita-libbaremetal/0001-max-brightness.patch" 2>/dev/null && \
-        git apply "${BUILD_DIR}/patches/vita-libbaremetal/0001-max-brightness.patch" || true
+    git apply "${BUILD_DIR}/patches/vita-libbaremetal/0001-max-brightness.patch" || true
 fi
 cd libbaremetal
 make clean || true
@@ -63,27 +63,50 @@ if [ ! -d "vita-baremetal-linux-loader" ]; then
     git clone https://github.com/xerpi/vita-baremetal-linux-loader.git
 fi
 cd vita-baremetal-linux-loader
+git checkout . 2>/dev/null || true
 make clean || true
 make CFLAGS="-std=gnu17 -Iinclude -IFatFs -mcpu=cortex-a9 -mthumb-interwork -O0 -g3 -Wall -Wno-unused-const-variable -ffreestanding"
 cp vita-baremetal-linux-loader.bin "${LINUX_OUT}/payload.bin"
 cd "${SRC_DIR}"
 
-# 4. Build vita_plugin_linux_loader (Bootstrapper VPK)
-echo "[4/4] Building vita-linux-bootstrapper VPK..."
-if [ ! -d "vita_plugin_linux_loader" ]; then
-    git clone https://github.com/DvaMishkiLapa/vita_plugin_linux_loader.git
-fi
-cd vita_plugin_linux_loader
-rm -rf build && mkdir build && cd build
-cmake ..
-make
-cp *.vpk "${VPK_OUT}/vita-linux-bootstrapper.vpk"
-cp *.vpk "${VPK_OUT}/VitaLinux.vpk"
+# Ensure clean wpa_supplicant.conf template is in LINUX_OUT for bundling into VPK
+cat << 'EOF' > "${LINUX_OUT}/wpa_supplicant.conf"
+# LinuxOnVita Wi-Fi Configuration
+# ================================
+# Edit this file with your Wi-Fi credentials before booting Linux,
+# or connect on-device using 'vita-wifi'.
 
-# Pre-extract VPK for direct folder deployment (avoids LiveArea corrupt file errors)
-APP_DIR="${OUTPUT_DIR}/ux0/app/VITALINUX"
+ctrl_interface=/var/run/wpa_supplicant
+update_config=1
+
+network={
+    ssid="YourWiFiNetworkName"
+    psk="YourWiFiPassword"
+    key_mgmt=WPA-PSK
+}
+EOF
+
+# Ensure kernel is built if zImage is missing
+if [ ! -f "${LINUX_OUT}/zImage" ]; then
+    echo "Notice: ${LINUX_OUT}/zImage not found. Building kernel first..."
+    "${BUILD_DIR}/docker/scripts/build_kernel.sh"
+fi
+
+# 4. Build LinuxOnVita (All-in-one Bootstrapper & Installer VPK)
+echo "[4/4] Building LinuxOnVita VPK..."
+APP_DIR_SRC="${BUILD_DIR}/app"
+cd "${APP_DIR_SRC}"
+rm -rf build && mkdir -p build && cd build
+cmake -DLINUX_FILES_DIR="${LINUX_OUT}" ..
+make
+cp *.vpk "${VPK_OUT}/LinuxOnVita.vpk"
+cp *.vpk "${OUTPUT_DIR}/LinuxOnVita.vpk"
+
+# Pre-extract VPK for direct folder deployment (ux0:app/LNXONVITA)
+APP_DIR="${OUTPUT_DIR}/ux0/app/LNXONVITA"
+rm -rf "${APP_DIR}"
 mkdir -p "${APP_DIR}"
-unzip -qo "${VPK_OUT}/VitaLinux.vpk" -d "${APP_DIR}"
+unzip -qo "${VPK_OUT}/LinuxOnVita.vpk" -d "${APP_DIR}"
 
 # Also mirror payload to ux0/baremetal for compatibility
 BAREMETAL_OUT="${OUTPUT_DIR}/ux0/baremetal"
@@ -94,4 +117,5 @@ cp "${LINUX_OUT}/baremetal-loader.skprx" "${BAREMETAL_OUT}/baremetal-loader.skpr
 cd "${SRC_DIR}"
 
 echo "All loaders and VPK built successfully!"
-ls -lh "${LINUX_OUT}/baremetal-loader.skprx" "${LINUX_OUT}/payload.bin" "${VPK_OUT}/VitaLinux.vpk"
+ls -lh "${LINUX_OUT}/baremetal-loader.skprx" "${LINUX_OUT}/payload.bin" "${OUTPUT_DIR}/LinuxOnVita.vpk"
+
