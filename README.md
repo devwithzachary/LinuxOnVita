@@ -42,11 +42,11 @@ While the original upstream projects proved that modern Linux can boot on the PS
 
 ## 📦 Pre-Built Releases (Quick Install)
 
-Don't want to compile from source? Download the latest release zip (`LinuxOnVita-release-*.zip`) from the [GitHub Releases page](https://github.com/devwithzachary/LinuxOnVita/releases).
+Don't want to compile from source? Download the latest release from the [GitHub Releases page](https://github.com/devwithzachary/LinuxOnVita/releases).
 
-The release zip contains:
-* **`LinuxOnVita.vpk`:** Standalone all-in-one homebrew package. Bundles the complete Linux kernel, device tree blobs, and baremetal loaders directly inside the app, with an on-device 1-click installer.
-* **`INSTALL.txt`:** Quick setup instructions.
+Release download assets:
+* **`LinuxOnVita.vpk` (Standalone VPK - Recommended for most users):** The all-in-one bootstrapper and on-device installer. Bundles the complete Linux kernel, device tree blobs, and baremetal loaders directly inside the app. Users who just want to run Linux only need to download and install this single VPK!
+* **`LinuxOnVita-release-*.zip` (All-in-One Archive):** Contains `LinuxOnVita.vpk`, extracted boot files (`ux0/linux/`), unpacked LiveArea app (`ux0/app/LNXONVITA/`), and `INSTALL.txt`.
 
 > [!IMPORTANT]
 > **Pre-built releases do NOT include Wi-Fi credentials.**
@@ -118,14 +118,14 @@ Run the automated Docker build system:
 *(You can also build individual components: `./build.sh rootfs`, `./build.sh kernel`, or `./build.sh loaders`.)*
 
 > [!NOTE]
-> `./build.sh release` packages everything into `output/LinuxOnVita-release-<version>.zip` ready to share or upload to GitHub Releases. Wi-Fi credentials are **never** included in the release zip.
+> `./build.sh release` packages everything into `output/LinuxOnVita-release-<version>.zip` and produces standalone `output/LinuxOnVita.vpk` ready to share or upload to GitHub Releases. Wi-Fi credentials are **never** included in release assets.
 
 ---
 
 ### Step 4: Transfer LinuxOnVita.vpk to Your PS Vita
 1. Connect your PS Vita to your computer via USB cable (or FTP).
 2. Open **VitaShell** and press **SELECT** to enable USB/FTP storage.
-3. Copy **`LinuxOnVita.vpk`** (from the release package or `output/vpk/`) to your memory card root (`ux0:LinuxOnVita.vpk`).
+3. Copy **`LinuxOnVita.vpk`** (from GitHub Releases, the release zip, or `output/`) to your memory card root (`ux0:LinuxOnVita.vpk`).
 
 > [!IMPORTANT]
 > **Hardware Requirement: Official Sony Memory Card Required**

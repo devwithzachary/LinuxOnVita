@@ -24,6 +24,7 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
 - **SD2Vita Setup Guide:** Expanded troubleshooting and setup guidance explaining that SD2Vita users must target their official Sony memory card (typically `xmc0:` or `uma0:`) because the baremetal payload only interfaces with MSIF hardware and cannot read from SD2Vita.
 
 ### Changed
+- **Dual Release Packaging:** Updated release packaging to distribute both the standalone `LinuxOnVita.vpk` (for quick 1-click on-device installs) and `LinuxOnVita-release-*.zip` (full archive with manual payloads and installation guides) as separate release assets.
 - **License Unification (GPL-3.0):** Unified the project under the GNU General Public License v3.0 (GPL-3.0). This aligns the repository license with upstream component requirements, specifically the native `app/` bootstrapper (derived from GPL-3.0 `vita_plugin_linux_loader`) and `fbdoom` (GPL-2.0+).
 
 ### Removed

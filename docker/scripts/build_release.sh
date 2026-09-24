@@ -21,11 +21,13 @@ VERSION=$(git -C "${BUILD_DIR}" describe --tags --exact-match 2>/dev/null \
 
 RELEASE_NAME="LinuxOnVita-release-${VERSION}"
 RELEASE_ZIP="${OUTPUT_DIR}/${RELEASE_NAME}.zip"
+RELEASE_VPK="${OUTPUT_DIR}/LinuxOnVita.vpk"
 
 echo "========================================================="
 echo " LinuxOnVita Public Release Build"
 echo " Version: ${VERSION}"
-echo " Output:  ${RELEASE_ZIP}"
+echo " Assets:  ${RELEASE_ZIP}"
+echo "          ${RELEASE_VPK}"
 echo "========================================================="
 echo ""
 
@@ -48,9 +50,10 @@ cp "${OUTPUT_DIR}/ux0/linux/"*.dtb     "${RELEASE_DIR}/ux0/linux/" 2>/dev/null |
 # Copy LiveArea launcher app folder (unpacked)
 cp -r "${OUTPUT_DIR}/ux0/app/LNXONVITA" "${RELEASE_DIR}/ux0/app/" 2>/dev/null || true
 
-# Copy standalone LinuxOnVita.vpk into the release package for easy 1-click VitaShell installation
+# Copy standalone LinuxOnVita.vpk into the release package and to output/
 if [ -f "${OUTPUT_DIR}/vpk/LinuxOnVita.vpk" ]; then
     cp "${OUTPUT_DIR}/vpk/LinuxOnVita.vpk" "${RELEASE_DIR}/LinuxOnVita.vpk"
+    cp "${OUTPUT_DIR}/vpk/LinuxOnVita.vpk" "${RELEASE_VPK}"
 fi
 
 # Include the wpa_supplicant template so users know what to edit
@@ -118,12 +121,17 @@ if command -v zip >/dev/null 2>&1; then
 
     echo ""
     echo "========================================================="
-    echo " Release package ready!"
-    echo " File: ${RELEASE_ZIP}"
+    echo " Release assets ready!"
+    echo " 1. Full Release Zip: ${RELEASE_ZIP}"
     SIZE=$(du -sh "${RELEASE_ZIP}" | cut -f1)
-    echo " Size: ${SIZE}"
+    echo "    Size: ${SIZE}"
+    if [ -f "${RELEASE_VPK}" ]; then
+        VPK_SIZE=$(du -sh "${RELEASE_VPK}" | cut -f1)
+        echo " 2. Standalone VPK:  ${RELEASE_VPK}"
+        echo "    Size: ${VPK_SIZE}"
+    fi
     echo ""
-    echo " Contents:"
+    echo " Contents of ${RELEASE_NAME}.zip:"
     unzip -l "${RELEASE_ZIP}" | tail -n +4 | head -n -2
     echo "========================================================="
 else

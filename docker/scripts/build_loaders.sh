@@ -88,6 +88,7 @@ rm -rf build && mkdir -p build && cd build
 cmake -DLINUX_FILES_DIR="${LINUX_OUT}" ..
 make
 cp *.vpk "${VPK_OUT}/LinuxOnVita.vpk"
+cp *.vpk "${OUTPUT_DIR}/LinuxOnVita.vpk"
 
 # Pre-extract VPK for direct folder deployment (ux0:app/LNXONVITA)
 APP_DIR="${OUTPUT_DIR}/ux0/app/LNXONVITA"
@@ -104,5 +105,5 @@ cp "${LINUX_OUT}/baremetal-loader.skprx" "${BAREMETAL_OUT}/baremetal-loader.skpr
 cd "${SRC_DIR}"
 
 echo "All loaders and VPK built successfully!"
-ls -lh "${LINUX_OUT}/baremetal-loader.skprx" "${LINUX_OUT}/payload.bin" "${VPK_OUT}/LinuxOnVita.vpk"
+ls -lh "${LINUX_OUT}/baremetal-loader.skprx" "${LINUX_OUT}/payload.bin" "${OUTPUT_DIR}/LinuxOnVita.vpk"
 
