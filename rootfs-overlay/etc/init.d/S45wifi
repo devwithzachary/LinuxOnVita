@@ -1,5 +1,5 @@
 #!/bin/sh
-# Wait for mlan0 or wlan0 (mwifiex SDIO async probe) and bring up Wi-Fi networking.
+# Wait for wireless interface (mlan0 or wlan0) and bring up Wi-Fi networking.
 # Runs in background so it does not block early console boot.
 
 TIMEOUT=60
@@ -11,7 +11,7 @@ start)
         IFACE=""
         while [ $i -lt $TIMEOUT ]; do
             for candidate in mlan0 wlan0; do
-                if ip link show "$candidate" >/dev/null 2>&1 || [ -e "/sys/class/net/$candidate" ]; then
+                if [ -e "/sys/class/net/$candidate" ] || ip link show "$candidate" >/dev/null 2>&1; then
                     IFACE="$candidate"
                     break 2
                 fi
@@ -28,27 +28,32 @@ start)
             WPA_CONF=""
             for candidate in \
                 /mnt/ux0/linux/wpa_supplicant.conf \
+                /mnt/xmc0/linux/wpa_supplicant.conf \
+                /mnt/uma0/linux/wpa_supplicant.conf \
                 /mnt/ux0/wpa_supplicant.conf \
                 /etc/wpa_supplicant.conf; do
                 if [ -f "$candidate" ]; then
-                    WPA_CONF="$candidate"
-                    break
+                    # Check if candidate has a network block with real credentials (not unedited template)
+                    if grep -q "network=" "$candidate" 2>/dev/null && \
+                       ! grep -Eq "YourWiFiNetworkName|YourWiFiSSID|YourNetworkName" "$candidate" 2>/dev/null; then
+                        WPA_CONF="$candidate"
+                        break
+                    fi
                 fi
             done
 
+            mkdir -p /var/run/wpa_supplicant
+
+            # Kill any previous/stale instances
+            killall wpa_supplicant 2>/dev/null || true
+            killall udhcpc 2>/dev/null || true
+
+            ip link set "$IFACE" up 2>/dev/null || true
+
             if [ -n "$WPA_CONF" ]; then
                 echo "[WiFi] Using config: $WPA_CONF"
-                # Defensive check: remove any ctrl_interface lines that cause wpa_supplicant to exit
-                sed -i '/^ctrl_interface/d' "${WPA_CONF}" 2>/dev/null || true
-
-                # Kill any previous/stale instances
-                killall wpa_supplicant 2>/dev/null || true
-                killall udhcpc 2>/dev/null || true
-
-                ip link set "$IFACE" up 2>/dev/null || true
-
                 echo "[WiFi] Launching wpa_supplicant on $IFACE using $WPA_CONF..."
-                wpa_supplicant -B -i "$IFACE" -c "${WPA_CONF}"
+                wpa_supplicant -B -i "$IFACE" -c "${WPA_CONF}" -O /var/run/wpa_supplicant
 
                 # Wait up to 15s for 802.11 association (carrier state)
                 echo "[WiFi] Waiting for $IFACE association..."
@@ -91,9 +96,13 @@ start)
                     echo "[WiFi] $IFACE associated. Waiting for background DHCP..."
                 fi
             else
-                echo "[WiFi] No wpa_supplicant.conf found. Wi-Fi not configured."
-                echo "[WiFi] For pre-built releases: add wpa_supplicant.conf to ux0:linux/ on your memory card."
-                echo "[WiFi] For builds from source: add credentials to configs/wifi.conf before building."
+                echo "[WiFi] No wpa_supplicant.conf found. Initializing idle Wi-Fi stack for vita-wifi..."
+                cat << 'EOF' > /etc/wpa_supplicant.conf
+ctrl_interface=/var/run/wpa_supplicant
+update_config=1
+EOF
+                wpa_supplicant -B -i "$IFACE" -c /etc/wpa_supplicant.conf -O /var/run/wpa_supplicant
+                echo "[WiFi] Wi-Fi ready. Run 'vita-wifi' to scan and connect."
             fi
         else
             echo "[WiFi] Wireless interface not detected after ${TIMEOUT}s."

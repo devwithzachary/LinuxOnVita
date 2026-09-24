@@ -22,7 +22,8 @@ While the original upstream projects proved that modern Linux can boot on the PS
 - **Physical Gamepad Navigation (`vita-input-mapper`):** Complete console shell navigation using the D-Pad, face buttons, and shoulder triggers synthesized through `/dev/uinput`.
 - **Fixed Controller Logic:** Corrected inverted button mask issues and initialized analog sticks via Syscon for smooth twin-stick controls in games.
 - **Full Display Brightness:** Patched baremetal bootloaders to initialize displays at 100% brightness on both OLED and LCD models, plus runtime adjustment via `vita-brightness`.
-- **Zero-Config Wi-Fi & Quick Boot:** Drop wireless credentials into `configs/wifi.conf` to automatically connect on boot with OpenSSH and mDNS (`vita.local`). Fixed CRNG entropy stalls so SSH is ready in ~12 seconds.
+- **Interactive On-Device Wi-Fi Manager (`vita-wifi`):** Scan, connect, and switch wireless networks directly on the console with an ASCII signal table. Saves credentials permanently to your memory card without needing to edit config files on a PC. Includes power toggle commands (`vita-wifi off / on`) to extend battery life.
+- **Fast Boot & OpenSSH:** Boots straight into the Linux terminal. Wi-Fi connects automatically with OpenSSH and mDNS (`vita.local`), ready in ~12 seconds. Headless pre-configuration is also supported via `configs/wifi.conf` or `wpa_supplicant.conf`.
 - **Alpine Linux Chroot (`alpine-chroot`):** Run a persistent Alpine Linux userland on storage with live `apk add` package management.
 - **Storage Auto-Mounting:** Automatically mounts SD2Vita (`/mnt/ux0`), internal memory (`/mnt/ur0`), and secondary storage (`/mnt/uma0`) on boot.
 - **Framebuffer DOOM (`vita-doom`):** Pre-installed pure-C `fbdoom` engine with twin-stick controls, analog deadzones, and input isolation.
@@ -48,18 +49,13 @@ Release download assets:
 * **`LinuxOnVita.vpk` (Standalone VPK - Recommended for most users):** The all-in-one bootstrapper and on-device installer. Bundles the complete Linux kernel, device tree blobs, and baremetal loaders directly inside the app. Users who just want to run Linux only need to download and install this single VPK!
 * **`LinuxOnVita-release-*.zip` (All-in-One Archive):** Contains `LinuxOnVita.vpk`, extracted boot files (`ux0/linux/`), unpacked LiveArea app (`ux0/app/LNXONVITA/`), and `INSTALL.txt`.
 
-> [!IMPORTANT]
-> **Pre-built releases do NOT include Wi-Fi credentials.**
-> To configure Wi-Fi, edit `wpa_supplicant.conf` in your memory card's `linux/` folder (e.g. `xmc0:linux/` or `ux0:linux/` via VitaShell FTP or USB) after running the on-device installer:
-> ```
-> network={
->     ssid="YourWiFiNetworkName"
->     psk="YourWiFiPassword"
-> }
-> ```
-> Without this step the system **will still boot into Linux** but Wi-Fi and SSH will not be available.
+> [!TIP]
+> **Wi-Fi Setup for Pre-Built Releases**
+> Pre-built releases connect to Wi-Fi directly on the console using `vita-wifi`. Boot into Linux, open the terminal, and run `vita-wifi` to scan for nearby networks and connect directly on your Vita. Your network credentials are automatically saved to your memory card for future boots!
+>
+> *(Optional: For headless setups, you can still drop a pre-configured `wpa_supplicant.conf` into your memory card's `linux/` directory via VitaShell).*
 
-To install, simply follow [Step 4](#step-4-transfer-linuxonvitavpk-to-your-ps-vita) and [Step 5](#step-5-install--launch-linux) below.
+To install, simply follow [Step 3](#step-3-transfer-linuxonvitavpk-to-your-ps-vita) and [Step 4](#step-4-install--launch-linux) below, then connect using [Step 5](#step-5-connect-to-wi-fi-on-device-vita-wifi).
 
 ---
 
@@ -85,25 +81,7 @@ cd LinuxOnVita
 
 ---
 
-### Step 2: Configure Your Wi-Fi Credentials
-
-> [!IMPORTANT]
-> **Wi-Fi must be configured before building.** Pre-built release downloads do **not** include Wi-Fi credentials - you must configure them on your memory card after installation. Without this step the Vita will boot into Linux but will **not** connect to your network and SSH will not be available.
-
-If you want your Vita to automatically join your Wi-Fi network and start SSH on boot:
-```bash
-cp configs/wifi.conf.example configs/wifi.conf
-```
-Edit `configs/wifi.conf` with your network details:
-```bash
-SSID="YourWiFiNetworkName"
-PSK="YourWiFiPassword"
-```
-*(Note: `configs/wifi.conf` is ignored by git so your credentials remain private).*
-
----
-
-### Step 3: Build Linux with Docker
+### Step 2: Build Linux with Docker
 Run the automated Docker build system:
 ```bash
 # 1. Build the Docker environment image (one-time setup)
@@ -120,9 +98,19 @@ Run the automated Docker build system:
 > [!NOTE]
 > `./build.sh release` packages everything into `output/LinuxOnVita-release-<version>.zip` and produces standalone `output/LinuxOnVita.vpk` ready to share or upload to GitHub Releases. Wi-Fi credentials are **never** included in release assets.
 
+> [!TIP]
+> **Optional: Pre-configure Wi-Fi for Headless Boot**
+> You do **not** need to configure Wi-Fi before building: you can scan and connect directly on the console after boot using `vita-wifi`.
+> However, if you want your Vita to join your network immediately on first boot without any manual interaction:
+> ```bash
+> cp configs/wifi.conf.example configs/wifi.conf
+> # Edit SSID="YourWiFiNetworkName" and PSK="YourWiFiPassword"
+> ```
+> *(Note: `configs/wifi.conf` is ignored by git so your credentials remain private).*
+
 ---
 
-### Step 4: Transfer LinuxOnVita.vpk to Your PS Vita
+### Step 3: Transfer LinuxOnVita.vpk to Your PS Vita
 1. Connect your PS Vita to your computer via USB cable (or FTP).
 2. Open **VitaShell** and press **SELECT** to enable USB/FTP storage.
 3. Copy **`LinuxOnVita.vpk`** (from GitHub Releases, the release zip, or `output/`) to your memory card root (`ux0:LinuxOnVita.vpk`).
@@ -136,7 +124,7 @@ Run the automated Docker build system:
 
 ---
 
-### Step 5: Install & Launch Linux
+### Step 4: Install & Launch Linux
 1. Disconnect USB / exit VitaShell server mode.
 2. In VitaShell, navigate to `ux0:LinuxOnVita.vpk`.
 3. Press **CROSS (✕)** to install the package, and accept extended permissions when prompted.
@@ -150,6 +138,32 @@ Run the automated Docker build system:
 7. Once files are verified on your Sony Memory Card, press **CROSS (✕)** to boot into Linux!
 
 The screen will blank briefly, take over the display, and boot straight into the Linux terminal!
+
+---
+
+### Step 5: Connect to Wi-Fi On-Device (`vita-wifi`)
+Once booted into Linux, connect to your wireless network directly from the handheld:
+
+1. Tap the lower third of the screen to toggle the virtual touch keyboard (or navigate with physical buttons).
+2. Scan for nearby wireless networks:
+   ```bash
+   vita-wifi scan
+   ```
+   Or launch the interactive menu:
+   ```bash
+   vita-wifi
+   ```
+3. Enter the network number from the ASCII table (or connect directly with `vita-wifi connect <SSID>`) and enter your Wi-Fi password when prompted.
+4. `vita-wifi` verifies the connection, obtains a DHCP lease, and automatically saves your configuration to `<mount>/linux/wpa_supplicant.conf` on your memory card so future boots connect automatically without re-entering your password.
+5. OpenSSH and mDNS (`vita.local`) are ready immediately:
+   ```bash
+   ssh root@vita.local
+   # or ssh root@<VITA_IP>
+   ```
+
+> [!NOTE]
+> **Backwards Compatibility / Headless Alternative:**
+> If you prefer headless setup, you can still drop a pre-configured `wpa_supplicant.conf` into `<mount>:linux/` (e.g. `ux0:linux/wpa_supplicant.conf` or `xmc0:linux/wpa_supplicant.conf`) via VitaShell before booting. LinuxOnVita automatically detects existing configuration files on boot and connects seamlessly.
 
 ---
 
@@ -213,14 +227,22 @@ apk add fastfetch htop python3 git curl nano gcc musl-dev
 fastfetch
 ```
 
-### 6. Remote SSH Access
-Within ~12 seconds of boot, your Vita connects to Wi-Fi and starts OpenSSH. Connect from your computer:
+### 6. Managing Wi-Fi On-Device (`vita-wifi`)
+Manage wireless connections directly on your PS Vita without needing to edit config files on a PC:
+* **Interactive TUI Menu:** Run `vita-wifi` without arguments for an interactive menu.
+* **Scan for Networks:** `vita-wifi scan` displays an ASCII table of nearby SSIDs, signal strength bars, and security types. Enter the network number to connect immediately.
+* **Connect to Network:** `vita-wifi connect <SSID>` prompts for your passphrase, saves persistently to your memory card (`<mount>/linux/wpa_supplicant.conf`), and acquires a DHCP lease.
+* **View Signal & Status:** `vita-wifi status` displays your active SSID, BSSID, RSSI dBm level, MAC, and assigned IP address.
+* **Power Savings:** `vita-wifi off` and `vita-wifi on` toggle the wireless radio to extend battery runtime.
+
+### 7. Remote SSH Access
+Within ~12 seconds of boot (or after connecting via `vita-wifi`), your Vita starts OpenSSH. Connect from your computer:
 ```bash
 ssh root@vita.local
 ```
-*(If mDNS does not resolve on your network, use the IP address shown on the login banner: `ssh root@<VITA_IP>`)*.
+*(If mDNS does not resolve on your network, use the IP address shown on the login banner or via `vita-wifi status`: `ssh root@<VITA_IP>`)*.
 
-### 7. Returning to VitaOS or Powering Down
+### 8. Returning to VitaOS or Powering Down
 ```bash
 reboot      # Clean cold reset straight back to official Sony OS
 poweroff    # Full hardware poweroff via Syscon

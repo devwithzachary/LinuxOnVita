@@ -69,10 +69,22 @@ make CFLAGS="-std=gnu17 -Iinclude -IFatFs -mcpu=cortex-a9 -mthumb-interwork -O0 
 cp vita-baremetal-linux-loader.bin "${LINUX_OUT}/payload.bin"
 cd "${SRC_DIR}"
 
-# Ensure wpa_supplicant.conf template is in LINUX_OUT so it can be bundled
-if [ -f "${BUILD_DIR}/rootfs-overlay/etc/wpa_supplicant.conf" ] && [ ! -f "${LINUX_OUT}/wpa_supplicant.conf" ]; then
-    cp "${BUILD_DIR}/rootfs-overlay/etc/wpa_supplicant.conf" "${LINUX_OUT}/wpa_supplicant.conf"
-fi
+# Ensure clean wpa_supplicant.conf template is in LINUX_OUT for bundling into VPK
+cat << 'EOF' > "${LINUX_OUT}/wpa_supplicant.conf"
+# LinuxOnVita Wi-Fi Configuration
+# ================================
+# Edit this file with your Wi-Fi credentials before booting Linux,
+# or connect on-device using 'vita-wifi'.
+
+ctrl_interface=/var/run/wpa_supplicant
+update_config=1
+
+network={
+    ssid="YourWiFiNetworkName"
+    psk="YourWiFiPassword"
+    key_mgmt=WPA-PSK
+}
+EOF
 
 # Ensure kernel is built if zImage is missing
 if [ ! -f "${LINUX_OUT}/zImage" ]; then

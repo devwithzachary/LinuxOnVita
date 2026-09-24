@@ -1,0 +1,14 @@
+diff --git a/buildroot-vita/configs/vita_defconfig b/buildroot-vita/configs/vita_defconfig
+index 8cd741d..b3e72f1 100644
+--- a/buildroot-vita/configs/vita_defconfig
++++ b/buildroot-vita/configs/vita_defconfig
+@@ -30,6 +30,9 @@ BR2_PACKAGE_OPENSSH=y
+ BR2_PACKAGE_LINUX_FIRMWARE=y
+ BR2_PACKAGE_LINUX_FIRMWARE_MWIFIEX_SD8787=y
+ BR2_PACKAGE_WPA_SUPPLICANT=y
++BR2_PACKAGE_WPA_SUPPLICANT_CLI=y
++BR2_PACKAGE_WPA_SUPPLICANT_PASSPHRASE=y
++BR2_PACKAGE_WPA_SUPPLICANT_CTRL_IFACE=y
+ BR2_PACKAGE_BASH=y
+ BR2_PACKAGE_HTOP=y
+ BR2_PACKAGE_PROCPS_NG=y

@@ -346,6 +346,11 @@ static int copy_file(const char *src_path, const char *dst_path,
   sceIoClose(src_fd);
   sceIoClose(dst_fd);
 
+  if (read_bytes < 0) {
+    printf("  [FAIL] %s (read error 0x%08X)\n", src_path, read_bytes);
+    return read_bytes;
+  }
+
   if (total_bytes > (1024 * 1024)) {
     printf("\n");
   } else {

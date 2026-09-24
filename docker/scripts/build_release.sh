@@ -8,6 +8,7 @@ set -euo pipefail
 # Users must add their own wpa_supplicant.conf to ux0:linux/ after flashing.
 
 export FORCE_UNSAFE_CONFIGURE=1
+export IS_RELEASE_BUILD=1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="/build"
@@ -41,7 +42,7 @@ echo "[2/3] Assembling release package..."
 rm -rf "${RELEASE_DIR}"
 mkdir -p "${RELEASE_DIR}/ux0/linux" "${RELEASE_DIR}/ux0/app"
 
-# Copy kernel, DTBs, and loaders
+# Copy kernel, DTBs, and loaders (rootfs is embedded directly inside zImage)
 cp "${OUTPUT_DIR}/ux0/linux/"*.skprx   "${RELEASE_DIR}/ux0/linux/" 2>/dev/null || true
 cp "${OUTPUT_DIR}/ux0/linux/"*.bin     "${RELEASE_DIR}/ux0/linux/" 2>/dev/null || true
 cp "${OUTPUT_DIR}/ux0/linux/"zImage    "${RELEASE_DIR}/ux0/linux/" 2>/dev/null || true
@@ -56,15 +57,15 @@ if [ -f "${OUTPUT_DIR}/vpk/LinuxOnVita.vpk" ]; then
     cp "${OUTPUT_DIR}/vpk/LinuxOnVita.vpk" "${RELEASE_VPK}"
 fi
 
-# Include the wpa_supplicant template so users know what to edit
+# Include the clean wpa_supplicant template so users know what to edit
 cat > "${RELEASE_DIR}/ux0/linux/wpa_supplicant.conf" << 'EOF'
 # LinuxOnVita Wi-Fi Configuration
 # ================================
-# Edit this file with your Wi-Fi credentials before booting Linux.
-# Copy it to ux0:linux/wpa_supplicant.conf on your Vita memory card.
-#
-# Tip: You can also drop configs/wifi.conf in the repository before building
-# to have credentials baked in automatically (it is gitignored).
+# Edit this file with your Wi-Fi credentials before booting Linux,
+# or connect directly on-device using 'vita-wifi'.
+
+ctrl_interface=/var/run/wpa_supplicant
+update_config=1
 
 network={
     ssid="YourWiFiNetworkName"
