@@ -69,26 +69,31 @@ make CFLAGS="-std=gnu17 -Iinclude -IFatFs -mcpu=cortex-a9 -mthumb-interwork -O0 
 cp vita-baremetal-linux-loader.bin "${LINUX_OUT}/payload.bin"
 cd "${SRC_DIR}"
 
-# 4. Build vita_plugin_linux_loader (Bootstrapper VPK)
-echo "[4/4] Building vita-linux-bootstrapper VPK..."
-if [ ! -d "vita_plugin_linux_loader" ]; then
-    git clone https://github.com/DvaMishkiLapa/vita_plugin_linux_loader.git
+# Ensure wpa_supplicant.conf template is in LINUX_OUT so it can be bundled
+if [ -f "${BUILD_DIR}/rootfs-overlay/etc/wpa_supplicant.conf" ] && [ ! -f "${LINUX_OUT}/wpa_supplicant.conf" ]; then
+    cp "${BUILD_DIR}/rootfs-overlay/etc/wpa_supplicant.conf" "${LINUX_OUT}/wpa_supplicant.conf"
 fi
-cd vita_plugin_linux_loader
-git checkout . 2>/dev/null || true
-if [ -f "${BUILD_DIR}/patches/vita_plugin_linux_loader/0001-bootstrapper-features.patch" ]; then
-    git apply "${BUILD_DIR}/patches/vita_plugin_linux_loader/0001-bootstrapper-features.patch" || true
-fi
-rm -rf build && mkdir build && cd build
-cmake ..
-make
-cp *.vpk "${VPK_OUT}/vita-linux-bootstrapper.vpk"
-cp *.vpk "${VPK_OUT}/VitaLinux.vpk"
 
-# Pre-extract VPK for direct folder deployment (avoids LiveArea corrupt file errors)
-APP_DIR="${OUTPUT_DIR}/ux0/app/VITALINUX"
+# Ensure kernel is built if zImage is missing
+if [ ! -f "${LINUX_OUT}/zImage" ]; then
+    echo "Notice: ${LINUX_OUT}/zImage not found. Building kernel first..."
+    "${BUILD_DIR}/docker/scripts/build_kernel.sh"
+fi
+
+# 4. Build LinuxOnVita (All-in-one Bootstrapper & Installer VPK)
+echo "[4/4] Building LinuxOnVita VPK..."
+APP_DIR_SRC="${BUILD_DIR}/app"
+cd "${APP_DIR_SRC}"
+rm -rf build && mkdir -p build && cd build
+cmake -DLINUX_FILES_DIR="${LINUX_OUT}" ..
+make
+cp *.vpk "${VPK_OUT}/LinuxOnVita.vpk"
+
+# Pre-extract VPK for direct folder deployment (ux0:app/LNXONVITA)
+APP_DIR="${OUTPUT_DIR}/ux0/app/LNXONVITA"
+rm -rf "${APP_DIR}"
 mkdir -p "${APP_DIR}"
-unzip -qo "${VPK_OUT}/VitaLinux.vpk" -d "${APP_DIR}"
+unzip -qo "${VPK_OUT}/LinuxOnVita.vpk" -d "${APP_DIR}"
 
 # Also mirror payload to ux0/baremetal for compatibility
 BAREMETAL_OUT="${OUTPUT_DIR}/ux0/baremetal"
@@ -99,4 +104,5 @@ cp "${LINUX_OUT}/baremetal-loader.skprx" "${BAREMETAL_OUT}/baremetal-loader.skpr
 cd "${SRC_DIR}"
 
 echo "All loaders and VPK built successfully!"
-ls -lh "${LINUX_OUT}/baremetal-loader.skprx" "${LINUX_OUT}/payload.bin" "${VPK_OUT}/VitaLinux.vpk"
+ls -lh "${LINUX_OUT}/baremetal-loader.skprx" "${LINUX_OUT}/payload.bin" "${VPK_OUT}/LinuxOnVita.vpk"
+

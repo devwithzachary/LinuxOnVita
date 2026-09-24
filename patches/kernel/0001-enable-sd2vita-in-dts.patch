@@ -4,7 +4,7 @@ index ec05ab2a0..a473f61ad 100644
 +++ b/arch/arm/boot/dts/vita1000.dts
 @@ -32,14 +32,19 @@ &i2c0 {
  
- /* I2C1 disabled — bus scan empty on PCH-1000 (no powered consumers) */
+ /* I2C1 disabled - bus scan empty on PCH-1000 (no powered consumers) */
  
 -/* SDIF0 = eMMC, SDIF2 = WLAN/BT (SD8787 via SDIO) */
 +/* SDIF0 = eMMC, SDIF1 = Game card / SD2Vita, SDIF2 = WLAN/BT, SDIF3 = Memory Card */

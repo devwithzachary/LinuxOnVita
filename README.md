@@ -34,17 +34,15 @@ If you build the raw upstream projects by default, you get a bare-bones Linux ke
 
 ## 📦 Pre-Built Releases (Quick Install)
 
-Don't want to compile from source? Download the latest pre-built release zip (`LinuxOnVita-release-*.zip`) from the [GitHub Releases page](https://github.com/devwithzachary/LinuxOnVita/releases).
+Don't want to compile from source? Download the latest release zip (`LinuxOnVita-release-*.zip`) from the [GitHub Releases page](https://github.com/devwithzachary/LinuxOnVita/releases).
 
-The release zip is an all-in-one package that contains:
-* **`VitaLinux.vpk`:** Standalone homebrew installer package (easiest way to install the LiveArea bubble via VitaShell).
-* **`ux0/linux/`:** Linux 6.12 kernel (`zImage`), Device Tree blobs (`*.dtb`), baremetal loaders (`baremetal-loader.skprx`, `payload.bin`), and sample Wi-Fi config.
-* **`ux0/app/VITALINUX/`:** Pre-extracted app folder (for users who prefer manual folder deployment).
+The release zip contains:
+* **`LinuxOnVita.vpk`:** Standalone all-in-one homebrew package. Bundles the complete Linux kernel, device tree blobs, and baremetal loaders directly inside the app, with an on-device 1-click installer.
 * **`INSTALL.txt`:** Quick setup instructions.
 
 > [!IMPORTANT]
-> **Pre-built releases do NOT include Wi-Fi credentials.** The release zip is intentionally built without a `wpa_supplicant.conf` so you must add your own network details before the Vita can connect to Wi-Fi or SSH.
-> After extracting the release, edit `ux0:linux/wpa_supplicant.conf` directly on your memory card (via VitaShell FTP or USB):
+> **Pre-built releases do NOT include Wi-Fi credentials.**
+> To configure Wi-Fi, edit `ux0:linux/wpa_supplicant.conf` directly on your memory card (via VitaShell FTP or USB) after running the on-device installer:
 > ```
 > network={
 >     ssid="YourWiFiNetworkName"
@@ -53,7 +51,7 @@ The release zip is an all-in-one package that contains:
 > ```
 > Without this step the system **will still boot into Linux** but Wi-Fi and SSH will not be available.
 
-To install, simply follow [Step 4](#step-4-transfer-files-to-your-ps-vita) and [Step 5](#step-5-install--launch-linux) below.
+To install, simply follow [Step 4](#step-4-transfer-linuxonvitavpk-to-your-ps-vita) and [Step 5](#step-5-install--launch-linux) below.
 
 ---
 
@@ -116,76 +114,32 @@ Run the automated Docker build system:
 
 ---
 
-### Step 4: Transfer Files to Your PS Vita
+### Step 4: Transfer LinuxOnVita.vpk to Your PS Vita
 1. Connect your PS Vita to your computer via USB cable (or FTP).
 2. Open **VitaShell** and press **SELECT** to enable USB/FTP storage.
-3. Choose your preferred installation method below:
-
-#### Option A: Install via `VitaLinux.vpk` (Recommended & Easiest!)
-Copy the following files to your memory card (`ux0:`):
-
-| Source on Computer | Destination on PS Vita (`ux0:`) | Description |
-| :--- | :--- | :--- |
-| `VitaLinux.vpk` (from release zip or `output/vpk/`) | `ux0:VitaLinux.vpk` | Standard Vita homebrew installer package |
-| `ux0/linux/*` (from release zip or `output/ux0/linux/`) | `ux0:linux/` | Kernel (`zImage`), Device Trees (`*.dtb`), and Loaders |
-
-#### Option B: Manual Folder Copy
-Copy the pre-extracted application folder directly:
-
-| Source on Computer | Destination on PS Vita (`ux0:`) | Description |
-| :--- | :--- | :--- |
-| `output/ux0/app/VITALINUX/` | `ux0:app/VITALINUX/` | LiveArea launcher bubble folder |
-| `output/ux0/linux/*` | `ux0:linux/` | Kernel (`zImage`), Device Trees (`*.dtb`), and Loaders |
-
-Your Vita's file structure should look like this:
-```
-ux0:
-├── VitaLinux.vpk               (if using Option A to install)
-├── app/
-│   └── VITALINUX/             (installed by VPK, or copied manually)
-│       ├── eboot.bin
-│       ├── sce_sys/
-│       │   ├── icon0.png
-│       │   └── param.sfo
-└── linux/
-    ├── baremetal-loader.skprx
-    ├── payload.bin
-    ├── zImage
-    ├── vita.dtb
-    ├── vita1000.dtb
-    ├── vita2000.dtb
-    ├── pstv.dtb
-    └── wpa_supplicant.conf     (edit with your Wi-Fi details)
-```
+3. Copy **`LinuxOnVita.vpk`** (from the release package or `output/vpk/`) to your memory card root (`ux0:LinuxOnVita.vpk`).
 
 > [!IMPORTANT]
 > **Hardware Requirement: Official Sony Memory Card Required**
 > The early baremetal payload initializes storage using Sony's proprietary memory card interface (MSIF).
 > - **All models (1000 and 2000):** An official physical Sony memory card is **strictly required** to boot Linux.
-> - **For SD2Vita Users:** If your SD2Vita adapter is configured as `ux0:`, you **must also copy** `zImage` and `vita.dtb` to your official Sony memory card (which typically mounts as `uma0:linux/` in VitaShell).
-> - **Internal Storage Note:** The baremetal loader runs directly on bare metal hardware without VitaOS and cannot read from internal eMMC storage (`imc0:`/`uma0:`) or SD2Vita. Booting without an official Sony memory card is currently not supported.
+> - **For SD2Vita Users:** If your SD2Vita adapter is configured as `ux0:`, your official Sony memory card is typically mounted as `xmc0:` (VitaShell/YAMT default) or `uma0:` (StorageMgr). Inside the **LinuxOnVita** app, select your Sony card mount using the D-Pad, and press **CROSS (X)** to install directly to it.
+> - **Internal Storage Note:** The baremetal loader runs directly on bare metal hardware without VitaOS and cannot read from internal eMMC storage (`imc0:`) or SD2Vita adapters. Booting without an official Sony memory card is currently not supported.
 
 ---
 
 ### Step 5: Install & Launch Linux
-
-#### If you used Option A (`VitaLinux.vpk`):
 1. Disconnect USB / exit VitaShell server mode.
-2. In VitaShell, navigate to `ux0:VitaLinux.vpk`.
-3. Press **CROSS (✕)** to install the package.
-4. When prompted that the package requires extended/unsafe permissions, press **CROSS (✕)** to accept.
-5. Once installation finishes, press the **PS Button** to return to the LiveArea home screen.
-6. Tap the new **VitaLinux** bubble and select **Start**.
-7. Press **CROSS (✕)** to initiate the baremetal loader handover.
-
-#### If you used Option B (Manual Folder Copy):
-1. Disconnect USB / exit VitaShell server mode.
-2. In VitaShell, navigate to the partition list (`ux0:`, `ur0:`, etc.).
-3. Highlight `ux0:`, press **TRIANGLE (△)** to open the menu, and select **Refresh LiveArea**.
-   *(Note: If the bubble does not appear, see [Troubleshooting](#livearea-bubble-does-not-appear-after-refresh-livearea-refreshed-0-items) or simply install `VitaLinux.vpk`).*
-4. Press the **PS Button** to return to the LiveArea home screen.
-5. Tap the new **VitaLinux** bubble and select **Start**.
-6. Press **CROSS (✕)** to initiate the baremetal loader handover.
+2. In VitaShell, navigate to `ux0:LinuxOnVita.vpk`.
+3. Press **CROSS (✕)** to install the package, and accept extended permissions when prompted.
+4. Once installation finishes, press the **PS Button** to return to the LiveArea home screen.
+5. Tap the new **LinuxOnVita** bubble and select **Start**.
+6. **Mount Selection & Setup:**
+   - The app scans all available storage partitions (`xmc0:`, `ux0:`, `uma0:`, `imc0:`) and displays their size and free space.
+   - Use **D-PAD UP / DOWN** or **L / R** to select the mount corresponding to your official Sony Memory Card (e.g. `xmc0:` for SD2Vita users, or `ux0:` for standard consoles). Your choice is saved automatically.
+   - Press **CROSS (✕)** to install the bundled Linux files directly to your Sony Memory Card (`<mount>/linux/`).
+   - If you already have boot files on `ux0:`, you can also press **TRIANGLE (/\\)** to copy them to your selected memory card mount.
+7. Once files are verified on your Sony Memory Card, press **CROSS (✕)** to boot into Linux!
 
 The screen will blank briefly, take over the display, and boot straight into the Linux terminal!
 
@@ -289,13 +243,13 @@ poweroff    # Full hardware poweroff via Syscon
 ## ❓ Troubleshooting
 
 ### LiveArea bubble does not appear after "Refresh LiveArea" ("Refreshed 0 items")
-- **Cause 1 (Nested Directory):** If you extracted the release zip on your PC/Mac and dragged the `ux0` folder straight into `ux0:`, the files ended up at `ux0:ux0/app/VITALINUX/`. VitaShell only scans the top-level `ux0:app/` folder.
+- **Cause 1 (Nested Directory):** If you extracted the release zip on your PC/Mac and dragged the `ux0` folder straight into `ux0:`, the files ended up at `ux0:ux0/app/LNXONVITA/`. VitaShell only scans the top-level `ux0:app/` folder.
 - **Cause 2 (VitaShell Homebrew Detection):** VitaShell's "Refresh LiveArea" was originally designed for NoNpDrm game dumps that contain license files (`work.bin`). Raw homebrew folders without license files can be skipped depending on your VitaShell or HENkaku version.
-- **Fix:** Install via **`VitaLinux.vpk`**! In VitaShell, highlight `VitaLinux.vpk` and press **CROSS (✕)** to install it directly. The installer registers the application directly into the PS Vita's system database and creates the bubble reliably every time.
+- **Fix:** Install via **`LinuxOnVita.vpk`**! In VitaShell, highlight `LinuxOnVita.vpk` and press **CROSS (✕)** to install it directly. The installer registers the application directly into the PS Vita's system database and creates the bubble reliably every time.
 
 ### "The file is corrupt" error when launching the LiveArea bubble
-- **Cause:** Sony OS reports this if `eboot.bin` does not physically exist inside `ux0:app/VITALINUX/` on the current `ux0:` partition.
-- **Fix:** Install **`VitaLinux.vpk`** via VitaShell, or copy the entire `output/ux0/app/VITALINUX` folder into `ux0:app/VITALINUX` and run **Refresh LiveArea** from VitaShell.
+- **Cause:** Sony OS reports this if `eboot.bin` does not physically exist inside `ux0:app/LNXONVITA/` on the current `ux0:` partition.
+- **Fix:** Reinstall **`LinuxOnVita.vpk`** via VitaShell.
 
 ### Error `0x8002D003` when launching the bootstrapper
 - **Cause:** Unsafe homebrew is disabled in HENkaku settings.
@@ -304,12 +258,12 @@ poweroff    # Full hardware poweroff via Syscon
 ### "Memory card not inserted" on screen
 - **Cause:** The baremetal loader could not locate an official Sony memory card in the memory card slot.
 - **Fix:**
-  - An official Sony memory card is required on all consoles (both 1000 OLED and 2000 Slim). The baremetal loader only includes drivers for Sony's proprietary memory card interface (MSIF). It cannot read `zImage` or `vita.dtb` from internal eMMC storage (`imc0:`/`uma0:`) or SD2Vita.
-  - If you use an SD2Vita adapter as `ux0:`, insert an official Sony memory card, copy `zImage` and `vita.dtb` to it (it typically mounts as `uma0:linux/` in VitaShell), and then launch the bootstrapper.
+  - An official Sony memory card is required on all consoles (both 1000 OLED and 2000 Slim). The baremetal loader only includes drivers for Sony's proprietary memory card interface (MSIF). It cannot read `zImage` or `vita.dtb` from internal eMMC storage (`imc0:`) or SD2Vita adapters.
+  - If you use an SD2Vita adapter as `ux0:`, insert an official Sony memory card, open LinuxOnVita, select your Sony card mount (`xmc0:` or `uma0:`), install or copy the boot files, and then launch Linux.
 
 ### Screen freezes at `Uncompressing Linux... done, booting the kernel`
 - **Cause:** The Device Tree Blob (`vita.dtb`) does not match your specific console model.
-- **Fix:** Copy `vita1000.dtb` (for OLED 1000) or `vita2000.dtb` (for Slim 2000) to `ux0:linux/vita.dtb`.
+- **Fix:** Copy `vita1000.dtb` (for OLED 1000) or `vita2000.dtb` (for Slim 2000) to `<target_mount>:linux/vita.dtb` (on your official Sony Memory Card).
 
 ---
 
@@ -354,5 +308,6 @@ If LinuxOnVita has been useful to you, consider supporting continued development
 
 ## 📄 License
 
-This project and its orchestration scripts are licensed under the [MIT License](LICENSE).
+LinuxOnVita is licensed under the [GNU General Public License v3.0](LICENSE) (GPL-3.0).
 Upstream source trees (Linux kernel, Buildroot, VitaSDK) retain their respective licenses (GPLv2, MIT, BSD).
+

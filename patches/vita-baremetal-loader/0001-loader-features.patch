@@ -20,7 +20,7 @@ diff --git a/main.c b/main.c
 index ffa2a2c..bcc98a9 100644
 --- a/main.c
 +++ b/main.c
-@@ -179,9 +179,27 @@ int module_start(SceSize argc, const void *args)
+@@ -179,9 +179,31 @@ int module_start(SceSize argc, const void *args)
  	/*
  	 * Load the baremetal payload to physically contiguous memory.
  	 */
@@ -31,10 +31,14 @@ index ffa2a2c..bcc98a9 100644
 +		"ux0:/linux/payload.bin",
 +		"ux0:baremetal/payload.bin",
 +		"ux0:/baremetal/payload.bin",
++		"xmc0:linux/payload.bin",
++		"xmc0:/linux/payload.bin",
 +		"uma0:linux/payload.bin",
 +		"uma0:/linux/payload.bin",
 +		"imc0:linux/payload.bin",
 +		"imc0:/linux/payload.bin",
++		"ur0:linux/payload.bin",
++		"ur0:/linux/payload.bin",
 +	};
 +	ret = -1;
 +	for (unsigned int i = 0; i < sizeof(payload_paths) / sizeof(payload_paths[0]); i++) {

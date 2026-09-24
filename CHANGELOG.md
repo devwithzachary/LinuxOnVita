@@ -7,9 +7,22 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
 
 ## [1.1.0] - Unreleased
 
+### Added
+- **All-in-One Application (`app/LinuxOnVita`):** Rebuilt the bootstrapper into a native, tracked project under `app/` (Title ID `LNXONVITA`, named `LinuxOnVita.vpk`).
+- **Dynamic Storage Partition Detection & Sizing:** Integrated `sceIoDevctl` to query and display all active storage partitions (`xmc0:`, `ux0:`, `uma0:`, `imc0:`) with total capacity and free space in real-time.
+- **Custom Memory Card Mount Selection:** Users can select their official Sony Memory Card partition (`xmc0:`, `ux0:`, `uma0:`, `imc0:`) using D-Pad Up/Down or L/R shoulder buttons. This resolves issues on consoles where SD2Vita is `ux0:` and the Sony card is mapped to `xmc0:` or `uma0:`.
+- **Persistent Mount Preference:** Automatically saves and restores the user's selected mount across reboots in `ur0:data/LinuxOnVita/mount.cfg` (with `ux0:` fallback).
+- **Multi-Path Baremetal Loader (`xmc0:` & `ur0:`):** Updated `baremetal-loader.skprx` and `0001-loader-features.patch` to search `xmc0:linux/payload.bin` and `ur0:linux/payload.bin` so the kernel plugin reliably locates the payload on secondary mounts.
+- **Bundled Linux Payload & 1-Click Installer:** The single `LinuxOnVita.vpk` bundles all built Linux files (`zImage`, `vita.dtb`, `payload.bin`, `baremetal-loader.skprx`, and configuration templates) directly inside `app0:data/`. Users can install or update all files directly to their chosen memory card partition (`<mount>/linux/`).
+- **Boot File Copy Helper:** Added a 1-click copy action (TRIANGLE) in the application UI that copies `zImage` and Device Tree files to the selected memory card partition.
+- **Reinstall & Update Support:** Added a reinstall/update shortcut (SQUARE) to refresh or repair memory card files directly from the bundled payload at any time.
+
 ### Documentation & Hardware Requirements
 - **Official Sony Memory Card Requirement:** Clarified that an official physical Sony memory card is strictly required on all hardware models (both 1000 and 2000 consoles) to boot Linux. Corrected misleading documentation that previously suggested PS Vita 2000 Slim could boot using internal 1GB storage without an official memory card.
-- **SD2Vita Setup Guide:** Expanded troubleshooting and setup guidance explaining that SD2Vita users must also copy `zImage` and `vita.dtb` to their official Sony memory card (`uma0:linux/`) because the baremetal payload only interfaces with MSIF.
+- **SD2Vita Setup Guide:** Expanded troubleshooting and setup guidance explaining that SD2Vita users must target their official Sony memory card (typically `xmc0:` or `uma0:`) because the baremetal payload only interfaces with MSIF hardware and cannot read from SD2Vita.
+
+### Changed
+- **License Unification (GPL-3.0):** Unified the project under the GNU General Public License v3.0 (GPL-3.0). This aligns the repository license with upstream component requirements, specifically the native `app/` bootstrapper (derived from GPL-3.0 `vita_plugin_linux_loader`) and `fbdoom` (GPL-2.0+).
 
 ### Removed
 - **Static Battery Telemetry (`vita-battery`):** Removed the static bootloader handoff and `vita-battery` command. Because the hardware fuel gauge (TI bq27520) is isolated on the Syscon companion microcontroller's private I2C bus and live streaming is not yet reverse-engineered, the static snapshot did not reflect runtime battery state or charging changes and caused confusion.
