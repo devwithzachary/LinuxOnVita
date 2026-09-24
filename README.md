@@ -4,31 +4,39 @@
 [![Kernel](https://img.shields.io/badge/Kernel-Linux%206.12-orange.svg)](https://kernel.org)
 [![Architecture](https://img.shields.io/badge/Architecture-ARMv7--A%20(Cortex--A9)-green.svg)](https://developer.arm.com/Processors/Cortex-A9)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2.svg?logo=discord&logoColor=white)](https://discord.gg/BrzdmHu8Am)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 
 A complete distribution, automated build environment, and handheld userland for running **Linux 6.12** on hacked PlayStation Vita consoles ([HENlo](https://vita.hacks.guide/using-henlo) / HENkaku / Ensō 3.60 & 3.65).
 
-While the original upstream projects proved that modern Linux can boot on the PS Vita SoC, they functioned primarily as developer proof-of-concepts requiring specialized hardware (such as soldered UART debug cables). LinuxOnVita bridges the gap into a **fully standalone, interactive handheld Linux device** with out-of-the-box touch typing, physical gamepad navigation, automated Wi-Fi, battery monitoring, package management (`apk`), and native framebuffer gaming.
+While the original upstream projects proved that modern Linux can boot on the PS Vita SoC, they functioned primarily as developer proof-of-concepts requiring specialized hardware (such as soldered UART debug cables). LinuxOnVita bridges the gap into a **fully standalone, interactive handheld Linux device** with out-of-the-box touch typing, physical gamepad navigation, automated Wi-Fi, package management (`apk`), and native framebuffer gaming.
+
+<p align="center">
+  <img src="screenshot.png" alt="PlayStation Vita Linux 6.12 Running with Framebuffer Touch Keyboard" width="720">
+</p>
 
 ---
 
-## 🌟 What Makes This Project Different: Upstream vs. LinuxOnVita
+## ✨ Features
 
-If you build the raw upstream projects by default, you get a bare-bones Linux kernel that boots to a terminal you cannot interact with without soldering serial wires. Below is a breakdown of what this distribution adds:
+- **Built-in Touch Keyboard (`fbkeyboard`):** Type directly on the console screen with an on-framebuffer virtual keyboard featuring dual ABC / ?123 layouts, special keys, and a hide toggle.
+- **Physical Gamepad Navigation (`vita-input-mapper`):** Complete console shell navigation using the D-Pad, face buttons, and shoulder triggers synthesized through `/dev/uinput`.
+- **Fixed Controller Logic:** Corrected inverted button mask issues and initialized analog sticks via Syscon for smooth twin-stick controls in games.
+- **Full Display Brightness:** Patched baremetal bootloaders to initialize displays at 100% brightness on both OLED and LCD models, plus runtime adjustment via `vita-brightness`.
+- **Zero-Config Wi-Fi & Quick Boot:** Drop wireless credentials into `configs/wifi.conf` to automatically connect on boot with OpenSSH and mDNS (`vita.local`). Fixed CRNG entropy stalls so SSH is ready in ~12 seconds.
+- **Alpine Linux Chroot (`alpine-chroot`):** Run a persistent Alpine Linux userland on storage with live `apk add` package management.
+- **Storage Auto-Mounting:** Automatically mounts SD2Vita (`/mnt/ux0`), internal memory (`/mnt/ur0`), and secondary storage (`/mnt/uma0`) on boot.
+- **Framebuffer DOOM (`vita-doom`):** Pre-installed pure-C `fbdoom` engine with twin-stick controls, analog deadzones, and input isolation.
+- **All-in-One Installer App (`LinuxOnVita.vpk`):** Graphical bootstrapper with real-time partition detection, memory card mount selector, and 1-click on-device installer.
+- **Automated Docker Build:** Build the entire stack (kernel, rootfs, loaders, and VPK) with a single command (`./build.sh all`).
 
-| Feature Area | Upstream Default Experience (Raw Proof-of-Concept) | **LinuxOnVita (This Distribution)** |
-| :--- | :--- | :--- |
-| **Interactive Terminal Input** | ❌ **None.** Requires a custom soldered UART cable or USB-UART interface to type commands. | ✅ **Built-in Touch Keyboard (`fbkeyboard`):** Rendered directly on `/dev/fb0` with dual ABC / ?123 layout, customizable keys, and VT isolation. |
-| **Physical Button Navigation** | ❌ Raw evdev only; buttons do nothing in the console shell. | ✅ **`vita-input-mapper`:** D-Pad, Cross (Enter), Circle (Backspace), Square (Space), Triangle (Tab), and L-Trigger (Ctrl+C) synthesized via `/dev/uinput`. |
-| **Button Driver Correctness** | ⚠️ **Broken Mask:** Legacy XOR mask `0x4037fcf9` inverted D-Pad Right, Down, Select, and L-Trigger (causing D-Pad Right to be permanently stuck ON). | ✅ **Fixed Mask (`0x4037ffff`):** All 12 hardware buttons are decoded with uniform active-low logic. Analog sticks are initialized via Syscon `0x180`. |
-| **Screen Brightness** | ⚠️ **Dim:** Baremetal OLED driver hardcoded to gamma level 0 (dimmest); LCD driver hardcoded to 50% PWM. | ✅ **100% Full Brightness:** Patched baremetal loaders to maximum brightness curve on boot, plus a runtime `vita-brightness` CLI. |
-| **Wi-Fi & SSH Access** | ⚠️ Manual CLI setup or hardcoded supplicant configs required. | ✅ **Zero-Config Auto-Connect:** Drop credentials into `configs/wifi.conf`. Auto-joins WPA2 Wi-Fi on boot and starts OpenSSH with mDNS (`vita.local`). |
-| **Boot Delay / SSH Ready Time** | ⚠️ **~2.5 minute delay:** Linux kernel blocked waiting on CRNG random entropy due to missing hardware timer. | ✅ **~12 seconds to SSH:** Enabled the 144 MHz ARM Global Timer clocksource, completely eliminating entropy stalls. |
-| **Package Management** | ❌ **Read-only / Ephemeral:** Buildroot initramfs has no package manager (`apt`/`apk`); any downloaded binaries vanish on reboot. | ✅ **Alpine Linux (`alpine-chroot`):** Run `alpine-chroot` to create a persistent ext4 userland on SD/internal storage with live `apk add` package management. |
-| **Storage & SD2Vita** | ⚠️ Only official Sony memory cards or internal eMMC mounted manually. | ✅ **Auto-Mounting:** Automatic mounting of `/mnt/ux0` (SD2Vita / memory card), `/mnt/ur0` (internal storage), and `/mnt/uma0` on boot. |
-| **Battery & Power Management** | ❌ Unknown; battery fuel gauge is isolated on Ernie's private I2C bus. | ⚠️ **Isolated on Ernie PMIC:** The battery fuel gauge (TI bq27520) communicates over a private I2C bus with the Syscon microcontroller; live runtime battery streaming is not yet supported in Linux. |
-| **Gaming Demonstration** | ❌ None out of the box. | ✅ **Framebuffer DOOM (`vita-doom`):** Native pure-C `fbdoom` with twin-stick and button controls, analog deadzones, and input isolation. |
-| **Build System & Toolchains** | ⚠️ Complex multi-step host compilation across separate repos and cross-compilers. | ✅ **One-Command Docker Build:** `./build.sh all` handles toolchains, kernel patches, Buildroot overlays, and VPK packaging automatically. |
+---
+
+> [!IMPORTANT]
+> **Hardware Requirement: Official Sony Memory Card Strictly Required**
+> An official physical Sony memory card is required on **all** PS Vita models (both 1000 OLED and 2000 Slim) to boot Linux.
+> The baremetal loader communicates directly with Sony's proprietary memory card interface (MSIF) and cannot boot Linux from SD2Vita adapters (game card slot) or internal eMMC storage (`imc0:`).
+> - **Standard Consoles (No SD2Vita):** Your Sony Memory Card mounts as `ux0:`.
+> - **SD2Vita Users:** Your SD2Vita mounts as `ux0:`, and your physical Sony Memory Card typically mounts as `xmc0:` (VitaShell/YAMT default) or `uma0:` (StorageMgr). The **LinuxOnVita** app detects all partitions and lets you install directly to your Sony Memory Card.
 
 ---
 
@@ -42,7 +50,7 @@ The release zip contains:
 
 > [!IMPORTANT]
 > **Pre-built releases do NOT include Wi-Fi credentials.**
-> To configure Wi-Fi, edit `ux0:linux/wpa_supplicant.conf` directly on your memory card (via VitaShell FTP or USB) after running the on-device installer:
+> To configure Wi-Fi, edit `wpa_supplicant.conf` in your memory card's `linux/` folder (e.g. `xmc0:linux/` or `ux0:linux/` via VitaShell FTP or USB) after running the on-device installer:
 > ```
 > network={
 >     ssid="YourWiFiNetworkName"
@@ -55,7 +63,7 @@ To install, simply follow [Step 4](#step-4-transfer-linuxonvitavpk-to-your-ps-vi
 
 ---
 
-## 🚀 Complete Step-by-Step Guide: From Clone to Running Linux (Build from Source)
+## 🚀 Complete Step-by-Step Guide
 
 Follow these steps to build and install Linux on your PlayStation Vita:
 
@@ -80,7 +88,7 @@ cd LinuxOnVita
 ### Step 2: Configure Your Wi-Fi Credentials
 
 > [!IMPORTANT]
-> **Wi-Fi must be configured before building.** Pre-built release downloads do **not** include Wi-Fi credentials - you must add them yourself before flashing. Without this step the Vita will boot into Linux but will **not** connect to your network and SSH will not be available.
+> **Wi-Fi must be configured before building.** Pre-built release downloads do **not** include Wi-Fi credentials - you must configure them on your memory card after installation. Without this step the Vita will boot into Linux but will **not** connect to your network and SSH will not be available.
 
 If you want your Vita to automatically join your Wi-Fi network and start SSH on boot:
 ```bash
@@ -220,7 +228,7 @@ poweroff    # Full hardware poweroff via Syscon
 
 ---
 
-## 🛠 Hardware Support Matrix
+## 🛠 Hardware Support
 
 | Hardware Component | Status | Implementation Details |
 | :--- | :--- | :--- |
@@ -230,13 +238,13 @@ poweroff    # Full hardware poweroff via Syscon
 | **Touchscreen** | **Working** | `vita-syscon-ts.c` multi-touch digitizer mapped via `evdev` |
 | **Buttons & D-Pad** | **Working** | Patched `vita-buttons.c` driver with uniform active-low mask and `/dev/uinput` mapping |
 | **Analog Sticks** | **Working** | Syscon `0x180` analog sampling enabled with deadzone filtering |
-| **Storage (eMMC)** | **Working** | Auto-detected SCE partitions (`/dev/mmcblk*p1`–`p12`) |
+| **Storage (eMMC)** | **Working** | Auto-detected SCE partitions (`/dev/mmcblk*p1`-`p12`) |
 | **Storage (SD2Vita / Sony)** | **Working** | Automatically mounted at `/mnt/ux0`, `/mnt/ur0`, and `/mnt/uma0` |
 | **Battery Fuel Gauge** | **Not yet supported** | Isolated on Syscon (Ernie) private I2C bus; runtime streaming unsupported |
 | **UART0 Serial Console** | **Working** | 115200 baud serial debug console |
-| **Bluetooth** | Working | Marvell SD8787 via `btmrvl` |
-| **Audio** | Working | Vita audio codec via ALSA & PipeWire |
-| **3D GPU Acceleration** | Not Working | SGX543MP4+ lacks open-source Linux drivers (software rendering) |
+| **Bluetooth** | **Not yet supported** | Marvell SD8787 Bluetooth driver not enabled in kernel config |
+| **Audio** | **Not yet supported** | Vita audio codec lacks an active Linux ALSA driver |
+| **3D GPU Acceleration** | **Not supported** | PowerVR SGX543MP4+ lacks open-source Linux drivers (software rendering via simplefb) |
 
 ---
 
