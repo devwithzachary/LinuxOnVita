@@ -80,6 +80,10 @@ While original proof-of-concept projects proved that modern Linux can boot on th
 5. Select your Sony Memory Card partition (e.g. `xmc0:` for SD2Vita users, or `ux0:` for standard consoles) and press **CROSS (✕)** to install the bundled Linux files.
 6. Press **CROSS (✕)** to boot straight into Linux!
 
+> [!IMPORTANT]
+> **Updating from an Earlier Version:**
+> If you already have an older version of LinuxOnVita installed, transfer and install the latest `LinuxOnVita.vpk` in VitaShell, launch the app, and press **SQUARE (□)** to reinstall and update the Linux setup (`<mount>/linux/`). Pressing CROSS (✕) immediately would otherwise boot the older kernel and loaders already on your memory card.
+
 For full usage instructions, gamepad shortcuts, and Wi-Fi setup, see the **[Complete User Guide](USER_GUIDE.md)**.
 
 ---

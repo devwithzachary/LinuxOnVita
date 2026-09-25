@@ -69,6 +69,13 @@ Download **`LinuxOnVita.vpk`** from the [GitHub Releases page](https://github.co
 
 The screen will blank briefly, take over the hardware framebuffer, and boot directly to the Linux terminal prompt (`root@vita:~#`).
 
+### Updating to a New Version
+When upgrading your console from a previous release of LinuxOnVita:
+1. Transfer and install the new `LinuxOnVita.vpk` in VitaShell.
+2. Launch the **LinuxOnVita** bubble from the LiveArea.
+3. **Reinstall / Update Memory Card Files:** Press **SQUARE (□)** to update the Linux setup (`<mount>/linux/`). Because boot files (`zImage`, Device Tree blobs, and baremetal loaders) already exist on your memory card from the previous version, pressing Cross (✕) would continue booting the older kernel and files. Pressing **Square (□)** refreshes and overwrites your memory card with the new release files bundled inside the VPK.
+4. Press **CROSS (✕)** to boot into your updated Linux system!
+
 ---
 
 ## 3. Navigating the Handheld Console
