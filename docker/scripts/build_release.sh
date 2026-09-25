@@ -15,6 +15,8 @@ BUILD_DIR="/build"
 OUTPUT_DIR="${BUILD_DIR}/output"
 RELEASE_DIR="${OUTPUT_DIR}/release"
 
+git config --global --add safe.directory "${BUILD_DIR}" 2>/dev/null || true
+
 # Determine version: check VERSION env var, exact git tag, git branch, or date
 VERSION="${VERSION:-$(git -C "${BUILD_DIR}" describe --tags --exact-match 2>/dev/null \
     || git -C "${BUILD_DIR}" branch --show-current 2>/dev/null \

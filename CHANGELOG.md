@@ -5,7 +5,7 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
 
 ---
 
-## [v1.2.0] - Unreleased
+## [v1.2.0] - 2026-09-25
 
 ### Added
 - **SD2Vita (Game Card Slot) Power & High-Speed Support:** Enabled hardware power and high-speed bus negotiation for SD2Vita adapters in the Game Card slot (`SDIF1`):
