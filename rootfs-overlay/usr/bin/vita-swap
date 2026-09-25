@@ -1,0 +1,420 @@
+#!/bin/sh
+# vita-swap: PlayStation Vita Memory & Swap Management Utility
+# Controls compressed ZRAM swap in RAM and physical swapfiles on storage.
+
+ZRAM_DEV="/dev/zram0"
+ZRAM_SYS="/sys/block/zram0"
+ZRAM_CONF="/etc/vita-zram.conf"
+SWAP_CONF="/etc/vita-swap.conf"
+DEFAULT_SWAP_PATH="/mnt/ux0/swapfile"
+DEFAULT_SWAP_SIZE="512M"
+DEFAULT_ZRAM_SIZE="256M"
+
+parse_size_mb() {
+    val="$1"
+    case "$val" in
+        *[gG]|*[gG][bB])
+            num=$(echo "$val" | sed 's/[^0-9]//g')
+            echo $(( num * 1024 ))
+            ;;
+        *[mM]|*[mM][bB])
+            num=$(echo "$val" | sed 's/[^0-9]//g')
+            echo "$num"
+            ;;
+        *)
+            echo "$val" | sed 's/[^0-9]//g'
+            ;;
+    esac
+}
+
+bytes_to_human() {
+    bytes="${1:-0}"
+    if [ "$bytes" -ge 1073741824 ] 2>/dev/null; then
+        echo "$(( bytes / 1073741824 )) GB"
+    elif [ "$bytes" -ge 1048576 ] 2>/dev/null; then
+        echo "$(( bytes / 1048576 )) MB"
+    elif [ "$bytes" -ge 1024 ] 2>/dev/null; then
+        echo "$(( bytes / 1024 )) KB"
+    else
+        echo "${bytes} B"
+    fi
+}
+
+show_help() {
+    cat << 'EOF'
+Usage: vita-swap [COMMAND] [OPTIONS]
+
+PlayStation Vita Memory & Swap Management Utility.
+Expands usable RAM with zero-latency compressed ZRAM and storage swapfiles.
+
+Commands:
+  status                   Display RAM, ZRAM, and physical swap telemetry (default)
+  create [size] [path]     Create, format, and activate a persistent swapfile
+                           (Default: 512M at /mnt/ux0/swapfile)
+  remove [path]            Deactivate and delete an existing swapfile
+  on [path]                Activate an existing swapfile
+  off [path]               Deactivate an active swapfile
+  zram [size]              Resize and re-initialize compressed ZRAM swap
+                           (e.g., 256M, 512M)
+  help                     Show this help screen
+
+Examples:
+  vita-swap                        # View memory and swap status
+  vita-swap create 512M            # Create 512MB swapfile on SD card (/mnt/ux0)
+  vita-swap create 1G /mnt/ux0     # Create 1GB swapfile on SD card
+  vita-swap zram 512M              # Expand compressed ZRAM pool to 512MB
+  vita-swap remove                 # Remove default /mnt/ux0/swapfile
+EOF
+    exit 0
+}
+
+show_status() {
+    echo "=================================================="
+    echo " PlayStation Vita Memory & Swap Telemetry"
+    echo "=================================================="
+
+    # Physical RAM
+    if [ -f /proc/meminfo ]; then
+        MEM_TOTAL_KB=$(awk '/MemTotal:/ {print $2}' /proc/meminfo)
+        MEM_FREE_KB=$(awk '/MemFree:/ {print $2}' /proc/meminfo)
+        MEM_AVAIL_KB=$(awk '/MemAvailable:/ {print $2}' /proc/meminfo)
+        [ -z "$MEM_AVAIL_KB" ] && MEM_AVAIL_KB=$MEM_FREE_KB
+        MEM_TOTAL_MB=$(( MEM_TOTAL_KB / 1024 ))
+        MEM_AVAIL_MB=$(( MEM_AVAIL_KB / 1024 ))
+        MEM_USED_MB=$(( MEM_TOTAL_MB - MEM_AVAIL_MB ))
+        echo " Physical RAM:   ${MEM_TOTAL_MB} MB (${MEM_USED_MB} MB used, ${MEM_AVAIL_MB} MB available)"
+    fi
+
+    echo "--------------------------------------------------"
+    echo " Compressed ZRAM (RAM Swap):"
+
+    if [ -e "${ZRAM_SYS}" ] && grep -q "${ZRAM_DEV}" /proc/swaps 2>/dev/null; then
+        ZRAM_DISK_BYTES=$(cat "${ZRAM_SYS}/disksize" 2>/dev/null || echo 0)
+        ZRAM_DISK_MB=$(( ZRAM_DISK_BYTES / 1048576 ))
+
+        ZRAM_ALGO="unknown"
+        if [ -f "${ZRAM_SYS}/comp_algorithm" ]; then
+            ZRAM_ALGO=$(grep -o '\[[a-zA-Z0-9_-]*\]' "${ZRAM_SYS}/comp_algorithm" | tr -d '[]' || echo "lz4")
+        fi
+
+        ORIG_SIZE=0
+        COMPR_SIZE=0
+        MEM_USED=0
+        if [ -f "${ZRAM_SYS}/orig_data_size" ]; then
+            ORIG_SIZE=$(cat "${ZRAM_SYS}/orig_data_size" 2>/dev/null || echo 0)
+            COMPR_SIZE=$(cat "${ZRAM_SYS}/compr_data_size" 2>/dev/null || echo 0)
+            MEM_USED=$(cat "${ZRAM_SYS}/mem_used_total" 2>/dev/null || echo 0)
+        elif [ -f "${ZRAM_SYS}/mm_stat" ]; then
+            ORIG_SIZE=$(awk '{print $1}' "${ZRAM_SYS}/mm_stat" 2>/dev/null || echo 0)
+            COMPR_SIZE=$(awk '{print $2}' "${ZRAM_SYS}/mm_stat" 2>/dev/null || echo 0)
+            MEM_USED=$(awk '{print $3}' "${ZRAM_SYS}/mm_stat" 2>/dev/null || echo 0)
+        fi
+
+        ORIG_HUMAN=$(bytes_to_human "$ORIG_SIZE")
+        COMPR_HUMAN=$(bytes_to_human "$COMPR_SIZE")
+        MEM_HUMAN=$(bytes_to_human "$MEM_USED")
+
+        RATIO="1.0x"
+        if [ "$ORIG_SIZE" -gt 0 ] 2>/dev/null && [ "$COMPR_SIZE" -gt 0 ] 2>/dev/null; then
+            # Integer ratio x10 for 1 decimal place
+            RATIO_INT=$(( (ORIG_SIZE * 10) / COMPR_SIZE ))
+            RATIO="$(( RATIO_INT / 10 )).$(( RATIO_INT % 10 ))x"
+        fi
+
+        echo "   State:        Active (/dev/zram0)"
+        echo "   Capacity:     ${ZRAM_DISK_MB} MB virtual swap"
+        echo "   Compressor:   ${ZRAM_ALGO}"
+        echo "   Data Stored:  ${ORIG_HUMAN} (compressed to ${COMPR_HUMAN} in RAM)"
+        echo "   Ratio:        ${RATIO} efficiency (${MEM_HUMAN} allocator overhead)"
+        echo "   Priority:     100 (Primary high-speed swap)"
+    elif [ -e "${ZRAM_SYS}" ]; then
+        echo "   State:        Device exists but inactive"
+        echo "   Run:          'vita-swap zram 256M' to initialize"
+    else
+        echo "   State:        Not available (Kernel CONFIG_ZRAM disabled)"
+    fi
+
+    echo "--------------------------------------------------"
+    echo " Physical Swapfile (Storage Swap):"
+
+    PHYS_FOUND=0
+    if [ -f /proc/swaps ]; then
+        while read -r line; do
+            case "$line" in
+                Filename*|*"${ZRAM_DEV}"*)
+                    continue
+                    ;;
+                /*)
+                    SW_FILE=$(echo "$line" | awk '{print $1}')
+                    SW_SIZE_KB=$(echo "$line" | awk '{print $3}')
+                    SW_USED_KB=$(echo "$line" | awk '{print $4}')
+                    SW_PRIO=$(echo "$line" | awk '{print $5}')
+                    SW_SIZE_MB=$(( SW_SIZE_KB / 1024 ))
+                    SW_USED_MB=$(( SW_USED_KB / 1024 ))
+                    echo "   Path:         ${SW_FILE}"
+                    echo "   Capacity:     ${SW_SIZE_MB} MB (${SW_USED_MB} MB used)"
+                    echo "   Priority:     ${SW_PRIO} (Secondary storage fallback)"
+                    PHYS_FOUND=1
+                    ;;
+            esac
+        done < /proc/swaps
+    fi
+
+    if [ "$PHYS_FOUND" -eq 0 ]; then
+        if [ -f "${SWAP_CONF}" ] && [ -f "$(cat "${SWAP_CONF}" 2>/dev/null)" ]; then
+            CONFIGURED_PATH=$(cat "${SWAP_CONF}")
+            echo "   State:        Inactive (Configured at ${CONFIGURED_PATH})"
+            echo "   Run:          'vita-swap on ${CONFIGURED_PATH}' to activate"
+        elif [ -f "${DEFAULT_SWAP_PATH}" ]; then
+            echo "   State:        Inactive (Found at ${DEFAULT_SWAP_PATH})"
+            echo "   Run:          'vita-swap on' to activate"
+        else
+            echo "   State:        None active"
+            echo "   Tip:          Run 'vita-swap create 512M' to add an SD swapfile"
+        fi
+    fi
+
+    # Auto-mount status
+    echo "--------------------------------------------------"
+    AUTO_STATUS="Disabled"
+    if [ -f "${SWAP_CONF}" ] && [ -n "$(cat "${SWAP_CONF}" 2>/dev/null)" ]; then
+        AUTO_STATUS="Enabled ($(cat "${SWAP_CONF}"))"
+    elif [ -f "${DEFAULT_SWAP_PATH}" ]; then
+        AUTO_STATUS="Enabled (default /mnt/ux0/swapfile detected)"
+    fi
+    echo " Auto-Mount:     ${AUTO_STATUS}"
+
+    # Total Memory Calculation
+    SWAP_TOTAL_KB=0
+    SWAP_USED_KB=0
+    if [ -f /proc/meminfo ]; then
+        SWAP_TOTAL_KB=$(awk '/SwapTotal:/ {print $2}' /proc/meminfo)
+        SWAP_USED_KB=$(awk '/SwapFree:/ {print $2}' /proc/meminfo)
+        SWAP_USED_KB=$(( SWAP_TOTAL_KB - SWAP_USED_KB ))
+    fi
+    SWAP_TOTAL_MB=$(( SWAP_TOTAL_KB / 1024 ))
+    SWAP_USED_MB=$(( SWAP_USED_KB / 1024 ))
+    COMBINED_MB=$(( MEM_TOTAL_MB + SWAP_TOTAL_MB ))
+
+    echo " Total Usable:   ${COMBINED_MB} MB RAM+Swap (${SWAP_TOTAL_MB} MB total swap, ${SWAP_USED_MB} MB used)"
+    echo "=================================================="
+}
+
+cmd_create() {
+    SIZE_INPUT="${1:-$DEFAULT_SWAP_SIZE}"
+    PATH_INPUT="${2:-$DEFAULT_SWAP_PATH}"
+
+    # If second arg is a directory, append swapfile
+    if [ -d "$PATH_INPUT" ]; then
+        PATH_INPUT="${PATH_INPUT%/}/swapfile"
+    fi
+
+    SIZE_MB=$(parse_size_mb "$SIZE_INPUT")
+    if [ -z "$SIZE_MB" ] || [ "$SIZE_MB" -lt 32 ] 2>/dev/null; then
+        echo "Error: Invalid swap size '$SIZE_INPUT'. Must be at least 32M."
+        exit 1
+    fi
+
+    PARENT_DIR=$(dirname "$PATH_INPUT")
+    if [ ! -d "$PARENT_DIR" ]; then
+        echo "Error: Directory '$PARENT_DIR' does not exist."
+        echo "Ensure your memory card or SD2Vita is mounted first."
+        exit 1
+    fi
+
+    # Check free disk space
+    AVAIL_KB=$(df -k "$PARENT_DIR" 2>/dev/null | awk 'NR==2 {print $4}')
+    if [ -n "$AVAIL_KB" ]; then
+        AVAIL_MB=$(( AVAIL_KB / 1024 ))
+        NEEDED_MB=$(( SIZE_MB + 30 ))
+        if [ "$AVAIL_MB" -lt "$NEEDED_MB" ]; then
+            echo "Error: Insufficient disk space on $PARENT_DIR."
+            echo "Available: ${AVAIL_MB} MB, Needed: ${NEEDED_MB} MB."
+            exit 1
+        fi
+    fi
+
+    # If active swap, deactivate first
+    if grep -q "$PATH_INPUT" /proc/swaps 2>/dev/null; then
+        echo "Deactivating existing swap at $PATH_INPUT..."
+        swapoff "$PATH_INPUT" 2>/dev/null || true
+    fi
+
+    echo "Creating ${SIZE_MB} MB swapfile at ${PATH_INPUT}..."
+    echo "(Allocating contiguous zero blocks on storage...)"
+    
+    if ! dd if=/dev/zero of="$PATH_INPUT" bs=1M count="$SIZE_MB" status=progress 2>/dev/null; then
+        if ! dd if=/dev/zero of="$PATH_INPUT" bs=1M count="$SIZE_MB" 2>/dev/null; then
+            echo "Error: Failed to allocate swapfile on $PATH_INPUT."
+            exit 1
+        fi
+    fi
+
+    echo "Setting secure permissions (0600)..."
+    chmod 600 "$PATH_INPUT"
+
+    echo "Formatting swap signature..."
+    if ! mkswap "$PATH_INPUT"; then
+        echo "Error: mkswap failed on $PATH_INPUT."
+        rm -f "$PATH_INPUT"
+        exit 1
+    fi
+
+    echo "Activating swapfile..."
+    if ! swapon -p 10 "$PATH_INPUT"; then
+        echo "Error: swapon failed for $PATH_INPUT."
+        exit 1
+    fi
+
+    # Save to persistent auto-mount config
+    echo "$PATH_INPUT" > "${SWAP_CONF}"
+    echo "Saved auto-mount configuration to ${SWAP_CONF}."
+
+    echo ""
+    echo "Success! Swapfile of ${SIZE_MB} MB created and activated."
+    show_status
+}
+
+cmd_remove() {
+    TARGET_PATH="${1:-}"
+    if [ -z "$TARGET_PATH" ]; then
+        if [ -f "${SWAP_CONF}" ]; then
+            TARGET_PATH=$(cat "${SWAP_CONF}")
+        fi
+        [ -z "$TARGET_PATH" ] && TARGET_PATH="$DEFAULT_SWAP_PATH"
+    fi
+
+    echo "Deactivating swapfile at ${TARGET_PATH}..."
+    swapoff "$TARGET_PATH" 2>/dev/null || true
+
+    if [ -f "$TARGET_PATH" ]; then
+        echo "Deleting file ${TARGET_PATH}..."
+        rm -f "$TARGET_PATH"
+    fi
+
+    if [ -f "${SWAP_CONF}" ]; then
+        CONF_VAL=$(cat "${SWAP_CONF}")
+        if [ "$CONF_VAL" = "$TARGET_PATH" ]; then
+            rm -f "${SWAP_CONF}"
+            echo "Removed ${TARGET_PATH} from ${SWAP_CONF}."
+        fi
+    fi
+
+    echo "Swapfile removed successfully."
+}
+
+cmd_on() {
+    TARGET_PATH="${1:-}"
+    if [ -z "$TARGET_PATH" ]; then
+        if [ -f "${SWAP_CONF}" ]; then
+            TARGET_PATH=$(cat "${SWAP_CONF}")
+        fi
+        [ -z "$TARGET_PATH" ] && TARGET_PATH="$DEFAULT_SWAP_PATH"
+    fi
+
+    if [ ! -f "$TARGET_PATH" ]; then
+        echo "Error: Swapfile not found at ${TARGET_PATH}."
+        echo "Run 'vita-swap create' to generate a new swapfile."
+        exit 1
+    fi
+
+    chmod 600 "$TARGET_PATH" 2>/dev/null || true
+    if swapon -p 10 "$TARGET_PATH"; then
+        echo "$TARGET_PATH" > "${SWAP_CONF}"
+        echo "Swap activated: ${TARGET_PATH} (Saved to ${SWAP_CONF})"
+    else
+        echo "Error: Failed to activate swap on ${TARGET_PATH}."
+        exit 1
+    fi
+}
+
+cmd_off() {
+    TARGET_PATH="${1:-}"
+    if [ -z "$TARGET_PATH" ]; then
+        if [ -f "${SWAP_CONF}" ]; then
+            TARGET_PATH=$(cat "${SWAP_CONF}")
+        fi
+        [ -z "$TARGET_PATH" ] && TARGET_PATH="$DEFAULT_SWAP_PATH"
+    fi
+
+    if swapoff "$TARGET_PATH"; then
+        echo "Swap deactivated: ${TARGET_PATH}"
+    else
+        echo "Notice: Swap was not active on ${TARGET_PATH}."
+    fi
+}
+
+cmd_zram() {
+    SIZE_INPUT="${1:-$DEFAULT_ZRAM_SIZE}"
+    SIZE_MB=$(parse_size_mb "$SIZE_INPUT")
+
+    if [ -z "$SIZE_MB" ] || [ "$SIZE_MB" -lt 64 ] 2>/dev/null; then
+        echo "Error: Invalid ZRAM size '$SIZE_INPUT'. Must be at least 64M."
+        exit 1
+    fi
+
+    if [ ! -e "${ZRAM_SYS}" ]; then
+        echo "Error: /sys/block/zram0 not found. Kernel ZRAM support missing."
+        exit 1
+    fi
+
+    echo "Reconfiguring compressed ZRAM to ${SIZE_MB} MB..."
+
+    # Deactivate existing zram swap
+    swapoff "${ZRAM_DEV}" 2>/dev/null || true
+
+    # Reset zram device
+    echo 1 > "${ZRAM_SYS}/reset" 2>/dev/null || true
+
+    # Configure compressor (prefer lz4)
+    if grep -q "lz4" "${ZRAM_SYS}/comp_algorithm" 2>/dev/null; then
+        echo lz4 > "${ZRAM_SYS}/comp_algorithm" 2>/dev/null || true
+    fi
+
+    # Set new uncompressed capacity
+    echo "${SIZE_MB}M" > "${ZRAM_SYS}/disksize"
+
+    # Format swap signature and activate with high priority
+    mkswap "${ZRAM_DEV}" >/dev/null 2>&1
+    swapon -p 100 "${ZRAM_DEV}" >/dev/null 2>&1
+
+    # Persist setting across reboots
+    echo "${SIZE_MB}M" > "${ZRAM_CONF}"
+    echo "Saved persistent ZRAM size to ${ZRAM_CONF}."
+
+    echo ""
+    echo "Success! Compressed ZRAM swap set to ${SIZE_MB} MB."
+    show_status
+}
+
+CMD="${1:-status}"
+shift 2>/dev/null || true
+
+case "$CMD" in
+    status)
+        show_status
+        ;;
+    create)
+        cmd_create "$@"
+        ;;
+    remove|delete)
+        cmd_remove "$@"
+        ;;
+    on|start)
+        cmd_on "$@"
+        ;;
+    off|stop)
+        cmd_off "$@"
+        ;;
+    zram)
+        cmd_zram "$@"
+        ;;
+    -h|--help|help)
+        show_help
+        ;;
+    *)
+        echo "Unknown command: $CMD"
+        echo ""
+        show_help
+        ;;
+esac

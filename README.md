@@ -25,6 +25,7 @@ While the original upstream projects proved that modern Linux can boot on the PS
 - **Interactive On-Device Wi-Fi Manager (`vita-wifi`):** Scan, connect, and switch wireless networks directly on the console with an ASCII signal table. Saves credentials permanently to your memory card without needing to edit config files on a PC. Includes power toggle commands (`vita-wifi off / on`) to extend battery life.
 - **Fast Boot & OpenSSH:** Boots straight into the Linux terminal. Wi-Fi connects automatically with OpenSSH and mDNS (`vita.local`), ready in ~12 seconds. Headless pre-configuration is also supported via `configs/wifi.conf` or `wpa_supplicant.conf`.
 - **Alpine Linux Chroot (`alpine-chroot`):** Run an isolated, persistent Alpine Linux userland on storage with full `apk add` package management (packages run inside the chroot container).
+- **Compressed ZRAM & Swap Management (`vita-swap`):** Zero-latency LZ4 compressed RAM swap expands usable memory from 512MB to ~768MB-1GB, preventing Out-Of-Memory (OOM) crashes during heavy package installs, Python scripts, or C compilation. Includes physical SD card swapfile auto-mounting.
 - **Storage Auto-Mounting:** Automatically mounts SD2Vita (`/mnt/ux0`), internal memory (`/mnt/ur0`), and secondary storage (`/mnt/uma0`) on boot.
 - **Framebuffer DOOM (`vita-doom`):** Pre-installed pure-C `fbdoom` engine with twin-stick controls, analog deadzones, and input isolation.
 - **All-in-One Installer App (`LinuxOnVita.vpk`):** Graphical bootstrapper with real-time partition detection, memory card mount selector, and 1-click on-device installer.
@@ -257,7 +258,36 @@ alpine-chroot -- python3 my_script.py
 * `alpine-chroot --ram`: Launch a temporary in-memory session (changes discarded on reboot).
 * `alpine-chroot --status`: View current chroot mount status and storage usage.
 
-### 6. Managing Wi-Fi On-Device (`vita-wifi`)
+### 6. Memory Expansion & Swap Management (`vita-swap`)
+The PS Vita has 512 MB of physical RAM. Memory-intensive tasks like compiling C programs, installing large Alpine packages with `apk`, or running Python applications can trigger the Linux Out-Of-Memory (OOM) killer.
+
+To prevent crashes, Vita Linux includes:
+1. **Compressed ZRAM Swap (Default):** An in-memory, LZ4-compressed virtual swap pool initialized on boot (`/dev/zram0`). It operates with near-zero latency and zero storage wear, effectively expanding usable RAM to ~768 MB - 1 GB.
+2. **Physical Storage Swapfiles:** Optional disk-backed swap files on your SD card or memory card (`/mnt/ux0/swapfile`) with automatic boot-time mounting.
+
+Manage memory and swap using `vita-swap`:
+```bash
+# View RAM, ZRAM compression ratios, and swap telemetry
+vita-swap status
+
+# Create a 512MB persistent swapfile on your SD card (/mnt/ux0/swapfile)
+vita-swap create 512M
+
+# Create a 1GB swapfile at a custom path
+vita-swap create 1G /mnt/ux0/myswap
+
+# Resize the compressed ZRAM RAM pool (e.g. 512MB)
+vita-swap zram 512M
+
+# Remove or toggle swapfiles
+vita-swap off
+vita-swap on
+vita-swap remove
+```
+* **Prioritized Paging:** ZRAM runs at priority 100 while physical swapfiles run at priority 10. The kernel always fills fast, compressed RAM first and only pages to storage if physical RAM is fully saturated.
+* **Persistent Auto-Mount:** Any swapfile created or activated with `vita-swap` is automatically re-activated on boot.
+
+### 7. Managing Wi-Fi On-Device (`vita-wifi`)
 Manage wireless connections directly on your PS Vita without needing to edit config files on a PC:
 * **Interactive TUI Menu:** Run `vita-wifi` without arguments for an interactive menu.
 * **Scan for Networks:** `vita-wifi scan` displays an ASCII table of nearby SSIDs, signal strength bars, and security types. Enter the network number to connect immediately.
@@ -265,14 +295,14 @@ Manage wireless connections directly on your PS Vita without needing to edit con
 * **View Signal & Status:** `vita-wifi status` displays your active SSID, BSSID, RSSI dBm level, MAC, and assigned IP address.
 * **Power Savings:** `vita-wifi off` and `vita-wifi on` toggle the wireless radio to extend battery runtime.
 
-### 7. Remote SSH Access
+### 8. Remote SSH Access
 Within ~12 seconds of boot (or after connecting via `vita-wifi`), your Vita starts OpenSSH. Connect from your computer:
 ```bash
 ssh root@vita.local
 ```
 *(If mDNS does not resolve on your network, use the IP address shown on the login banner or via `vita-wifi status`: `ssh root@<VITA_IP>`)*.
 
-### 8. Returning to VitaOS or Powering Down
+### 9. Returning to VitaOS or Powering Down
 ```bash
 reboot      # Clean cold reset straight back to official Sony OS
 poweroff    # Full hardware poweroff via Syscon

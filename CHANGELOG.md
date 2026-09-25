@@ -32,6 +32,11 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Clarified environment isolation in documentation and interactive banners, explaining that packages installed via `apk` are confined to the chroot container (`/mnt/alpine`) and are not accessible from the base BusyBox shell.
   - Added visual environment prompt (`alpine@vita:~#` in cyan) inside the chroot to clearly distinguish between host and chroot sessions.
   - Added support for running one-shot commands inside Alpine directly from the base shell via `alpine-chroot run <command>`, `alpine-chroot -- <command>`, or `alpine-chroot -c "<command>"`.
+- **Compressed ZRAM & Memory Safety Management (`vita-swap`):**
+  - Enabled kernel `CONFIG_ZRAM=y`, `CONFIG_ZSMALLOC=y`, `CONFIG_SWAP=y`, and `CONFIG_ZRAM_BACKEND_LZ4=y` with default LZ4 compression in `configs/kernel/vita_defconfig` and build orchestration.
+  - Automatically initializes a high-priority (100) 256MB compressed ZRAM swap pool on boot in `S00mount`, expanding usable RAM to ~768MB - 1GB with near-zero latency to eliminate Out-Of-Memory (OOM) crashes during heavy package installations or compilation.
+  - Added support for physical swapfiles on SD card or internal storage (`/mnt/ux0/swapfile`), automatically mounted at boot-time with secondary priority (10).
+  - Created `vita-swap` CLI utility for inspecting memory telemetry, creating formatted swapfiles with contiguous blocks, resizing ZRAM on the fly, and persisting auto-mount configurations in `/etc/vita-swap.conf` and `/etc/vita-zram.conf`.
 
 ---
 

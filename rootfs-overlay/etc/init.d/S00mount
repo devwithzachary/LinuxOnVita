@@ -22,6 +22,19 @@ case "$1" in
 
         mkdir -p /mnt/ur0 /mnt/ux0 /mnt/alpine
 
+        # Initialize compressed ZRAM swap device (256MB default or configured in /etc/vita-zram.conf)
+        if [ -e /sys/block/zram0 ]; then
+            if grep -q "lz4" /sys/block/zram0/comp_algorithm 2>/dev/null; then
+                echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null || true
+            fi
+            ZRAM_SIZE="256M"
+            [ -f /etc/vita-zram.conf ] && ZRAM_SIZE=$(cat /etc/vita-zram.conf 2>/dev/null)
+            [ -z "$ZRAM_SIZE" ] && ZRAM_SIZE="256M"
+            echo "$ZRAM_SIZE" > /sys/block/zram0/disksize 2>/dev/null || true
+            mkswap /dev/zram0 >/dev/null 2>&1 || true
+            swapon -p 100 /dev/zram0 >/dev/null 2>&1 || true
+        fi
+
         # Mount ux0 (Game card slot / SD2Vita or Sony memory card) if available
         for dev in /dev/mmcblk1p1 /dev/mmcblk1 /dev/mmcblk2p1 /dev/mmcblk2; do
             if [ -b "$dev" ] && ! mountpoint -q /mnt/ux0 2>/dev/null; then
@@ -32,8 +45,18 @@ case "$1" in
                 break
             fi
         done
+
+        # Auto-activate physical swapfile if present
+        SWAP_FILE=""
+        [ -f /etc/vita-swap.conf ] && SWAP_FILE=$(cat /etc/vita-swap.conf 2>/dev/null)
+        [ -z "$SWAP_FILE" ] && [ -f /mnt/ux0/swapfile ] && SWAP_FILE="/mnt/ux0/swapfile"
+        if [ -n "$SWAP_FILE" ] && [ -f "$SWAP_FILE" ]; then
+            chmod 600 "$SWAP_FILE" 2>/dev/null || true
+            swapon -p 10 "$SWAP_FILE" >/dev/null 2>&1 || true
+        fi
         ;;
     stop)
+        swapoff -a 2>/dev/null || true
         ;;
     *)
         echo "Usage: $0 {start|stop}"

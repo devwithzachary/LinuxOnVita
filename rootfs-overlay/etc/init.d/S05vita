@@ -46,5 +46,14 @@ start)
             break
         fi
     done
+
+    # Auto-activate physical swapfile if present on mounted storage
+    SWAP_FILE=""
+    [ -f /etc/vita-swap.conf ] && SWAP_FILE=$(cat /etc/vita-swap.conf 2>/dev/null)
+    [ -z "$SWAP_FILE" ] && [ -f /mnt/ux0/swapfile ] && SWAP_FILE="/mnt/ux0/swapfile"
+    if [ -n "$SWAP_FILE" ] && [ -f "$SWAP_FILE" ]; then
+        chmod 600 "$SWAP_FILE" 2>/dev/null || true
+        swapon -p 10 "$SWAP_FILE" >/dev/null 2>&1 || true
+    fi
     ;;
 esac
