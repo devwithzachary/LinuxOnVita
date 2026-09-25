@@ -64,6 +64,9 @@ if [ ! -d "vita-baremetal-linux-loader" ]; then
 fi
 cd vita-baremetal-linux-loader
 git checkout . 2>/dev/null || true
+if [ -f "${BUILD_DIR}/patches/vita-baremetal-linux-loader/0001-fix-model-dtb-order.patch" ]; then
+    git apply "${BUILD_DIR}/patches/vita-baremetal-linux-loader/0001-fix-model-dtb-order.patch" || true
+fi
 make clean || true
 make CFLAGS="-std=gnu17 -Iinclude -IFatFs -mcpu=cortex-a9 -mthumb-interwork -O0 -g3 -Wall -Wno-unused-const-variable -ffreestanding"
 cp vita-baremetal-linux-loader.bin "${LINUX_OUT}/payload.bin"

@@ -186,12 +186,14 @@ Navigate your terminal history and line editing entirely with the Vita's physica
 * **R-Trigger:** Page Up
 
 ### 3. Screen Brightness Control (`vita-brightness`)
-Displays automatically initialize to 100% full brightness on boot. You can inspect and adjust brightness dynamically:
+Displays automatically initialize to 100% full brightness on boot across all models.
+* **PS Vita 2000 (Slim / LCD):** Features dynamic hardware backlight control via I2C bus 1:
 ```bash
-vita-brightness get        # View current brightness percentage
-vita-brightness set 80     # Adjust brightness (0-100%)
+vita-brightness get        # View current brightness and hardware status
+vita-brightness set 80     # Adjust LCD backlight (0-100%)
 vita-brightness max        # Jump straight to 100% full bright
 ```
+* **PS Vita 1000 (Fat / OLED):** Uses an emissive OLED display (Samsung AMS387VB01) locked to 100% maximum brightness (Hardware Level 15 Gamma) during bootloader initialization. OLED displays do not use an LCD backlight, and running `vita-brightness` displays hardware status.
 
 ### 4. Playing Framebuffer DOOM (`vita-doom`)
 A pure-C standalone framebuffer DOOM engine (`fbdoom`) is pre-installed.

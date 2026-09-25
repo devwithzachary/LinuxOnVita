@@ -21,6 +21,13 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Added universal instant exit controller shortcut: pressing **`START + SELECT`** simultaneously now cleanly exits DOOM from any gameplay screen back to the Linux shell.
   - Ensured `I_Quit()` and `I_Error()` restore terminal modes via `kbd_shutdown()` and cleanly exit the process.
   - Updated in-game exit and confirmation prompts to explicitly reference Cross and Circle buttons.
+- **Display Brightness & Model-Aware Backlight Control:**
+  - Resolved a critical bug in `vita-baremetal-linux-loader` where `sysroot_model_is_vita()` was evaluated before `sysroot_model_is_vita2k()`, causing all consoles (including PS Vita 2000 Slim) to load `vita1000.dtb` which had I2C bus 1 disabled.
+  - Corrected DTB loading order so PS TV loads `pstv.dtb`, PS Vita 2000 loads `vita2000.dtb`, and PS Vita 1000 loads `vita1000.dtb`.
+  - Enabled I2C bus 1 in `vita1000.dts` and fallback `vita.dtb` so `/dev/i2c-1` is universally available.
+  - Overhauled `vita-brightness` to perform automatic hardware model detection:
+    - On **PS Vita 1000 (OLED)**: Displays clear hardware notices explaining that the emissive OLED display is locked to 100% full brightness (Level 15 Gamma) at boot and does not have an adjustable LCD backlight, preventing misleading success messages.
+    - On **PS Vita 2000 (Slim / LCD)**: Dynamically controls the hardware PWM backlight via `/dev/i2c-1` at address `0x64`, scaling across the hardware duty cycle range (`0x1F` to `0xFF`), and verifies command success.
 
 ---
 

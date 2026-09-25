@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: DevWithZachary <devwithzachary@pm.me>
+Date: Fri, 25 Sep 2026 09:30:00 +0100
+Subject: [PATCH] Fix model DTB selection order for Dolce and Vita 2000
+
+---
+ src/main.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/main.c b/src/main.c
+index 5f38520..0cf3692 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -164,12 +164,12 @@ int main(struct sysroot_buffer *sysroot)
+ 	if (res != FR_OK)
+ 		goto fatal_error;
+ 
+-	if (sysroot_model_is_vita()) {
+-		res = file_load_log(VITA1000_DTB, DTB_LOAD_ADDR);
++	if (sysroot_model_is_dolce()) {
++		res = file_load_log(PSTV_DTB, DTB_LOAD_ADDR);
+ 	} else if (sysroot_model_is_vita2k()) {
+ 		res = file_load_log(VITA2000_DTB, DTB_LOAD_ADDR);
+-	} else if (sysroot_model_is_dolce()) {
+-		res = file_load_log(PSTV_DTB, DTB_LOAD_ADDR);
++	} else if (sysroot_model_is_vita()) {
++		res = file_load_log(VITA1000_DTB, DTB_LOAD_ADDR);
+ 	} else {
+ 		LOG("Unsupported Vita model.\n");
+ 		goto fatal_error;
+-- 
