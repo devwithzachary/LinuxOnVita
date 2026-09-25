@@ -468,9 +468,26 @@ static void PollVitaGamepad(void)
     event_t doom_ev;
     static int stick_up = 0, stick_down = 0, stick_left = 0, stick_right = 0;
     static int stick_strafe_l = 0, stick_strafe_r = 0;
+    static int btn_start_held = 0;
+    static int btn_select_held = 0;
 
     while (read(vita_buttons_fd, &ev, sizeof(ev)) > 0) {
         if (ev.type == EV_KEY) {
+            if (ev.code == BTN_START) {
+                btn_start_held = (ev.value != 0);
+            } else if (ev.code == BTN_SELECT) {
+                btn_select_held = (ev.value != 0);
+            }
+
+            /* Quick exit combo: Hold START + SELECT simultaneously to exit DOOM immediately */
+            if (btn_start_held && btn_select_held) {
+                printf("\n[DOOM] START + SELECT pressed - exiting game...\n");
+                fflush(stdout);
+                I_Quit();
+                kbd_shutdown();
+                exit(0);
+            }
+
             int key = 0;
             switch (ev.code) {
                 case BTN_DPAD_UP:    key = KEY_UPARROW; break;

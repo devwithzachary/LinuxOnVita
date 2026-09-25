@@ -47,6 +47,7 @@
 #include "i_video.h"
 
 #include "i_system.h"
+#include "i_input_tty.h"
 
 #include "w_wad.h"
 #include "z_zone.h"
@@ -259,9 +260,10 @@ void I_Quit (void)
 
 #if ORIGCODE
     SDL_Quit();
-
-    exit(0);
 #endif
+
+    kbd_shutdown();
+    exit(0);
 }
 
 #if !defined(_WIN32) && !defined(__MACOSX__)
@@ -460,9 +462,8 @@ void I_Error (char *error, ...)
 
     exit(-1);
 #else
-    while (true)
-    {
-    }
+    kbd_shutdown();
+    exit(-1);
 #endif
 }
 

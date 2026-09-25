@@ -205,11 +205,12 @@ vita-doom
 * **Right Stick:** Strafe left / right
 * **R-Trigger:** Shoot / Fire (`KEY_FIRE`)
 * **Square (□):** Open doors / use switches (`KEY_USE`)
-* **Cross (✕) / Select:** Enter / menu select
-* **Circle (○):** Back / cancel
+* **Cross (✕) / Select:** Enter / menu select / confirm prompt (Y)
+* **Circle (○):** Back / cancel prompt (N)
 * **L-Trigger:** Run / speed (`KEY_RSHIFT`)
-* **Triangle (△):** Automap (`KEY_TAB`)
+* **Triangle (△):** Automap (`KEY_TAB`) / confirm prompt (Y)
 * **Start:** Pause / Menu (`KEY_ESCAPE`)
+* **Start + Select:** Instant quick-exit back to terminal
 
 *(Note: Background input daemons and the touch keyboard are automatically suspended while DOOM is running and resumed when you exit).*
 

@@ -14,6 +14,13 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Added `broken-cd` and `cap-sd-highspeed` to the `sdif1` Device Tree node in `vita.dtsi`.
   - Added automatic MMC rescan trigger upon Syscon power stabilization so the microSD card is immediately recognized as `mmcblk1`.
 - **Automatic SD2Vita Auto-Mounting & Symlinks:** Updated `S05vita` and `S00mount` to automatically detect `/dev/mmcblk1p1` or `/dev/mmcblk1`, create the `/dev/vita/ux0` device symlink, and mount the card to `/mnt/ux0`.
+- **Framebuffer DOOM Controller Exit Confirmation & Quick Exit:**
+  - Resolved an issue in `fbdoom` where selecting "Quit Game" from the in-game menu prompted for 'Y' without accepting any PS Vita gamepad buttons.
+  - Mapped **Cross (✕)** (`KEY_ENTER`) and **Triangle (△)** (`KEY_TAB`) to confirm menu prompts (`key_menu_confirm`), allowing natural exit confirmation on PS Vita hardware.
+  - Mapped **Circle (○)** (`KEY_BACKSPACE`) to abort/cancel menu prompts (`key_menu_abort`).
+  - Added universal instant exit controller shortcut: pressing **`START + SELECT`** simultaneously now cleanly exits DOOM from any gameplay screen back to the Linux shell.
+  - Ensured `I_Quit()` and `I_Error()` restore terminal modes via `kbd_shutdown()` and cleanly exit the process.
+  - Updated in-game exit and confirmation prompts to explicitly reference Cross and Circle buttons.
 
 ---
 

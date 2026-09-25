@@ -31,6 +31,7 @@ rcsid[] = "$Id: i_x.c,v 1.6 1997/02/03 22:45:10 b1 Exp $";
 #include "d_event.h"
 #include "d_main.h"
 #include "i_video.h"
+#include "i_system.h"
 #include "z_zone.h"
 
 #include "tables.h"
@@ -202,6 +203,8 @@ void I_InitGraphics (void)
 
 	screenvisible = true;
 
+    I_AtExit(I_ShutdownGraphics, true);
+
     extern int I_InitInput(void);
     I_InitInput();
 }
@@ -210,6 +213,11 @@ void I_ShutdownGraphics (void)
 {
 	Z_Free (I_VideoBuffer);
 	free(I_VideoBuffer_FB);
+	if (fd_fb >= 0)
+	{
+		close(fd_fb);
+		fd_fb = -1;
+	}
 }
 
 void I_StartFrame (void)
