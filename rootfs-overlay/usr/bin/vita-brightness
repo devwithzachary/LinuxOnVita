@@ -1,56 +1,179 @@
 #!/bin/sh
 # vita-brightness: Backlight and display brightness control for PS Vita Linux
 
-show_help() {
-    echo "Usage: vita-brightness [get | set <0-100> | max]"
-    echo ""
-    echo "Options:"
-    echo "  get           - Display current brightness setting"
-    echo "  set <0-100>   - Set screen brightness percentage (0=Off, 100=Full)"
-    echo "  max           - Set screen to 100% full brightness"
-    echo ""
-    echo "Hardware Support:"
-    echo "  - PS Vita 2000 (Slim/LCD) : Dynamic PWM backlight via I2C bus 1"
-    echo "  - PS Vita 1000 (Fat/OLED)  : Hardware Level 15 Gamma (Max Brightness default)"
-    exit 0
-}
-
 I2C_BUS=1
 I2C_ADDR=0x64
 I2C_REG_PWM=0x05
 I2C_REG_ENABLE=0x0e
+STATE_FILE="/var/run/vita_brightness"
 
-set_lcd_brightness() {
+detect_hardware() {
+    # 1. Check device tree model string if available
+    if [ -f /proc/device-tree/model ]; then
+        MODEL_STR=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null)
+        case "$MODEL_STR" in
+            *1000*|*OLED*|*oled*)
+                echo "oled"
+                return
+                ;;
+            *2000*|*LCD*|*lcd*|*Slim*|*slim*)
+                echo "lcd"
+                return
+                ;;
+            *TV*|*tv*|*Dolce*|*dolce*)
+                echo "pstv"
+                return
+                ;;
+        esac
+    fi
+
+    # 2. Check I2C bus 1 presence
+    if [ ! -e "/dev/i2c-${I2C_BUS}" ]; then
+        echo "oled"
+        return
+    fi
+
+    # 3. Test if LCD backlight IC responds at 0x64 on I2C bus 1
+    if command -v i2cset >/dev/null 2>&1; then
+        if i2cset -y ${I2C_BUS} ${I2C_ADDR} ${I2C_REG_ENABLE} 0x01 >/dev/null 2>&1; then
+            echo "lcd"
+            return
+        fi
+    fi
+
+    echo "oled"
+}
+
+show_help() {
+    echo "Usage: vita-brightness [get | set <0-100> | max]"
+    echo ""
+    echo "Commands:"
+    echo "  get           - Display current screen brightness and hardware status"
+    echo "  set <0-100>   - Set LCD screen brightness percentage (0=Off, 100=Full)"
+    echo "  max           - Set LCD screen to 100% full brightness"
+    echo ""
+    echo "Hardware Differences:"
+    echo "  - PS Vita 2000 (Slim/LCD) : Dynamic PWM backlight via I2C bus 1 (0x64)"
+    echo "  - PS Vita 1000 (Fat/OLED)  : Hardware Level 15 Gamma (Locked 100% at boot)"
+    echo "  - PlayStation TV (Dolce)  : HDMI output (Adjust via TV/monitor controls)"
+    exit 0
+}
+
+get_brightness() {
+    HW=$(detect_hardware)
+
+    if [ "$HW" = "oled" ]; then
+        echo "=================================================="
+        echo " PlayStation Vita Display Status"
+        echo "=================================================="
+        echo " Model:        PS Vita 1000 (Fat / OLED)"
+        echo " Panel Type:   Emissive OLED (Samsung AMS387VB01)"
+        echo " Brightness:   100% (Hardware Level 15 Gamma)"
+        echo " Backlight:    N/A (Emissive panel, fixed at boot)"
+        echo "=================================================="
+        echo " Note: PS Vita 1000 OLED displays do not use an"
+        echo " adjustable LCD backlight. The display is fixed at"
+        echo " 100% maximum brightness during bootloader init."
+        echo "=================================================="
+        return 0
+    fi
+
+    if [ "$HW" = "pstv" ]; then
+        echo "=================================================="
+        echo " PlayStation TV Display Status"
+        echo "=================================================="
+        echo " Model:        PlayStation TV (VTE-1000)"
+        echo " Video Output: HDMI (ADV7533 transmitter)"
+        echo " Brightness:   Adjust via TV or monitor settings"
+        echo "=================================================="
+        return 0
+    fi
+
+    # LCD (PS Vita 2000)
+    CURR=100
+    if [ -f "${STATE_FILE}" ]; then
+        CURR=$(cat "${STATE_FILE}")
+    fi
+    PWM=$(( 31 + (CURR * (255 - 31)) / 100 ))
+    HEX_PWM=$(printf "0x%02x" $PWM)
+
+    echo "=================================================="
+    echo " PlayStation Vita Display Status"
+    echo "=================================================="
+    echo " Model:        PS Vita 2000 (Slim / LCD)"
+    echo " Panel Type:   LCD with Dynamic I2C PWM Backlight"
+    echo " Brightness:   ${CURR}% (PWM: ${HEX_PWM})"
+    echo " I2C Bus:      /dev/i2c-${I2C_BUS} (Device: ${I2C_ADDR})"
+    echo "=================================================="
+}
+
+set_brightness() {
     PCT=$1
-    if [ "$PCT" -lt 0 ] 2>/dev/null || [ "$PCT" -gt 100 ] 2>/dev/null; then
+    if [ -z "$PCT" ] || [ "$PCT" -lt 0 ] 2>/dev/null || [ "$PCT" -gt 100 ] 2>/dev/null; then
         echo "Error: Brightness must be an integer between 0 and 100"
         exit 1
     fi
 
-    # Scale 0-100 to 0-255
-    PWM=$(( (PCT * 255) / 100 ))
-    HEX_PWM=$(printf "0x%02x" $PWM)
+    HW=$(detect_hardware)
 
-    if [ -e "/dev/i2c-${I2C_BUS}" ]; then
-        if command -v i2cset >/dev/null 2>&1; then
-            i2cset -y ${I2C_BUS} ${I2C_ADDR} ${I2C_REG_ENABLE} 0x01 >/dev/null 2>&1 || true
-            i2cset -y ${I2C_BUS} ${I2C_ADDR} ${I2C_REG_PWM} ${HEX_PWM} >/dev/null 2>&1 || true
-            echo "Brightness set to ${PCT}% (PWM: ${HEX_PWM})"
-            echo "$PCT" > /var/run/vita_brightness 2>/dev/null || true
+    if [ "$HW" = "oled" ]; then
+        echo "=================================================="
+        echo " PlayStation Vita 1000 (OLED) Display Notice"
+        echo "=================================================="
+        echo " PS Vita 1000 features an emissive OLED display"
+        echo " without a traditional LCD backlight."
+        echo ""
+        echo " Brightness is hardware-configured at 100% maximum"
+        echo " (Level 15 Gamma) during bootloader initialization."
+        echo " Runtime dimming via I2C is not supported on OLED."
+        echo "=================================================="
+        exit 0
+    fi
+
+    if [ "$HW" = "pstv" ]; then
+        echo "Notice: PlayStation TV uses HDMI output. Display brightness"
+        echo "must be adjusted on your connected TV or monitor."
+        exit 0
+    fi
+
+    # LCD (PS Vita 2000)
+    if [ ! -e "/dev/i2c-${I2C_BUS}" ]; then
+        echo "Error: /dev/i2c-${I2C_BUS} not found."
+        echo "Make sure I2C bus 1 is enabled in your Device Tree."
+        exit 1
+    fi
+
+    if ! command -v i2cset >/dev/null 2>&1; then
+        echo "Error: i2cset command not found (install i2c-tools)."
+        exit 1
+    fi
+
+    if [ "$PCT" -eq 0 ]; then
+        # Turn off backlight
+        if i2cset -y ${I2C_BUS} ${I2C_ADDR} ${I2C_REG_PWM} 0x00 >/dev/null 2>&1 && \
+           i2cset -y ${I2C_BUS} ${I2C_ADDR} ${I2C_REG_ENABLE} 0x00 >/dev/null 2>&1; then
+            echo "$PCT" > "${STATE_FILE}" 2>/dev/null || true
+            echo "Brightness set to 0% (Backlight Off)"
             return 0
+        else
+            echo "Error: Failed to write to backlight IC at 0x64 on I2C bus ${I2C_BUS}."
+            exit 1
         fi
     fi
 
-    echo "Brightness set to ${PCT}%"
-    echo "$PCT" > /var/run/vita_brightness 2>/dev/null || true
-}
+    # Scale 1-100% to hardware PWM range 0x1F (31) - 0xFF (255)
+    PWM=$(( 31 + (PCT * (255 - 31)) / 100 ))
+    HEX_PWM=$(printf "0x%02x" $PWM)
 
-get_brightness() {
-    CURR=100
-    if [ -f /var/run/vita_brightness ]; then
-        CURR=$(cat /var/run/vita_brightness)
+    if i2cset -y ${I2C_BUS} ${I2C_ADDR} ${I2C_REG_ENABLE} 0x01 >/dev/null 2>&1 && \
+       i2cset -y ${I2C_BUS} ${I2C_ADDR} ${I2C_REG_PWM} ${HEX_PWM} >/dev/null 2>&1; then
+        echo "$PCT" > "${STATE_FILE}" 2>/dev/null || true
+        echo "Brightness set to ${PCT}% (PWM: ${HEX_PWM})"
+        return 0
+    else
+        echo "Error: Failed to write to backlight IC at 0x64 on I2C bus ${I2C_BUS}."
+        exit 1
     fi
-    echo "Current Brightness: ${CURR}% (Display mode: Full Maximum)"
 }
 
 CMD="${1:-get}"
@@ -59,16 +182,16 @@ case "$CMD" in
         get_brightness
         ;;
     max)
-        set_lcd_brightness 100
+        set_brightness 100
         ;;
     set)
         if [ -z "$2" ]; then
             show_help
         fi
-        set_lcd_brightness "$2"
+        set_brightness "$2"
         ;;
     [0-9]|[0-9][0-9]|100)
-        set_lcd_brightness "$CMD"
+        set_brightness "$CMD"
         ;;
     *)
         show_help

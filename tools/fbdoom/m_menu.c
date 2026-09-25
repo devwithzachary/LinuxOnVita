@@ -1628,6 +1628,17 @@ boolean M_Responder (event_t* ev)
     {
 	if (messageNeedsInput)
         {
+            /* Map PS Vita controller buttons: Cross (KEY_ENTER) and Triangle (KEY_TAB) confirm;
+             * Circle (KEY_BACKSPACE) aborts. Also allow keyboard Y / N. */
+            if (key == KEY_ENTER || key == KEY_TAB || key == 'y' || key == 'Y')
+            {
+                key = key_menu_confirm;
+            }
+            else if (key == KEY_BACKSPACE || key == 'n' || key == 'N')
+            {
+                key = key_menu_abort;
+            }
+
             if (key != ' ' && key != KEY_ESCAPE
              && key != key_menu_confirm && key != key_menu_abort)
             {

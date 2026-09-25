@@ -255,6 +255,7 @@ int tty_is_kbd(int fd)
 static int old_mode = -1;
 static struct termios old_term;
 static int kb = -1; /* keyboard file descriptor */
+static int vita_buttons_fd = -1;
 
 void kbd_shutdown(void)
 {
@@ -266,11 +267,21 @@ void kbd_shutdown(void)
     printf("Exiting normally.\n");
     if (old_mode != -1) {
         ioctl(kb, KDSKBMODE, old_mode);
-        tcsetattr(kb, 0, &old_term);
+        tcsetattr(kb, TCSAFLUSH, &old_term);
     }
 
-    if (kb > 3)
-        close(kb);
+    if (kb >= 0) {
+        tcflush(kb, TCIFLUSH);
+        if (kb > 2)
+            close(kb);
+        kb = -1;
+    }
+    tcflush(0, TCIFLUSH);
+
+    if (vita_buttons_fd >= 0) {
+        close(vita_buttons_fd);
+        vita_buttons_fd = -1;
+    }
 
     exit(0);
 }
@@ -427,8 +438,6 @@ static void UpdateShiftStatus(int pressed, unsigned char key)
 }
 
 
-static int vita_buttons_fd = -1;
-
 static int open_vita_gamepad(void)
 {
     char path[256];
@@ -468,9 +477,24 @@ static void PollVitaGamepad(void)
     event_t doom_ev;
     static int stick_up = 0, stick_down = 0, stick_left = 0, stick_right = 0;
     static int stick_strafe_l = 0, stick_strafe_r = 0;
+    static int btn_start_held = 0;
+    static int btn_select_held = 0;
 
     while (read(vita_buttons_fd, &ev, sizeof(ev)) > 0) {
         if (ev.type == EV_KEY) {
+            if (ev.code == BTN_START) {
+                btn_start_held = (ev.value != 0);
+            } else if (ev.code == BTN_SELECT) {
+                btn_select_held = (ev.value != 0);
+            }
+
+            /* Quick exit combo: Hold START + SELECT simultaneously to exit DOOM immediately */
+            if (btn_start_held && btn_select_held) {
+                printf("\n[DOOM] START + SELECT pressed - exiting game...\n");
+                fflush(stdout);
+                I_Quit();
+            }
+
             int key = 0;
             switch (ev.code) {
                 case BTN_DPAD_UP:    key = KEY_UPARROW; break;

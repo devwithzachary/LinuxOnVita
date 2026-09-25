@@ -1,10 +1,25 @@
 diff --git a/arch/arm/boot/dts/vita1000.dts b/arch/arm/boot/dts/vita1000.dts
-index ec05ab2a0..a473f61ad 100644
+index ec05ab2a0..b67777c3c 100644
 --- a/arch/arm/boot/dts/vita1000.dts
 +++ b/arch/arm/boot/dts/vita1000.dts
-@@ -32,14 +32,19 @@ &i2c0 {
+@@ -11,6 +11,9 @@
+ #include "vita.dtsi"
  
- /* I2C1 disabled - bus scan empty on PCH-1000 (no powered consumers) */
+ / {
++	model = "Sony PlayStation Vita 1000 (OLED)";
++	compatible = "sony,vita1000", "vita,vita";
++
+ 	chosen {
+ 		bootargs = "earlyprintk keep_bootcon console=tty0 console=ttyS0,115200";
+ 
+@@ -30,16 +33,23 @@ &i2c0 {
+ 	status = "okay";
+ };
+ 
+-/* I2C1 disabled - bus scan empty on PCH-1000 (no powered consumers) */
++&i2c1 {
++	status = "okay";
++};
  
 -/* SDIF0 = eMMC, SDIF2 = WLAN/BT (SD8787 via SDIO) */
 +/* SDIF0 = eMMC, SDIF1 = Game card / SD2Vita, SDIF2 = WLAN/BT, SDIF3 = Memory Card */
@@ -26,10 +41,20 @@ index ec05ab2a0..a473f61ad 100644
 +	status = "okay";
 +};
 diff --git a/arch/arm/boot/dts/vita2000.dts b/arch/arm/boot/dts/vita2000.dts
-index 04e833fc2..0e4925f90 100644
+index 04e833fc2..030977b38 100644
 --- a/arch/arm/boot/dts/vita2000.dts
 +++ b/arch/arm/boot/dts/vita2000.dts
-@@ -25,3 +25,27 @@ framebuffer0: framebuffer@20000000 {
+@@ -11,6 +11,9 @@
+ #include "vita.dtsi"
+ 
+ / {
++	model = "Sony PlayStation Vita 2000 (LCD)";
++	compatible = "sony,vita2000", "vita,vita";
++
+ 	chosen {
+ 		bootargs = "earlyprintk keep_bootcon console=tty0";
+ 
+@@ -25,3 +28,27 @@ framebuffer0: framebuffer@20000000 {
  		};
  	};
  };

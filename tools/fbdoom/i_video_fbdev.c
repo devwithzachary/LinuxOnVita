@@ -31,6 +31,7 @@ rcsid[] = "$Id: i_x.c,v 1.6 1997/02/03 22:45:10 b1 Exp $";
 #include "d_event.h"
 #include "d_main.h"
 #include "i_video.h"
+#include "i_system.h"
 #include "z_zone.h"
 
 #include "tables.h"
@@ -45,14 +46,34 @@ rcsid[] = "$Id: i_x.c,v 1.6 1997/02/03 22:45:10 b1 Exp $";
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/mman.h>
 #include <linux/fb.h>
 #include <sys/ioctl.h>
 
-//#define CMAP256
+typedef enum {
+    SCALE_FULLSCREEN, // Stretch to entire framebuffer (960x544 on PS Vita)
+    SCALE_ASPECT,     // 4:3 aspect ratio fit (725x544 centered on Vita)
+    SCALE_INTEGER,    // Fixed integer scaling (e.g. 640x400 for 2x)
+} scale_mode_t;
+
+static scale_mode_t scale_mode = SCALE_FULLSCREEN;
 
 struct fb_var_screeninfo fb = {};
 int fb_scaling = 1;
 int usemouse = 0;
+
+static uint32_t palette32[256];
+static uint16_t palette16[256];
+
+static void *fb_mmap_ptr = MAP_FAILED;
+static size_t fb_mmap_size = 0;
+
+static int *y_lut = NULL;
+static int *x_lut = NULL;
+static int render_w = 0;
+static int render_h = 0;
+static int offset_x = 0;
+static int offset_y = 0;
 
 struct color {
     uint32_t b:8;
@@ -69,7 +90,7 @@ byte *I_VideoBuffer = NULL;
 byte *I_VideoBuffer_FB = NULL;
 
 /* framebuffer file descriptor */
-int fd_fb = 0;
+int fd_fb = -1;
 
 int	X_width;
 int X_height;
@@ -106,58 +127,6 @@ typedef struct
 	byte b;
 } col_t;
 
-// Palette converted to RGB565
-
-static uint16_t rgb565_palette[256];
-
-void cmap_to_rgb565(uint16_t * out, uint8_t * in, int in_pixels)
-{
-    int i, j;
-    struct color c;
-    uint16_t r, g, b;
-
-    for (i = 0; i < in_pixels; i++)
-    {
-        c = colors[*in]; 
-        r = ((uint16_t)(c.r >> 3)) << 11;
-        g = ((uint16_t)(c.g >> 2)) << 5;
-        b = ((uint16_t)(c.b >> 3)) << 0;
-        *out = (r | g | b);
-
-        in++;
-        for (j = 0; j < fb_scaling; j++) {
-            out++;
-        }
-    }
-}
-
-void cmap_to_fb(uint8_t * out, uint8_t * in, int in_pixels)
-{
-    int i, j, k;
-    struct color c;
-    uint32_t pix;
-    uint16_t r, g, b;
-
-    for (i = 0; i < in_pixels; i++)
-    {
-        c = colors[*in];  /* R:8 G:8 B:8 format! */
-        r = (uint16_t)(c.r >> (8 - fb.red.length));
-        g = (uint16_t)(c.g >> (8 - fb.green.length));
-        b = (uint16_t)(c.b >> (8 - fb.blue.length));
-        pix = r << fb.red.offset;
-        pix |= g << fb.green.offset;
-        pix |= b << fb.blue.offset;
-
-        for (k = 0; k < fb_scaling; k++) {
-            for (j = 0; j < fb.bits_per_pixel/8; j++) {
-                *out = (pix >> (j*8));
-                out++;
-            }
-        }
-        in++;
-    }
-}
-
 void I_InitGraphics (void)
 {
     int i;
@@ -166,41 +135,90 @@ void I_InitGraphics (void)
     fd_fb = open("/dev/fb0", O_RDWR);
     if (fd_fb < 0)
     {
-        printf("Could not open /dev/fb0");
+        printf("Could not open /dev/fb0\n");
         exit(-1);
     }
 
     /* fetch framebuffer info */
     ioctl(fd_fb, FBIOGET_VSCREENINFO, &fb);
-    /* change params if needed */
-    //ioctl(fd_fb, FBIOPUT_VSCREENINFO, &fb);
-    printf("I_InitGraphics: framebuffer: x_res: %d, y_res: %d, x_virtual: %d, y_virtual: %d, bpp: %d, grayscale: %d\n",
-            fb.xres, fb.yres, fb.xres_virtual, fb.yres_virtual, fb.bits_per_pixel, fb.grayscale);
+    printf("I_InitGraphics: framebuffer: x_res: %d, y_res: %d, bpp: %d\n",
+            fb.xres, fb.yres, fb.bits_per_pixel);
+    printf("I_InitGraphics: DOOM internal canvas: %d x %d\n", SCREENWIDTH, SCREENHEIGHT);
 
-    printf("I_InitGraphics: framebuffer: RGBA: %d%d%d%d, red_off: %d, green_off: %d, blue_off: %d, transp_off: %d\n",
-            fb.red.length, fb.green.length, fb.blue.length, fb.transp.length, fb.red.offset, fb.green.offset, fb.blue.offset, fb.transp.offset);
+    // Scaling mode selection: Fullscreen (960x544) is default on PS Vita
+    scale_mode = SCALE_FULLSCREEN;
 
-    printf("I_InitGraphics: DOOM screen size: w x h: %d x %d\n", SCREENWIDTH, SCREENHEIGHT);
-
-
-    i = M_CheckParmWithArgs("-scaling", 1);
-    if (i > 0) {
-        i = atoi(myargv[i + 1]);
-        fb_scaling = i;
-        printf("I_InitGraphics: Scaling factor: %d\n", fb_scaling);
-    } else {
-        fb_scaling = fb.xres / SCREENWIDTH;
-        if (fb.yres / SCREENHEIGHT < fb_scaling)
-            fb_scaling = fb.yres / SCREENHEIGHT;
-        printf("I_InitGraphics: Auto-scaling factor: %d\n", fb_scaling);
+    if (M_CheckParm("-aspect") || M_CheckParm("-fit") || M_CheckParm("-4:3")) {
+        scale_mode = SCALE_ASPECT;
+    } else if (M_CheckParm("-integer") || M_CheckParm("-scale2") || M_CheckParm("-1:1")) {
+        scale_mode = SCALE_INTEGER;
+        fb_scaling = 2;
+    } else if ((i = M_CheckParmWithArgs("-scaling", 1)) > 0) {
+        fb_scaling = atoi(myargv[i + 1]);
+        if (fb_scaling <= 0) {
+            scale_mode = SCALE_FULLSCREEN;
+        } else {
+            scale_mode = SCALE_INTEGER;
+        }
+    } else if (M_CheckParm("-fullscreen") || M_CheckParm("-stretch")) {
+        scale_mode = SCALE_FULLSCREEN;
     }
 
+    if (scale_mode == SCALE_FULLSCREEN) {
+        render_w = fb.xres;
+        render_h = fb.yres;
+        offset_x = 0;
+        offset_y = 0;
+        printf("I_InitGraphics: Scaling mode: FULLSCREEN (%dx%d edge-to-edge)\n", render_w, render_h);
+    } else if (scale_mode == SCALE_ASPECT) {
+        // Fit vertically, 4:3 aspect ratio -> width = (height * 4) / 3
+        render_h = fb.yres;
+        render_w = (fb.yres * 4) / 3;
+        if (render_w > (int)fb.xres) render_w = fb.xres;
+        offset_x = (fb.xres - render_w) / 2;
+        offset_y = 0;
+        printf("I_InitGraphics: Scaling mode: ASPECT 4:3 (%dx%d pillarbox, x_offset=%d)\n",
+               render_w, render_h, offset_x);
+    } else { // SCALE_INTEGER
+        if (fb_scaling < 1) fb_scaling = 1;
+        render_w = SCREENWIDTH * fb_scaling;
+        render_h = SCREENHEIGHT * fb_scaling;
+        if (render_w > (int)fb.xres) render_w = fb.xres;
+        if (render_h > (int)fb.yres) render_h = fb.yres;
+        offset_x = (fb.xres - render_w) / 2;
+        offset_y = (fb.yres - render_h) / 2;
+        printf("I_InitGraphics: Scaling mode: INTEGER %dx (%dx%d centered, x_offset=%d, y_offset=%d)\n",
+               fb_scaling, render_w, render_h, offset_x, offset_y);
+    }
 
-    /* Allocate screen to draw to */
-	I_VideoBuffer = (byte*)Z_Malloc (SCREENWIDTH * SCREENHEIGHT, PU_STATIC, NULL);  // For DOOM to draw on
-	I_VideoBuffer_FB = (byte*)malloc(fb.xres * fb.yres * (fb.bits_per_pixel/8));     // For a single write() syscall to fbdev
+    y_lut = (int *)malloc(render_h * sizeof(int));
+    for (int y = 0; y < render_h; y++) {
+        y_lut[y] = (y * SCREENHEIGHT) / render_h;
+    }
 
-	screenvisible = true;
+    x_lut = (int *)malloc(render_w * sizeof(int));
+    for (int x = 0; x < render_w; x++) {
+        x_lut[x] = (x * SCREENWIDTH) / render_w;
+    }
+
+    /* Allocate screen buffer for DOOM to draw on */
+    I_VideoBuffer = (byte*)Z_Malloc (SCREENWIDTH * SCREENHEIGHT, PU_STATIC, NULL);
+
+    /* Map framebuffer directly via mmap for zero-copy high performance rendering */
+    fb_mmap_size = fb.xres * fb.yres * (fb.bits_per_pixel / 8);
+    fb_mmap_ptr = mmap(NULL, fb_mmap_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd_fb, 0);
+    if (fb_mmap_ptr != MAP_FAILED) {
+        memset(fb_mmap_ptr, 0, fb_mmap_size); // Clear screen to black
+        printf("I_InitGraphics: Framebuffer mapped via mmap (%zu bytes)\n", fb_mmap_size);
+    } else {
+        printf("I_InitGraphics: mmap failed, falling back to write buffer\n");
+        I_VideoBuffer_FB = (byte*)malloc(fb_mmap_size);
+        if (I_VideoBuffer_FB) memset(I_VideoBuffer_FB, 0, fb_mmap_size);
+    }
+
+    screenvisible = true;
+
+    I_AtExit(I_ShutdownGraphics, true);
 
     extern int I_InitInput(void);
     I_InitInput();
@@ -208,8 +226,31 @@ void I_InitGraphics (void)
 
 void I_ShutdownGraphics (void)
 {
-	Z_Free (I_VideoBuffer);
-	free(I_VideoBuffer_FB);
+    if (y_lut) {
+        free(y_lut);
+        y_lut = NULL;
+    }
+    if (x_lut) {
+        free(x_lut);
+        x_lut = NULL;
+    }
+    if (fb_mmap_ptr != MAP_FAILED) {
+        memset(fb_mmap_ptr, 0, fb_mmap_size);
+        munmap(fb_mmap_ptr, fb_mmap_size);
+        fb_mmap_ptr = MAP_FAILED;
+    }
+    if (I_VideoBuffer) {
+        Z_Free(I_VideoBuffer);
+        I_VideoBuffer = NULL;
+    }
+    if (I_VideoBuffer_FB) {
+        free(I_VideoBuffer_FB);
+        I_VideoBuffer_FB = NULL;
+    }
+    if (fd_fb >= 0) {
+        close(fd_fb);
+        fd_fb = -1;
+    }
 }
 
 void I_StartFrame (void)
@@ -402,48 +443,89 @@ void I_UpdateNoBlit (void)
 
 void I_FinishUpdate (void)
 {
-    int y;
-    int x_offset, y_offset, x_offset_end;
-    unsigned char *line_in, *line_out;
+    if (!screenvisible) return;
 
-    /* Offsets in case FB is bigger than DOOM */
-    /* 600 = fb heigt, 200 screenheight */
-    /* 600 = fb heigt, 200 screenheight */
-    /* 2048 =fb width, 320 screenwidth */
-    y_offset     = (((fb.yres - (SCREENHEIGHT * fb_scaling)) * fb.bits_per_pixel/8)) / 2;
-    x_offset     = (((fb.xres - (SCREENWIDTH  * fb_scaling)) * fb.bits_per_pixel/8)) / 2; // XXX: siglent FB hack: /4 instead of /2, since it seems to handle the resolution in a funny way
-    //x_offset     = 0;
-    x_offset_end = ((fb.xres - (SCREENWIDTH  * fb_scaling)) * fb.bits_per_pixel/8) - x_offset;
+    uint8_t *fb_dest = (uint8_t *)(fb_mmap_ptr != MAP_FAILED ? fb_mmap_ptr : I_VideoBuffer_FB);
+    if (!fb_dest) return;
 
-    /* DRAW SCREEN */
-    line_in  = (unsigned char *) I_VideoBuffer;
-    line_out = (unsigned char *) I_VideoBuffer_FB;
+    int bpp = fb.bits_per_pixel;
+    int bytes_per_pixel = bpp / 8;
 
-    y = SCREENHEIGHT;
+    // Fast-path: 32-bit PS Vita native fullscreen (960x544, exact 3x horizontal scale)
+    if (bpp == 32 && render_w == 960 && render_h == 544 && offset_x == 0 && offset_y == 0) {
+        uint32_t *d32 = (uint32_t *)fb_dest;
+        int prev_src_y = -1;
+        uint32_t *prev_row = NULL;
 
-    while (y--)
-    {
-        int i;
-        for (i = 0; i < fb_scaling; i++) {
-            line_out += x_offset;
-#ifdef CMAP256
-            for (fb_scaling == 1) {
-                memcpy(line_out, line_in, SCREENWIDTH); /* fb_width is bigger than Doom SCREENWIDTH... */
+        for (int y = 0; y < 544; y++) {
+            int src_y = y_lut[y];
+            uint32_t *row = d32 + y * 960;
+
+            if (src_y == prev_src_y && prev_row != NULL) {
+                memcpy(row, prev_row, 960 * sizeof(uint32_t));
             } else {
-                //XXX FIXME fb_scaling support!
+                const byte *src = I_VideoBuffer + src_y * SCREENWIDTH;
+                for (int x = 0; x < SCREENWIDTH; x++) {
+                    uint32_t pix = palette32[src[x]];
+                    row[x * 3]     = pix;
+                    row[x * 3 + 1] = pix;
+                    row[x * 3 + 2] = pix;
+                }
+                prev_src_y = src_y;
+                prev_row = row;
             }
-#else
-            //cmap_to_rgb565((void*)line_out, (void*)line_in, SCREENWIDTH);
-            cmap_to_fb((void*)line_out, (void*)line_in, SCREENWIDTH);
-#endif
-            line_out += (SCREENWIDTH * fb_scaling * (fb.bits_per_pixel/8)) + x_offset_end;
         }
-        line_in += SCREENWIDTH;
+    } else if (bpp == 32) {
+        // General 32-bit blitter (aspect ratio, integer, or custom resolution)
+        uint32_t *d32 = (uint32_t *)fb_dest;
+        int prev_src_y = -1;
+        uint32_t *prev_row = NULL;
+
+        for (int y = 0; y < render_h; y++) {
+            int src_y = y_lut[y];
+            uint32_t *row = d32 + (y + offset_y) * fb.xres + offset_x;
+
+            if (src_y == prev_src_y && prev_row != NULL) {
+                memcpy(row, prev_row, render_w * sizeof(uint32_t));
+            } else {
+                const byte *src = I_VideoBuffer + src_y * SCREENWIDTH;
+                for (int x = 0; x < render_w; x++) {
+                    row[x] = palette32[src[x_lut[x]]];
+                }
+                prev_src_y = src_y;
+                prev_row = row;
+            }
+        }
+    } else if (bpp == 16) {
+        // 16-bit RGB565 blitter
+        uint16_t *d16 = (uint16_t *)fb_dest;
+        int prev_src_y = -1;
+        uint16_t *prev_row = NULL;
+
+        for (int y = 0; y < render_h; y++) {
+            int src_y = y_lut[y];
+            uint16_t *row = d16 + (y + offset_y) * fb.xres + offset_x;
+
+            if (src_y == prev_src_y && prev_row != NULL) {
+                memcpy(row, prev_row, render_w * sizeof(uint16_t));
+            } else {
+                const byte *src = I_VideoBuffer + src_y * SCREENWIDTH;
+                for (int x = 0; x < render_w; x++) {
+                    row[x] = palette16[src[x_lut[x]]];
+                }
+                prev_src_y = src_y;
+                prev_row = row;
+            }
+        }
     }
 
-    /* Start drawing from y-offset */
-    lseek(fd_fb, y_offset * fb.xres, SEEK_SET);
-    write(fd_fb, I_VideoBuffer_FB, (SCREENHEIGHT * fb_scaling * (fb.bits_per_pixel/8)) * fb.xres); /* draw only portion used by doom + x-offsets */
+    // If mmap was not available, fall back to write()
+    if (fb_mmap_ptr == MAP_FAILED && fd_fb >= 0) {
+        lseek(fd_fb, 0, SEEK_SET);
+        if (write(fd_fb, I_VideoBuffer_FB, fb.xres * fb.yres * bytes_per_pixel) < 0) {
+            // Ignored
+        }
+    }
 }
 
 //
@@ -464,33 +546,27 @@ void I_ReadScreen (byte* scr)
 
 void I_SetPalette (byte* palette)
 {
-	int i;
-	//col_t* c;
+    int i;
+    for (i = 0; i < 256; ++i) {
+        uint8_t r = gammatable[usegamma][*palette++];
+        uint8_t g = gammatable[usegamma][*palette++];
+        uint8_t b = gammatable[usegamma][*palette++];
 
-	//for (i = 0; i < 256; i++)
-	//{
-	//	c = (col_t*)palette;
+        colors[i].a = 0xFF;
+        colors[i].r = r;
+        colors[i].g = g;
+        colors[i].b = b;
 
-	//	rgb565_palette[i] = GFX_RGB565(gammatable[usegamma][c->r],
-	//								   gammatable[usegamma][c->g],
-	//								   gammatable[usegamma][c->b]);
-
-	//	palette += 3;
-	//}
-    
-
-    /* performance boost:
-     * map to the right pixel format over here! */
-
-    for (i=0; i<256; ++i ) {
-        colors[i].a = 0;
-        colors[i].r = gammatable[usegamma][*palette++];
-        colors[i].g = gammatable[usegamma][*palette++];
-        colors[i].b = gammatable[usegamma][*palette++];
+        uint32_t r_val = (uint32_t)(r >> (8 - fb.red.length)) << fb.red.offset;
+        uint32_t g_val = (uint32_t)(g >> (8 - fb.green.length)) << fb.green.offset;
+        uint32_t b_val = (uint32_t)(b >> (8 - fb.blue.length)) << fb.blue.offset;
+        uint32_t a_val = 0;
+        if (fb.transp.length > 0) {
+            a_val = (uint32_t)(0xFF >> (8 - fb.transp.length)) << fb.transp.offset;
+        }
+        palette32[i] = r_val | g_val | b_val | a_val;
+        palette16[i] = (uint16_t)(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
     }
-
-    /* Set new color map in kernel framebuffer driver */
-    //XXX FIXME ioctl(fd_fb, IOCTL_FB_PUTCMAP, colors);
 }
 
 // Given an RGB value, find the closest matching palette index.
@@ -508,9 +584,9 @@ int I_GetPaletteIndex (int r, int g, int b)
 
     for (i = 0; i < 256; ++i)
     {
-    	color.r = GFX_RGB565_R(rgb565_palette[i]);
-    	color.g = GFX_RGB565_G(rgb565_palette[i]);
-    	color.b = GFX_RGB565_B(rgb565_palette[i]);
+        color.r = GFX_RGB565_R(palette16[i]);
+        color.g = GFX_RGB565_G(palette16[i]);
+        color.b = GFX_RGB565_B(palette16[i]);
 
         diff = (r - color.r) * (r - color.r)
              + (g - color.g) * (g - color.g)

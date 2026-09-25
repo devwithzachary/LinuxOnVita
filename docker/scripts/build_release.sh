@@ -15,6 +15,8 @@ BUILD_DIR="/build"
 OUTPUT_DIR="${BUILD_DIR}/output"
 RELEASE_DIR="${OUTPUT_DIR}/release"
 
+git config --global --add safe.directory "${BUILD_DIR}" 2>/dev/null || true
+
 # Determine version: check VERSION env var, exact git tag, git branch, or date
 VERSION="${VERSION:-$(git -C "${BUILD_DIR}" describe --tags --exact-match 2>/dev/null \
     || git -C "${BUILD_DIR}" branch --show-current 2>/dev/null \
@@ -100,6 +102,13 @@ LinuxOnVita ${VERSION} - Installation Instructions
 6. (Optional) Connect to Wi-Fi on-device:
    Tap the screen to toggle the virtual keyboard and run 'vita-wifi scan' to connect
    directly from your handheld. Network credentials are saved permanently to your card!
+
+UPDATING FROM AN EARLIER VERSION:
+If you are upgrading an existing LinuxOnVita installation:
+After installing the new 'LinuxOnVita.vpk' and launching the app, you MUST
+press SQUARE (□) inside the app to reinstall/update the Linux files
+(kernel zImage, Device Tree blobs, and baremetal loaders) on your memory card.
+Simply pressing CROSS (X) would continue booting the older files already on the card.
 
 NOTE FOR SD2VITA USERS:
 An official physical Sony memory card is strictly required on all consoles

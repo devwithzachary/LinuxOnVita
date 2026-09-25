@@ -46,6 +46,7 @@ run_in_docker() {
         tty_flags="-it"
     fi
     docker run --rm --platform linux/amd64 ${tty_flags} \
+        ${VERSION:+-e VERSION="${VERSION}"} \
         -v "${ROOT_DIR}:/build" \
         -w /build \
         "${IMAGE_NAME}" \

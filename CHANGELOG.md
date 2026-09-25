@@ -5,6 +5,55 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
 
 ---
 
+## [v1.2.0] - 2026-09-25
+
+### Added
+- **SD2Vita (Game Card Slot) Power & High-Speed Support:** Enabled hardware power and high-speed bus negotiation for SD2Vita adapters in the Game Card slot (`SDIF1`):
+  - Added Syscon command `0x888` power-on invocation during boot so the physical Game Card slot receives 3.3V VCC.
+  - Configured pervasive pad voltage register (`0xE3100124`) for 3.3V signalling on SDIF1.
+  - Added `broken-cd` and `cap-sd-highspeed` to the `sdif1` Device Tree node in `vita.dtsi`.
+  - Added automatic MMC rescan trigger upon Syscon power stabilization so the microSD card is immediately recognized as `mmcblk1`.
+- **Automatic SD2Vita Auto-Mounting & Symlinks:** Updated `S05vita` and `S00mount` to automatically detect `/dev/mmcblk1p1` or `/dev/mmcblk1`, create the `/dev/vita/ux0` device symlink, and mount the card to `/mnt/ux0`.
+- **Framebuffer DOOM Controller Exit Confirmation & Quick Exit:**
+  - Resolved an issue in `fbdoom` where selecting "Quit Game" from the in-game menu prompted for 'Y' without accepting any PS Vita gamepad buttons.
+  - Mapped **Cross (✕)** (`KEY_ENTER`) and **Triangle (△)** (`KEY_TAB`) to confirm menu prompts (`key_menu_confirm`), allowing natural exit confirmation on PS Vita hardware.
+  - Mapped **Circle (○)** (`KEY_BACKSPACE`) to abort/cancel menu prompts (`key_menu_abort`).
+  - Added universal instant exit controller shortcut: pressing **`START + SELECT`** simultaneously now cleanly exits DOOM from any gameplay screen back to the Linux shell.
+  - Ensured `I_Quit()` and `I_Error()` restore terminal modes via `kbd_shutdown()` and cleanly exit the process.
+  - Updated in-game exit and confirmation prompts to explicitly reference Cross and Circle buttons.
+- **Fixed DOOM Exit Loop & Keystroke Replay (`vita-input-mapper` & `fbdoom`):**
+  - Resolved an issue where exiting `vita-doom` (via `START + SELECT` or the in-game menu) caused DOOM to immediately reload upon returning to the shell before exiting on the second attempt.
+  - Root cause: while `vita-input-mapper` was suspended (`SIGSTOP`) during gameplay, the kernel evdev queue accumulated physical button events (such as D-Pad Up for walking forward and Cross/Start for menu selection). When resumed (`SIGCONT`), `vita-input-mapper` replayed these queued events into `/dev/uinput`, recalling and executing `vita-doom` from the shell's command history.
+  - Added `SIGCONT` signal handling and an automatic evdev queue draining mechanism to `vita-input-mapper` and `fbkeyboard` to discard all stale events buffered during suspension before processing new inputs.
+  - Updated `kbd_shutdown()` in `fbdoom` to use `TCSAFLUSH`, flush terminal input with `tcflush()`, and close gamepad handles.
+  - Added a settling pause in `vita-doom`'s cleanup trap to allow physical button releases to settle before unpausing background input daemons.
+- **Fullscreen 960x544 Scaling & High-Speed Blitter (`fbdoom`):**
+  - Overhauled `i_video_fbdev.c` in `fbdoom` to scale DOOM to full screen (960x544) edge-to-edge on the PlayStation Vita display by default, eliminating the black side and vertical borders of the previous 640x400 window.
+  - Implemented direct zero-copy memory mapping (`mmap`) of `/dev/fb0` to eliminate per-frame `lseek()` and `write()` kernel syscall overhead.
+  - Engineered an optimized horizontal 3x pixel unrolling and precomputed palette conversion lookup table (`palette32`), coupled with row repetition caching (`memcpy`) to blit frames in under 0.6ms.
+  - Added support for alternative aspect modes: `vita-doom -aspect` for 4:3 pillarbox (725x544) and `vita-doom -integer` for 2x centered windowing (640x400).
+- **Display Brightness & Model-Aware Backlight Control:**
+  - Resolved a critical bug in `vita-baremetal-linux-loader` where `sysroot_model_is_vita()` was evaluated before `sysroot_model_is_vita2k()`, causing all consoles (including PS Vita 2000 Slim) to load `vita1000.dtb` which had I2C bus 1 disabled.
+  - Corrected DTB loading order so PS TV loads `pstv.dtb`, PS Vita 2000 loads `vita2000.dtb`, and PS Vita 1000 loads `vita1000.dtb`.
+  - Enabled I2C bus 1 in `vita1000.dts` and fallback `vita.dtb` so `/dev/i2c-1` is universally available.
+  - Overhauled `vita-brightness` to perform automatic hardware model detection:
+    - On **PS Vita 1000 (OLED)**: Displays clear hardware notices explaining that the emissive OLED display is locked to 100% full brightness (Level 15 Gamma) at boot and does not have an adjustable LCD backlight, preventing misleading success messages.
+    - On **PS Vita 2000 (Slim / LCD)**: Dynamically controls the hardware PWM backlight via `/dev/i2c-1` at address `0x64`, scaling across the hardware duty cycle range (`0x1F` to `0xFF`), and verifies command success.
+- **Alpine Linux Chroot Isolation & Command Execution:**
+  - Clarified environment isolation in documentation and interactive banners, explaining that packages installed via `apk` are confined to the chroot container (`/mnt/alpine`) and are not accessible from the base BusyBox shell.
+  - Added visual environment prompt (`alpine@vita:~#` in cyan) inside the chroot to clearly distinguish between host and chroot sessions.
+  - Added support for running one-shot commands inside Alpine directly from the base shell via `alpine-chroot run <command>`, `alpine-chroot -- <command>`, or `alpine-chroot -c "<command>"`.
+- **Compressed ZRAM & Memory Safety Management (`vita-swap`):**
+  - Enabled kernel `CONFIG_ZRAM=y`, `CONFIG_ZSMALLOC=y`, `CONFIG_SWAP=y`, and `CONFIG_ZRAM_BACKEND_LZ4=y` with default LZ4 compression in `configs/kernel/vita_defconfig` and build orchestration.
+  - Automatically initializes a high-priority (100) 256MB compressed ZRAM swap pool on boot in `S00mount`, expanding usable RAM to ~768MB - 1GB with near-zero latency to eliminate Out-Of-Memory (OOM) crashes during heavy package installations or compilation.
+  - Added support for physical swapfiles on SD card or internal storage (`/mnt/ux0/swapfile`), automatically mounted at boot-time with secondary priority (10).
+  - Created `vita-swap` CLI utility for inspecting memory telemetry, creating formatted swapfiles with contiguous blocks, resizing ZRAM on the fly, and persisting auto-mount configurations in `/etc/vita-swap.conf` and `/etc/vita-zram.conf`.
+- **Comprehensive User Guide (`USER_GUIDE.md`):**
+  - Authored an in-depth end-user manual covering console navigation, touchscreen keyboard usage, physical gamepad shortcuts, built-in system tools (`vita-wifi`, `vita-brightness`, `vita-swap`, `vita-doom`), remote SSH workflows, and real-world software installations in Alpine Linux (from micro web servers and network utilities to native C compilation).
+  - Streamlined `README.md` to focus on distribution overview, hardware support matrix, quick installation, and source build instructions.
+
+---
+
 ## [v1.1.0] - 2026-09-24
 
 ### Added

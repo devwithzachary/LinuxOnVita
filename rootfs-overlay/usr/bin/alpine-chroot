@@ -10,13 +10,21 @@ CUSTOM_FILE=""
 USE_RAM=0
 DO_RECREATE=0
 MOUNT_POINT="/mnt/alpine"
+EXEC_CMD=""
 
 show_usage() {
     cat << 'EOF'
-Usage: alpine-chroot [OPTIONS]
+Usage: alpine-chroot [OPTIONS] [-- COMMAND]
+       alpine-chroot run COMMAND
 
 Launch an interactive Alpine Linux environment with 'apk' package manager.
 By default, stores a persistent 1GB ext4 image on your SD card or memory card (ux0).
+
+IMPORTANT ISOLATION NOTICE:
+  Alpine Linux runs in an isolated chroot userland (/mnt/alpine). Packages
+  installed with 'apk' (such as python3, htop, git, compilers) only exist and
+  execute within this Alpine chroot. They are NOT installed into or directly
+  accessible from the base LinuxOnVita host shell.
 
 Options:
   -s, --size <MB|GB>   Image size when creating (default: 1024 MB / 1 GB, e.g. 2048 or 2G)
@@ -25,12 +33,15 @@ Options:
   --ram                Run entirely in volatile RAM (tmpfs at /tmp/alpine, no image file)
   --recreate           Delete existing image and create a fresh one from scratch
   --status             Show current Alpine chroot mount status and disk usage
+  -c, --exec <CMD>     Execute a command inside Alpine and exit
+  run <CMD...>         Execute a command inside Alpine and exit
   -h, --help           Show this help message
 
 Examples:
-  alpine-chroot                       # Default: persistent 1GB on SD card (/mnt/ux0)
+  alpine-chroot                       # Enter interactive Alpine shell (cyan prompt)
+  alpine-chroot -- python3 app.py     # Run script inside Alpine from base host
+  alpine-chroot run fastfetch         # Run Alpine-installed tool from base host
   alpine-chroot --size 2G             # Create 2GB persistent Alpine image on SD card
-  alpine-chroot --size 4096           # Create 4GB persistent Alpine image on SD card
   alpine-chroot --dir /mnt/ur0        # Save alpine.img on internal storage (ur0)
   alpine-chroot --ram                 # Launch temporary in-memory session
 EOF
@@ -117,6 +128,23 @@ while [ $# -gt 0 ]; do
             [ -z "${2:-}" ] && { echo "Error: --file requires a file path"; exit 1; }
             CUSTOM_FILE="$2"
             shift 2
+            ;;
+        -c|--exec)
+            [ -z "${2:-}" ] && { echo "Error: $1 requires a command to execute"; exit 1; }
+            EXEC_CMD="$2"
+            shift 2
+            ;;
+        run)
+            shift
+            [ $# -eq 0 ] && { echo "Error: run requires a command to execute"; exit 1; }
+            EXEC_CMD="$*"
+            break
+            ;;
+        --)
+            shift
+            [ $# -eq 0 ] && { echo "Error: -- requires a command to execute"; exit 1; }
+            EXEC_CMD="$*"
+            break
             ;;
         *)
             echo "Unknown option: $1 (run 'alpine-chroot --help' for options)"
@@ -292,18 +320,34 @@ cleanup_chroot() {
 }
 trap cleanup_chroot EXIT INT TERM
 
-echo "========================================================="
-echo " 🏔️  Welcome to Alpine Linux Userland (chroot)           "
-echo "========================================================="
-if [ $USE_RAM -eq 1 ]; then
-    echo " Mode:     Volatile RAM (changes lost on reboot)"
-else
-    echo " Storage:  ${IMG_FILE}"
-fi
-echo " Commands: Type 'apk update && apk add <pkg>' to install"
-echo " Exit:     Type 'exit' to return to Vita host shell"
-echo "========================================================="
-echo ""
+# Ensure distinct prompt and hostname inside Alpine chroot
+mkdir -p "${TARGET}/etc/profile.d"
+echo "vita-alpine" > "${TARGET}/etc/hostname" 2>/dev/null || true
+cat << 'EOF' > "${TARGET}/etc/profile.d/00-vita-prompt.sh"
+export PS1='\[\033[01;36m\]alpine@vita\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]# '
+EOF
+chmod 644 "${TARGET}/etc/profile.d/00-vita-prompt.sh"
 
-# Execute login shell inside Alpine chroot
-chroot "${TARGET}" /bin/sh -l
+if [ -z "${EXEC_CMD:-}" ]; then
+    echo "========================================================="
+    echo " 🏔️  Welcome to Alpine Linux Userland (chroot)           "
+    echo "========================================================="
+    if [ $USE_RAM -eq 1 ]; then
+        echo " Mode:      Volatile RAM (changes lost on reboot)"
+    else
+        echo " Storage:   ${IMG_FILE}"
+    fi
+    echo " Isolation: Packages installed via 'apk' reside inside"
+    echo "            this chroot and are not accessible from the"
+    echo "            base LinuxOnVita host system."
+    echo " Commands:  Type 'apk update && apk add <pkg>' to install"
+    echo " Exit:      Type 'exit' to return to base host shell"
+    echo "========================================================="
+    echo ""
+
+    # Execute login shell inside Alpine chroot
+    chroot "${TARGET}" /bin/sh -l
+else
+    # Execute command inside Alpine chroot
+    chroot "${TARGET}" /bin/sh -c "${EXEC_CMD}"
+fi

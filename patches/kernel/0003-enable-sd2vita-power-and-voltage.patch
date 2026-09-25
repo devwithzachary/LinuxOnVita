@@ -1,0 +1,69 @@
+diff --git a/arch/arm/boot/dts/vita.dtsi b/arch/arm/boot/dts/vita.dtsi
+index 5f7b54647..8b3d3f68e 100644
+--- a/arch/arm/boot/dts/vita.dtsi
++++ b/arch/arm/boot/dts/vita.dtsi
+@@ -170,6 +170,8 @@ sdif1: mmc@e0c00000 {
+ 			reg = <0xe0c00000 0x1000>;
+ 			vita,bus-index = <1>;
+ 			interrupts = <GIC_SPI 189 IRQ_TYPE_LEVEL_HIGH>;
++			broken-cd;
++			cap-sd-highspeed;
+ 			status = "disabled";
+ 		};
+ 
+diff --git a/drivers/mfd/vita-syscon.c b/drivers/mfd/vita-syscon.c
+index d616ccdd5..48c79ea65 100644
+--- a/drivers/mfd/vita-syscon.c
++++ b/drivers/mfd/vita-syscon.c
+@@ -694,6 +694,19 @@ static int vita_syscon_probe(struct spi_device *spi)
+ 	if (ret)
+ 		dev_warn(&spi->dev, "failed to register reboot notifier: %d\n", ret);
+ 
++	/*
++	 * Power on Game Card slot (cmd 0x888) so SD2Vita adapters receive
++	 * 3.3V VCC. VitaOS powers this on demand; Linux powers it at boot.
++	 */
++	ret = vita_syscon_short_command_write(syscon, 0x888, 1, 2);
++	if (ret < 0)
++		dev_warn(&spi->dev, "failed to power on game card slot: %d\n", ret);
++	else
++		dev_info(&spi->dev, "Game Card slot power enabled (cmd 0x888)\n");
++
++	/* Trigger card detect rescan on SDIF1 (bus 1) */
++	sdhci_vita_trigger_rescan(1);
++
+ 	return devm_mfd_add_devices(syscon->dev, PLATFORM_DEVID_NONE,
+ 				    vita_syscon_devs, ARRAY_SIZE(vita_syscon_devs),
+ 				    NULL, 0, NULL);
+diff --git a/drivers/mmc/host/sdhci-vita.c b/drivers/mmc/host/sdhci-vita.c
+index 467779c09..e60d88cc7 100644
+--- a/drivers/mmc/host/sdhci-vita.c
++++ b/drivers/mmc/host/sdhci-vita.c
+@@ -87,6 +87,27 @@ static void sdhci_vita_pervasive_init(struct device *dev, u32 bus_index)
+ 	val = readl(gate_reg);
+ 	val |= 1;
+ 	writel(val, gate_reg);	/* enable clock */
++
++	/*
++	 * Set pervasive I/O pad voltage in 0xE3100124:
++	 *   bit N = 1 -> SDIF N uses 1.8V
++	 *   bit N = 0 -> SDIF N uses 3.3V
++	 * Bus 0 (eMMC) and Bus 2 (WLAN) use 1.8V.
++	 * Bus 1 (Game card / SD2Vita) and Bus 3 (microSD / 3G) use 3.3V.
++	 */
++	{
++		void __iomem *misc_base = ioremap(PERVASIVE_MISC_BASE, 0x400);
++		if (misc_base) {
++			val = readl(misc_base + 0x124);
++			if (bus_index == 0 || bus_index == 2)
++				val |= BIT(bus_index);
++			else
++				val &= ~BIT(bus_index);
++			writel(val, misc_base + 0x124);
++			mb();
++			iounmap(misc_base);
++		}
++	}
+ }
+ 
+ /**

@@ -58,6 +58,14 @@ if [ -d "${PORT_DIR}" ]; then
     "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_EXT4_FS
     "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_EXT4_FS_POSIX_ACL
     "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_EXT4_FS_SECURITY
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_SWAP
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_ZRAM
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_ZRAM_BACKEND_LZ4
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_ZRAM_DEF_COMP_LZ4
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --set-str CONFIG_ZRAM_DEF_COMP "lz4"
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_ZSMALLOC
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_LZ4_COMPRESS
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_LZ4_DECOMPRESS
     
     echo "Compiling zImage and DTBs..."
     make build CROSS_COMPILE="${CROSS_COMPILE}"
@@ -103,6 +111,14 @@ else
     ./scripts/config --file .config --enable CONFIG_EXT4_FS
     ./scripts/config --file .config --enable CONFIG_EXT4_FS_POSIX_ACL
     ./scripts/config --file .config --enable CONFIG_EXT4_FS_SECURITY
+    ./scripts/config --file .config --enable CONFIG_SWAP
+    ./scripts/config --file .config --enable CONFIG_ZRAM
+    ./scripts/config --file .config --enable CONFIG_ZRAM_BACKEND_LZ4
+    ./scripts/config --file .config --enable CONFIG_ZRAM_DEF_COMP_LZ4
+    ./scripts/config --file .config --set-str CONFIG_ZRAM_DEF_COMP "lz4"
+    ./scripts/config --file .config --enable CONFIG_ZSMALLOC
+    ./scripts/config --file .config --enable CONFIG_LZ4_COMPRESS
+    ./scripts/config --file .config --enable CONFIG_LZ4_DECOMPRESS
     make ARCH=arm CROSS_COMPILE="${CROSS_COMPILE}" -j"$(nproc)" zImage
     make ARCH=arm CROSS_COMPILE="${CROSS_COMPILE}" sony/vita1000.dtb sony/vita2000.dtb sony/pstv.dtb
     

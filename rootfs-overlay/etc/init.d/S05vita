@@ -31,5 +31,29 @@ start)
         mount -t vfat -o rw /dev/vita/ur0 /mnt/ur0 2>/dev/null || \
         mount /dev/vita/ur0 /mnt/ur0 2>/dev/null || true
     fi
+
+    # Symlink and auto-mount ux0 (SD2Vita / Game card) if available
+    mkdir -p /mnt/ux0
+    for dev in /dev/mmcblk1p1 /dev/mmcblk1 /dev/mmcblk2p1 /dev/mmcblk2; do
+        if [ -b "$dev" ]; then
+            ln -sf "$dev" /dev/vita/ux0
+            if ! mountpoint -q /mnt/ux0 2>/dev/null; then
+                mount -t exfat -o rw "$dev" /mnt/ux0 2>/dev/null || \
+                mount -t vfat -o rw "$dev" /mnt/ux0 2>/dev/null || \
+                mount -t ext4 -o rw "$dev" /mnt/ux0 2>/dev/null || \
+                mount "$dev" /mnt/ux0 2>/dev/null || true
+            fi
+            break
+        fi
+    done
+
+    # Auto-activate physical swapfile if present on mounted storage
+    SWAP_FILE=""
+    [ -f /etc/vita-swap.conf ] && SWAP_FILE=$(cat /etc/vita-swap.conf 2>/dev/null)
+    [ -z "$SWAP_FILE" ] && [ -f /mnt/ux0/swapfile ] && SWAP_FILE="/mnt/ux0/swapfile"
+    if [ -n "$SWAP_FILE" ] && [ -f "$SWAP_FILE" ]; then
+        chmod 600 "$SWAP_FILE" 2>/dev/null || true
+        swapon -p 10 "$SWAP_FILE" >/dev/null 2>&1 || true
+    fi
     ;;
 esac
