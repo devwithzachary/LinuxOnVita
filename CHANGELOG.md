@@ -5,6 +5,18 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
 
 ---
 
+## [v1.3.0] - 2026-09-25
+
+### Added
+- **Hardware & System Diagnostic Tool (`vita-diagnostics` / `vita-diag`):**
+  - Created an on-device diagnostic program (`vita-diagnostics`, with `vita-diag` alias) to help users troubleshoot and collect system logs when experiencing Wi-Fi connection issues or SD card mounting failures.
+  - **Storage & SD Card Diagnosis:** Inspects MMC controllers (`/dev/mmcblk*`), partition tables, and mount statuses. If `/mnt/ux0` fails to mount, automatically executes safe read-only test-probes against candidate devices across `exfat`, `vfat`, and `ext4`, reporting the exact failure cause and recommended mount commands.
+  - **Wi-Fi & Network Diagnosis:** Verifies Marvell 88W8787 wireless hardware and firmware, inspects `wpa_supplicant` status, analyzes authentication states (`4WAY_HANDSHAKE` password issues, `SCANNING` 2.4GHz vs 5GHz reminders), runs live 2.4GHz RF scans, and tests gateway and DNS ping connectivity.
+  - **Privacy Protection:** Automatically redacts Wi-Fi passwords (`psk="[REDACTED_FOR_PRIVACY]"`) across all dumped configurations and logs so users can safely share reports on GitHub or Discord without exposing sensitive credentials.
+  - **Multi-Target Storage Guarantee:** Saves formatted reports (`vita-diagnostics.txt`) and complete raw log tarballs (`vita-diagnostics.tar.gz`) to `/mnt/ux0/`, `/mnt/ur0/`, and `/tmp/`. By saving to internal eMMC (`ur0:`), diagnostic reports remain accessible via VitaShell even if the SD card fails to mount entirely.
+
+---
+
 ## [v1.2.0] - 2026-09-25
 
 ### Added

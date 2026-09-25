@@ -16,8 +16,9 @@ Welcome to the comprehensive user guide for **LinuxOnVita**. This guide is desig
    - [Screen Brightness Control (`vita-brightness`)](#2-screen-brightness-control-vita-brightness)
    - [Memory Expansion & Swap (`vita-swap`)](#3-memory-expansion--swap-vita-swap)
    - [Framebuffer DOOM (`vita-doom`)](#4-framebuffer-doom-vita-doom)
-   - [Remote SSH & Wireless Terminal](#5-remote-ssh--wireless-terminal)
-   - [Rebooting & Powering Down](#6-rebooting--powering-down)
+   - [Hardware & System Diagnostics (`vita-diagnostics`)](#5-hardware--system-diagnostics-vita-diagnostics--vita-diag)
+   - [Remote SSH & Wireless Terminal](#6-remote-ssh--wireless-terminal)
+   - [Rebooting & Powering Down](#7-rebooting--powering-down)
 5. [Alpine Linux Package Ecosystem (`alpine-chroot`)](#5-alpine-linux-package-ecosystem-alpine-chroot)
    - [Understanding the Isolated Environment](#understanding-the-isolated-environment)
    - [Entering & Exiting Alpine](#entering--exiting-alpine)
@@ -237,7 +238,55 @@ By default, `vita-doom` automatically scales to fill 100% of the PlayStation Vit
 
 ---
 
-### 5. Remote SSH & Wireless Terminal
+### 5. Hardware & System Diagnostics (`vita-diagnostics` / `vita-diag`)
+When encountering issues like Wi-Fi failing to connect or an SD card not mounting, `vita-diagnostics` automates the entire debugging and log collection process. It probes hardware devices, verifies drivers and firmware, tests partition filesystems, queries Wi-Fi association state, redacts sensitive passwords for privacy, and saves a comprehensive report to accessible storage.
+
+#### Running Diagnostics:
+```bash
+vita-diagnostics
+# or using the shorthand alias:
+vita-diag
+```
+
+#### What It Checks:
+* **Storage & SD Cards (`--storage`):**
+  - Detects all MMC controllers, partition tables, and SD2Vita adapter devices (`/dev/mmcblk*`).
+  - Verifies whether `/mnt/ux0` (SD card or memory card) is mounted.
+  - If unmounted: safely probe-mounts candidate partitions with read-only checks across `exfat`, `vfat`, and `ext4` to identify why the mount failed, and provides exact commands to mount it.
+  - Inspects internal eMMC storage (`/mnt/ur0`).
+* **Wi-Fi & Networking (`--wifi`):**
+  - Confirms detection of Marvell 88W8787 wireless hardware (`mlan0` / `wlan0`).
+  - Verifies presence and integrity of Marvell firmware (`sd8787_uapsta.bin`) and wireless regulatory database.
+  - Queries `wpa_supplicant` and analyzes association states:
+    - `4WAY_HANDSHAKE`: Alerts if Wi-Fi password may be incorrect.
+    - `SCANNING`: Alerts if SSID was not found, reminding users that PS Vita hardware strictly supports 2.4GHz Wi-Fi (channels 1-13) and cannot connect to 5GHz networks.
+    - `COMPLETED`: Confirms active authentication and association.
+  - Performs live 2.4GHz RF scans and tests network gateway / DNS pings.
+  - **Privacy Guarantee:** Automatically redacts all Wi-Fi passwords (`psk="[REDACTED_FOR_PRIVACY]"`) so diagnostic reports can be shared publicly on Discord or GitHub without leaking private credentials.
+* **Kernel & System Telemetry:**
+  - Captures full kernel ring buffer (`dmesg`), early boot logs (`/tmp/boot.log`), running processes, memory usage, ZRAM compression ratios, and input mapping status.
+
+#### Safe Multi-Target Log Saving:
+Even if your SD card fails to mount, logs are **never lost**. `vita-diagnostics` simultaneously saves to multiple locations:
+1. `ur0:vita-diagnostics.txt` (Internal eMMC flash, accessible on all PS Vita models even if SD card fails).
+2. `ux0:vita-diagnostics.txt` and `ux0:vita-diagnostics.tar.gz` (SD card / Memory Card, if mounted).
+3. `/tmp/vita-diagnostics.txt` (Volatile RAM).
+
+#### How to Retrieve and Send Logs:
+1. After running `vita-diagnostics`, type `reboot` and press Enter to return to VitaOS.
+2. Launch **VitaShell** from the LiveArea home screen.
+3. If your SD card was mounted, navigate to **`ux0:`**. If your SD card failed to mount, navigate to **`ur0:`**.
+4. Press **SELECT** in VitaShell to connect your console to your computer via USB (or FTP).
+5. Copy `vita-diagnostics.txt` (or `vita-diagnostics.tar.gz`) to your computer and attach it to your GitHub issue or share it with DevWithZachary on Discord!
+
+#### Viewing Logs On-Device:
+```bash
+vita-diagnostics --view    # View the most recent report on the terminal
+```
+
+---
+
+### 6. Remote SSH & Wireless Terminal
 Once connected to Wi-Fi, LinuxOnVita automatically starts an OpenSSH server and broadcasts mDNS hostname `vita.local`.
 
 From any computer, tablet, or phone on the same Wi-Fi network:
@@ -250,7 +299,7 @@ Logging in via SSH gives you a full-sized desktop terminal, making it comfortabl
 
 ---
 
-### 6. Rebooting & Powering Down
+### 7. Rebooting & Powering Down
 * **Reboot straight to Sony VitaOS:**
   ```bash
   reboot

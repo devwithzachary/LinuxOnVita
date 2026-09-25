@@ -1,0 +1,739 @@
+#!/bin/sh
+# vita-diagnostics: Comprehensive Hardware & System Diagnostic Utility for LinuxOnVita
+#
+# Gathers detailed kernel, storage, Wi-Fi, memory, input, and bootloader logs.
+# Automatically analyzes common issues like Wi-Fi association failures and SD card
+# mount errors, then saves a diagnostic report and tarball to all accessible storage
+# (including internal ur0: so logs survive even when SD cards fail to mount).
+#
+# Usage:
+#   vita-diagnostics            - Run full diagnostics, analyze issues, and save logs
+#   vita-diagnostics --wifi     - Run focused Wi-Fi diagnostics & network analysis
+#   vita-diagnostics --storage  - Run focused SD card & partition diagnostics
+#   vita-diagnostics --view     - View the most recently generated diagnostic log
+#   vita-diagnostics --full     - Print full report directly to console & save files
+#   vita-diagnostics --help     - Show usage and options
+
+TOOL_VERSION="1.0.0"
+export PATH="/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+
+# ANSI Colors (disabled if not connected to a terminal)
+if [ -t 1 ]; then
+    C_RESET="\033[0m"
+    C_BOLD="\033[1m"
+    C_CYAN="\033[1;36m"
+    C_GREEN="\033[1;32m"
+    C_YELLOW="\033[1;33m"
+    C_RED="\033[1;31m"
+    C_BLUE="\033[1;34m"
+    C_GRAY="\033[1;30m"
+else
+    C_RESET=""
+    C_BOLD=""
+    C_CYAN=""
+    C_GREEN=""
+    C_YELLOW=""
+    C_RED=""
+    C_BLUE=""
+    C_GRAY=""
+fi
+
+echo_msg() {
+    printf '%b\n' "$*"
+}
+
+REPORT_NAME="vita-diagnostics.txt"
+ARCHIVE_NAME="vita-diagnostics.tar.gz"
+STAGE_DIR="/tmp/vita-diag-$$"
+
+cleanup() {
+    rm -rf "$STAGE_DIR" /tmp/.diag_probe_* 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+show_help() {
+    cat << EOF
+Usage: vita-diagnostics [COMMAND / OPTION]
+
+Comprehensive System & Hardware Diagnostics for PlayStation Vita Linux.
+
+Commands & Options:
+  (no args)       Run full diagnostics, analyze hardware, and save reports
+  --wifi, wifi    Run focused Wi-Fi and network diagnostics
+  --storage, storage Run focused SD card, block device, and mount diagnostics
+  --view, view    View the most recent saved diagnostic report
+  --full          Print complete unredacted report to console and save files
+  --help, help    Show this help message
+
+Output Locations:
+  * ux0:vita-diagnostics.txt  (SD card / Memory card - accessible via VitaShell)
+  * ur0:vita-diagnostics.txt  (Internal eMMC memory - accessible even if SD fails!)
+  * ux0:vita-diagnostics.tar.gz (Full archive containing all raw system logs)
+EOF
+    exit 0
+}
+
+view_last_report() {
+    for candidate in \
+        /mnt/ux0/vita-diagnostics.txt \
+        /mnt/ur0/vita-diagnostics.txt \
+        /tmp/vita-diagnostics.txt; do
+        if [ -f "$candidate" ]; then
+            echo_msg "${C_CYAN}Displaying last diagnostic report from $candidate:${C_RESET}\n"
+            if command -v more >/dev/null 2>&1; then
+                more "$candidate"
+            else
+                cat "$candidate"
+            fi
+            exit 0
+        fi
+    done
+    echo_msg "${C_RED}No previous diagnostic report found. Run 'vita-diagnostics' to generate one.${C_RESET}"
+    exit 1
+}
+
+# Mount internal eMMC partition 12 (/mnt/ur0) if not currently mounted
+ensure_ur0_mounted() {
+    mkdir -p /mnt/ur0
+    if ! mountpoint -q /mnt/ur0 2>/dev/null; then
+        for ur_dev in /dev/vita/ur0 /dev/mmcblk0p12; do
+            if [ -b "$ur_dev" ]; then
+                mount -t exfat -o rw "$ur_dev" /mnt/ur0 2>/dev/null || \
+                mount -t vfat -o rw "$ur_dev" /mnt/ur0 2>/dev/null || \
+                mount "$ur_dev" /mnt/ur0 2>/dev/null || true
+                break
+            fi
+        done
+    fi
+}
+
+# Mount removable SD card / memory card (/mnt/ux0) if available
+ensure_ux0_mounted() {
+    mkdir -p /mnt/ux0
+    if ! mountpoint -q /mnt/ux0 2>/dev/null; then
+        for dev in /dev/mmcblk1p1 /dev/mmcblk1 /dev/mmcblk2p1 /dev/mmcblk2; do
+            if [ -b "$dev" ]; then
+                mount -t exfat -o rw "$dev" /mnt/ux0 2>/dev/null || \
+                mount -t vfat -o rw "$dev" /mnt/ux0 2>/dev/null || \
+                mount -t ext4 -o rw "$dev" /mnt/ux0 2>/dev/null || \
+                mount "$dev" /mnt/ux0 2>/dev/null || true
+                break
+            fi
+        done
+    fi
+}
+
+detect_hardware_model() {
+    if [ -f /proc/device-tree/model ]; then
+        MODEL_STR=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null)
+        case "$MODEL_STR" in
+            *1000*|*OLED*|*oled*)
+                echo "PS Vita 1000 (Fat / OLED Samsung AMS387VB01)"
+                return
+                ;;
+            *2000*|*LCD*|*lcd*|*Slim*|*slim*)
+                echo "PS Vita 2000 (Slim / LCD with Dynamic Backlight)"
+                return
+                ;;
+            *TV*|*tv*|*Dolce*|*dolce*)
+                echo "PlayStation TV / PS Vita TV (Dolce HDMI Output)"
+                return
+                ;;
+            *)
+                echo "$MODEL_STR"
+                return
+                ;;
+        esac
+    fi
+    echo "PlayStation Vita (Generic ARMv7 Cortex-A9)"
+}
+
+get_wireless_iface() {
+    if [ -e "/sys/class/net/mlan0" ] || ip link show mlan0 >/dev/null 2>&1; then
+        echo "mlan0"
+        return 0
+    fi
+    if [ -e "/sys/class/net/wlan0" ] || ip link show wlan0 >/dev/null 2>&1; then
+        echo "wlan0"
+        return 0
+    fi
+    for dev in /sys/class/net/*; do
+        [ -e "$dev" ] || continue
+        name="${dev##*/}"
+        [ "$name" = "lo" ] && continue
+        if [ -e "$dev/phy80211" ] || [ -e "$dev/wireless" ]; then
+            echo "$name"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Redact sensitive Wi-Fi passwords from configuration dumps
+sanitize_wpa_conf() {
+    sed -E \
+        -e 's/(psk=[[:space:]]*)"[^"]+"/\1"[REDACTED_FOR_PRIVACY]"/g' \
+        -e 's/(psk=[[:space:]]*)[0-9a-fA-F]{64}/\1[REDACTED_FOR_PRIVACY]/g' \
+        -e 's/(password=[[:space:]]*)"[^"]+"/\1"[REDACTED_FOR_PRIVACY]"/g' \
+        -e 's/(wep_key[0-9]*=[[:space:]]*)"[^"]+"/\1"[REDACTED_FOR_PRIVACY]"/g'
+}
+
+MODE="all"
+case "${1:-}" in
+    --wifi|wifi)
+        MODE="wifi"
+        ;;
+    --storage|storage)
+        MODE="storage"
+        ;;
+    --view|view)
+        view_last_report
+        ;;
+    --full|full)
+        MODE="full"
+        ;;
+    --help|-h|help)
+        show_help
+        ;;
+esac
+
+echo_msg "${C_CYAN}================================================================${C_RESET}"
+echo_msg "${C_BOLD}   PlayStation Vita Linux Diagnostic Program v${TOOL_VERSION}${C_RESET}"
+echo_msg "${C_CYAN}================================================================${C_RESET}"
+
+mkdir -p "$STAGE_DIR"
+MAIN_REPORT="$STAGE_DIR/diagnostics.txt"
+
+# Make sure internal ur0 is mounted so logs can always be saved
+ensure_ur0_mounted
+ensure_ux0_mounted
+
+# Output header to main report
+{
+    echo "================================================================================"
+    echo " LinuxOnVita Diagnostic & Telemetry Report"
+    echo " Generated: $(date 2>/dev/null || echo 'Unknown Date')"
+    echo " Hostname:  $(hostname 2>/dev/null || echo 'vita')"
+    echo " Uptime:    $(uptime 2>/dev/null || echo 'Unknown')"
+    echo "================================================================================"
+    echo ""
+} > "$MAIN_REPORT"
+
+# -----------------------------------------------------------------------------
+# Section 1: System Hardware & Kernel
+# -----------------------------------------------------------------------------
+echo_msg "${C_YELLOW}[1/6] Probing System Hardware & Kernel...${C_RESET}"
+
+HW_MODEL=$(detect_hardware_model)
+KERNEL_VER=$(uname -a)
+CPU_CORES=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null || echo "1")
+CPU_MODEL=$(awk -F': ' '/model name/ {print $2; exit}' /proc/cpuinfo 2>/dev/null)
+[ -z "$CPU_MODEL" ] && CPU_MODEL="ARMv7 Processor rev 4 (v7l) Cortex-A9 MPCore"
+
+FB_RES="Unknown"
+if [ -f /sys/class/graphics/fb0/virtual_size ]; then
+    FB_RES=$(cat /sys/class/graphics/fb0/virtual_size 2>/dev/null)
+elif command -v fbset >/dev/null 2>&1; then
+    FB_RES=$(fbset | awk '/geometry/ {print $2 "x" $3}' 2>/dev/null)
+fi
+
+{
+    echo "=== SECTION 1: SYSTEM HARDWARE & KERNEL ==="
+    echo "Hardware Model:     $HW_MODEL"
+    echo "Kernel Version:     $KERNEL_VER"
+    echo "CPU Architecture:   $CPU_MODEL ($CPU_CORES cores online)"
+    echo "Framebuffer /dev/fb0: Resolution $FB_RES"
+    if [ -f /proc/device-tree/compatible ]; then
+        echo -n "Device Tree Comp:   "
+        tr '\0' ' ' < /proc/device-tree/compatible 2>/dev/null || true
+        echo ""
+    fi
+    echo ""
+} >> "$MAIN_REPORT"
+
+# -----------------------------------------------------------------------------
+# Section 2: Storage & Partition Diagnostics (SD Card Diagnosis)
+# -----------------------------------------------------------------------------
+echo_msg "${C_YELLOW}[2/6] Inspecting Storage & SD Card Controllers...${C_RESET}"
+
+UX0_STATUS="NOT MOUNTED"
+UX0_DEV=""
+UX0_FS=""
+UX0_TOTAL=""
+UX0_FREE=""
+
+if mountpoint -q /mnt/ux0 2>/dev/null; then
+    UX0_STATUS="MOUNTED"
+    UX0_DEV=$(grep ' /mnt/ux0 ' /proc/mounts 2>/dev/null | awk '{print $1}')
+    UX0_FS=$(grep ' /mnt/ux0 ' /proc/mounts 2>/dev/null | awk '{print $3}')
+    UX0_TOTAL=$(df -h /mnt/ux0 2>/dev/null | awk 'NR==2 {print $2}')
+    UX0_FREE=$(df -h /mnt/ux0 2>/dev/null | awk 'NR==2 {print $4}')
+fi
+
+UR0_STATUS="NOT MOUNTED"
+UR0_TOTAL=""
+UR0_FREE=""
+if mountpoint -q /mnt/ur0 2>/dev/null; then
+    UR0_STATUS="MOUNTED"
+    UR0_TOTAL=$(df -h /mnt/ur0 2>/dev/null | awk 'NR==2 {print $2}')
+    UR0_FREE=$(df -h /mnt/ur0 2>/dev/null | awk 'NR==2 {print $4}')
+fi
+
+# Detect all MMC block devices and partitions
+MMC_DEVS=$(ls /dev/mmcblk* 2>/dev/null || true)
+CANDIDATE_DEVS=""
+for cand in /dev/mmcblk1p1 /dev/mmcblk1 /dev/mmcblk2p1 /dev/mmcblk2 /dev/sda1 /dev/sda; do
+    if [ -b "$cand" ]; then
+        CANDIDATE_DEVS="${CANDIDATE_DEVS} $cand"
+    fi
+done
+
+# Perform safe read-only probe mounts if ux0 is unmounted
+PROBE_ANALYSIS=""
+if [ "$UX0_STATUS" != "MOUNTED" ]; then
+    if [ -n "$CANDIDATE_DEVS" ]; then
+        PROBE_ANALYSIS="Candidate storage devices detected:${CANDIDATE_DEVS}\n"
+        for cand in $CANDIDATE_DEVS; do
+            mkdir -p /tmp/.diag_probe_mnt
+            FOUND_FS=""
+            for fstype in exfat vfat ext4 ext2; do
+                if mount -t "$fstype" -o ro "$cand" /tmp/.diag_probe_mnt 2>/dev/null; then
+                    FOUND_FS="$fstype"
+                    umount /tmp/.diag_probe_mnt 2>/dev/null || true
+                    break
+                fi
+            done
+            rmdir /tmp/.diag_probe_mnt 2>/dev/null || true
+
+            if [ -n "$FOUND_FS" ]; then
+                PROBE_ANALYSIS="${PROBE_ANALYSIS}  * [PROBE SUCCESS] $cand contains a valid $FOUND_FS filesystem!\n"
+                PROBE_ANALYSIS="${PROBE_ANALYSIS}    Recommended manual fix: mount -t $FOUND_FS $cand /mnt/ux0\n"
+            else
+                PROBE_ANALYSIS="${PROBE_ANALYSIS}  * [PROBE FAILED] $cand exists but could not be mounted with exfat, vfat, or ext4.\n"
+                PROBE_ANALYSIS="${PROBE_ANALYSIS}    Check if the card is formatted with FAT32/exFAT, or if partition table is corrupted.\n"
+            fi
+        done
+    else
+        PROBE_ANALYSIS="No SD card block devices (/dev/mmcblk1 or mmcblk2) detected by Linux kernel.\n"
+        PROBE_ANALYSIS="${PROBE_ANALYSIS}Possible causes:\n"
+        PROBE_ANALYSIS="${PROBE_ANALYSIS}  1. SD2Vita adapter contacts dirty or card not fully inserted.\n"
+        PROBE_ANALYSIS="${PROBE_ANALYSIS}  2. Hardware defect in the SD2Vita game-card adapter.\n"
+        PROBE_ANALYSIS="${PROBE_ANALYSIS}  3. Official Sony Memory Card driver did not initialize or slot is empty.\n"
+    fi
+fi
+
+# Kernel MMC/SD error messages from dmesg
+MMC_DMESG=$(dmesg 2>/dev/null | grep -i -E "mmc[0-9]|sdhci|msif|bad.*partition|unknown.*partition|corrupt|timeout|crc error" | tail -n 25 || true)
+
+{
+    echo "=== SECTION 2: STORAGE & SD CARD DIAGNOSTICS ==="
+    echo "ux0 (SD2Vita / Memory Card): $UX0_STATUS"
+    if [ "$UX0_STATUS" = "MOUNTED" ]; then
+        echo "  - Device:      $UX0_DEV"
+        echo "  - Filesystem:  $UX0_FS"
+        echo "  - Total Size:  $UX0_TOTAL (Free: $UX0_FREE)"
+    else
+        echo "  - WARNING: /mnt/ux0 is not mounted!"
+    fi
+    echo ""
+    echo "ur0 (Internal eMMC Partition 12): $UR0_STATUS"
+    if [ "$UR0_STATUS" = "MOUNTED" ]; then
+        echo "  - Total Size:  $UR0_TOTAL (Free: $UR0_FREE)"
+    fi
+    echo ""
+    echo "--- Detected Block Devices (/dev/mmcblk*) ---"
+    ls -la /dev/mmcblk* 2>/dev/null || echo "None found"
+    echo ""
+    echo "--- Partition Table (/proc/partitions) ---"
+    cat /proc/partitions 2>/dev/null || echo "None found"
+    echo ""
+    echo "--- Currently Mounted Filesystems ---"
+    mount 2>/dev/null || cat /proc/mounts 2>/dev/null || true
+    echo ""
+    echo "--- Storage Utilization (df -h) ---"
+    df -h 2>/dev/null || true
+    echo ""
+    if [ -n "$PROBE_ANALYSIS" ]; then
+        echo "--- Unmounted SD Card Probe Analysis ---"
+        echo_msg "$PROBE_ANALYSIS"
+        echo ""
+    fi
+    if [ -n "$MMC_DMESG" ]; then
+        echo "--- Kernel Storage Messages (dmesg) ---"
+        echo "$MMC_DMESG"
+        echo ""
+    fi
+} >> "$MAIN_REPORT"
+
+# -----------------------------------------------------------------------------
+# Section 3: Wi-Fi & Wireless Subsystem (Wi-Fi Diagnosis)
+# -----------------------------------------------------------------------------
+echo_msg "${C_YELLOW}[3/6] Diagnosing Wi-Fi & Network Subsystem...${C_RESET}"
+
+WIFI_IFACE=$(get_wireless_iface || echo "")
+WIFI_STATE="NOT DETECTED"
+WIFI_MAC=""
+WIFI_CARRIER="0"
+WIFI_IP=""
+WIFI_GATEWAY=""
+WPA_STATUS=""
+WPA_PID=""
+
+if [ -n "$WIFI_IFACE" ]; then
+    WIFI_STATE="INTERFACE FOUND ($WIFI_IFACE)"
+    WIFI_MAC=$(cat "/sys/class/net/$WIFI_IFACE/address" 2>/dev/null || echo "Unknown")
+    WIFI_CARRIER=$(cat "/sys/class/net/$WIFI_IFACE/carrier" 2>/dev/null || echo "0")
+    WIFI_IP=$(ip -4 addr show "$WIFI_IFACE" 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2 || true)
+    WIFI_GATEWAY=$(ip route show 2>/dev/null | awk '/default/ {print $3}' | head -n 1 || true)
+fi
+
+WPA_PID=$(pidof wpa_supplicant 2>/dev/null || true)
+
+# Query wpa_cli if active
+WPA_CLI_OUTPUT=""
+WPA_WIFI_STATE=""
+WPA_SSID=""
+WPA_BSSID=""
+if [ -n "$WIFI_IFACE" ] && [ -n "$WPA_PID" ] && [ -e "/var/run/wpa_supplicant/$WIFI_IFACE" ]; then
+    WPA_CLI_OUTPUT=$(wpa_cli -i "$WIFI_IFACE" status 2>/dev/null || true)
+    WPA_WIFI_STATE=$(echo "$WPA_CLI_OUTPUT" | awk -F'=' '/wpa_state=/ {print $2}')
+    WPA_SSID=$(echo "$WPA_CLI_OUTPUT" | awk -F'=' '/^ssid=/ {print $2}')
+    WPA_BSSID=$(echo "$WPA_CLI_OUTPUT" | awk -F'=' '/^bssid=/ {print $2}')
+fi
+
+# Run an active Wi-Fi scan test
+SCAN_RESULTS=""
+if [ -n "$WIFI_IFACE" ] && [ -n "$WPA_PID" ]; then
+    wpa_cli -i "$WIFI_IFACE" scan >/dev/null 2>&1 || true
+    sleep 2
+    SCAN_RESULTS=$(wpa_cli -i "$WIFI_IFACE" scan_results 2>/dev/null | head -n 12 || true)
+fi
+
+# Firmware check
+FW_BIN="/lib/firmware/mrvl/sd8787_uapsta.bin"
+FW_STATUS="MISSING"
+if [ -f "$FW_BIN" ]; then
+    FW_SIZE=$(ls -lh "$FW_BIN" 2>/dev/null | awk '{print $5}')
+    FW_STATUS="PRESENT ($FW_SIZE)"
+fi
+
+REG_DB="/lib/firmware/regulatory.db"
+REG_STATUS="MISSING"
+[ -f "$REG_DB" ] && REG_STATUS="PRESENT"
+
+# Grep dmesg for mwifiex logs
+MWIFIEX_DMESG=$(dmesg 2>/dev/null | grep -i -E "mwifiex|marvell|firmware: direct-loading|mlan" | tail -n 25 || true)
+
+# Connectivity ping test (if IP & Gateway exist)
+PING_GW="SKIPPED"
+PING_INET="SKIPPED"
+PING_DNS="SKIPPED"
+if [ -n "$WIFI_IP" ] && [ -n "$WIFI_GATEWAY" ]; then
+    if ping -c 1 -W 2 "$WIFI_GATEWAY" >/dev/null 2>&1; then
+        PING_GW="SUCCESS"
+    else
+        PING_GW="FAILED"
+    fi
+    if ping -c 1 -W 2 1.1.1.1 >/dev/null 2>&1; then
+        PING_INET="SUCCESS (1.1.1.1 reachable)"
+    else
+        PING_INET="FAILED (1.1.1.1 unreachable)"
+    fi
+    if ping -c 1 -W 2 github.com >/dev/null 2>&1; then
+        PING_DNS="SUCCESS (github.com resolved)"
+    else
+        PING_DNS="FAILED or DNS resolution error"
+    fi
+fi
+
+# Locate and sanitize wpa_supplicant config files
+WPA_CONF_FOUND=""
+for conf_path in \
+    /mnt/ux0/linux/wpa_supplicant.conf \
+    /mnt/xmc0/linux/wpa_supplicant.conf \
+    /mnt/uma0/linux/wpa_supplicant.conf \
+    /mnt/ur0/wpa_supplicant.conf \
+    /etc/wpa_supplicant.conf; do
+    if [ -f "$conf_path" ]; then
+        WPA_CONF_FOUND="$conf_path"
+        break
+    fi
+done
+
+{
+    echo "=== SECTION 3: WI-FI & WIRELESS DIAGNOSTICS ==="
+    echo "Wireless Interface:     ${WIFI_IFACE:-None detected}"
+    echo "Interface Status:       $WIFI_STATE"
+    echo "MAC Address:            ${WIFI_MAC:-N/A}"
+    echo "Carrier (Associated):   $([ "$WIFI_CARRIER" = "1" ] && echo "YES (Connected to AP)" || echo "NO (Carrier Down)")"
+    echo "IP Address:             ${WIFI_IP:-None (DHCP pending or failed)}"
+    echo "Default Gateway:        ${WIFI_GATEWAY:-None}"
+    echo "wpa_supplicant Daemon:  $([ -n "$WPA_PID" ] && echo "RUNNING (PID: $WPA_PID)" || echo "STOPPED")"
+    echo "wpa_state:              ${WPA_WIFI_STATE:-N/A}"
+    echo "Connected SSID:         ${WPA_SSID:-N/A}"
+    echo "Connected BSSID:        ${WPA_BSSID:-N/A}"
+    echo "Marvell Firmware:       $FW_STATUS"
+    echo "Regulatory Database:    $REG_STATUS"
+    echo ""
+    echo "--- Network Connectivity Probes ---"
+    echo "Gateway Ping:           $PING_GW"
+    echo "Internet Ping:          $PING_INET"
+    echo "DNS Resolution:         $PING_DNS"
+    echo ""
+
+    if [ -n "$WPA_CONF_FOUND" ]; then
+        echo "--- Active Configuration: $WPA_CONF_FOUND (PASSWORDS REDACTED) ---"
+        sanitize_wpa_conf < "$WPA_CONF_FOUND" 2>/dev/null || true
+        echo ""
+        if grep -Eq "YourWiFiNetworkName|YourWiFiSSID" "$WPA_CONF_FOUND" 2>/dev/null; then
+            echo "NOTICE: Configuration contains default template placeholder SSID."
+            echo "Connect using: vita-wifi connect <SSID> [PASS]"
+            echo ""
+        fi
+    else
+        echo "--- Wi-Fi Configuration File ---"
+        echo "No wpa_supplicant.conf found on storage or /etc."
+        echo ""
+    fi
+
+    if [ -n "$SCAN_RESULTS" ]; then
+        echo "--- Live 2.4GHz Wi-Fi Scan Results ---"
+        echo "$SCAN_RESULTS"
+        echo ""
+    fi
+
+    if [ -f /tmp/wifi.log ]; then
+        echo "--- Wi-Fi Daemon Boot Log (/tmp/wifi.log) ---"
+        cat /tmp/wifi.log 2>/dev/null || true
+        echo ""
+    fi
+
+    if [ -n "$MWIFIEX_DMESG" ]; then
+        echo "--- Kernel Wi-Fi Messages (dmesg) ---"
+        echo "$MWIFIEX_DMESG"
+        echo ""
+    fi
+
+    echo "--- Wi-Fi Troubleshooting Advice ---"
+    if [ "$WIFI_CARRIER" != "1" ]; then
+        if [ "$WPA_WIFI_STATE" = "4WAY_HANDSHAKE" ]; then
+            echo "  * 4WAY_HANDSHAKE: Authentication failed. Verify that your Wi-Fi password is correct."
+        elif [ "$WPA_WIFI_STATE" = "SCANNING" ]; then
+            echo "  * SCANNING: Unable to find wireless network. Ensure network is 2.4GHz (Vita hardware"
+            echo "    does NOT support 5GHz Wi-Fi) and is broadcasting on channels 1-13."
+        fi
+    fi
+    echo ""
+} >> "$MAIN_REPORT"
+
+# -----------------------------------------------------------------------------
+# Section 4: Memory, Swap & ZRAM
+# -----------------------------------------------------------------------------
+echo_msg "${C_YELLOW}[4/6] Checking Memory, Swap & ZRAM...${C_RESET}"
+
+{
+    echo "=== SECTION 4: MEMORY, SWAP & ZRAM ==="
+    free -m 2>/dev/null || cat /proc/meminfo 2>/dev/null || true
+    echo ""
+    echo "--- Active Swap Spaces (/proc/swaps) ---"
+    cat /proc/swaps 2>/dev/null || true
+    echo ""
+    if [ -e /sys/block/zram0 ]; then
+        echo "--- ZRAM Compressed Memory Pool ---"
+        echo "Disk Size:    $(( $(cat /sys/block/zram0/disksize 2>/dev/null || echo 0) / 1048576 )) MB"
+        echo "Algorithm:    $(cat /sys/block/zram0/comp_algorithm 2>/dev/null || echo 'unknown')"
+        if [ -f /sys/block/zram0/mm_stat ]; then
+            echo "Stats (orig, compr, mem_used, max_used): $(cat /sys/block/zram0/mm_stat 2>/dev/null)"
+        fi
+        echo ""
+    fi
+} >> "$MAIN_REPORT"
+
+# -----------------------------------------------------------------------------
+# Section 5: Input & Console Telemetry
+# -----------------------------------------------------------------------------
+echo_msg "${C_YELLOW}[5/6] Collecting Input & Console Telemetry...${C_RESET}"
+
+INPUT_MAPPER_PID=$(pidof vita-input-mapper 2>/dev/null || true)
+KEYBOARD_PID=$(pidof fbkeyboard 2>/dev/null || true)
+
+{
+    echo "=== SECTION 5: INPUT & CONSOLE SUBSYSTEM ==="
+    echo "vita-input-mapper: $([ -n "$INPUT_MAPPER_PID" ] && echo "RUNNING (PID: $INPUT_MAPPER_PID)" || echo "NOT RUNNING")"
+    echo "fbkeyboard:        $([ -n "$KEYBOARD_PID" ] && echo "RUNNING (PID: $KEYBOARD_PID)" || echo "NOT RUNNING")"
+    echo ""
+    echo "--- Input Devices (/proc/bus/input/devices) ---"
+    cat /proc/bus/input/devices 2>/dev/null || true
+    echo ""
+    echo "--- Input Device Nodes (/dev/input) ---"
+    ls -la /dev/input 2>/dev/null || true
+    echo ""
+    if [ -f /tmp/vita-input-mapper.log ]; then
+        echo "--- vita-input-mapper Log (/tmp/vita-input-mapper.log) ---"
+        cat /tmp/vita-input-mapper.log 2>/dev/null || true
+        echo ""
+    fi
+    if [ -f /tmp/fbkeyboard.log ]; then
+        echo "--- fbkeyboard Log (/tmp/fbkeyboard.log) ---"
+        cat /tmp/fbkeyboard.log 2>/dev/null || true
+        echo ""
+    fi
+} >> "$MAIN_REPORT"
+
+# -----------------------------------------------------------------------------
+# Section 6: Kernel Ring Buffer & Boot Logs
+# -----------------------------------------------------------------------------
+echo_msg "${C_YELLOW}[6/6] Gathering Kernel Ring Buffer & Boot Logs...${C_RESET}"
+
+dmesg > "$STAGE_DIR/dmesg.txt" 2>/dev/null || true
+[ -f /tmp/wifi.log ] && cp /tmp/wifi.log "$STAGE_DIR/wifi.log" 2>/dev/null || true
+[ -f /tmp/boot.log ] && cp /tmp/boot.log "$STAGE_DIR/boot.log" 2>/dev/null || true
+ps -ef > "$STAGE_DIR/processes.txt" 2>/dev/null || ps > "$STAGE_DIR/processes.txt" 2>/dev/null || true
+cat /proc/partitions > "$STAGE_DIR/partitions.txt" 2>/dev/null || true
+cat /proc/mounts > "$STAGE_DIR/mounts.txt" 2>/dev/null || true
+cat /proc/meminfo > "$STAGE_DIR/meminfo.txt" 2>/dev/null || true
+cat /proc/cpuinfo > "$STAGE_DIR/cpuinfo.txt" 2>/dev/null || true
+ip addr show > "$STAGE_DIR/network_interfaces.txt" 2>/dev/null || true
+ip route show > "$STAGE_DIR/ip_route.txt" 2>/dev/null || true
+[ -f /etc/resolv.conf ] && cp /etc/resolv.conf "$STAGE_DIR/resolv.conf" 2>/dev/null || true
+
+{
+    echo "=== SECTION 6: KERNEL RING BUFFER (dmesg) ==="
+    dmesg 2>/dev/null || true
+    echo ""
+    if [ -f /tmp/boot.log ]; then
+        echo "=== SECTION 7: BOOT LOGGER SNAPSHOT (/tmp/boot.log) ==="
+        cat /tmp/boot.log 2>/dev/null || true
+        echo ""
+    fi
+    echo "=== SECTION 8: RUNNING PROCESS TABLE ==="
+    ps -ef 2>/dev/null || ps 2>/dev/null || true
+    echo ""
+} >> "$MAIN_REPORT"
+
+# -----------------------------------------------------------------------------
+# Packaging: Write to all accessible storage targets
+# -----------------------------------------------------------------------------
+SAVED_REPORT_PATHS=""
+SAVED_ARCHIVE_PATHS=""
+
+# Create tarball bundle in staging
+(
+    cd "$STAGE_DIR"
+    tar -czf "$ARCHIVE_NAME" ./* 2>/dev/null || true
+)
+
+# 1. Save to /tmp (always available)
+cp "$MAIN_REPORT" "/tmp/$REPORT_NAME" 2>/dev/null || true
+[ -f "$STAGE_DIR/$ARCHIVE_NAME" ] && cp "$STAGE_DIR/$ARCHIVE_NAME" "/tmp/$ARCHIVE_NAME" 2>/dev/null || true
+SAVED_REPORT_PATHS="/tmp/$REPORT_NAME"
+SAVED_ARCHIVE_PATHS="/tmp/$ARCHIVE_NAME"
+
+# 2. Save to internal eMMC /mnt/ur0 (GUARANTEED accessible in VitaOS via VitaShell ur0:)
+if mountpoint -q /mnt/ur0 2>/dev/null; then
+    cp "$MAIN_REPORT" "/mnt/ur0/$REPORT_NAME" 2>/dev/null || true
+    [ -f "$STAGE_DIR/$ARCHIVE_NAME" ] && cp "$STAGE_DIR/$ARCHIVE_NAME" "/mnt/ur0/$ARCHIVE_NAME" 2>/dev/null || true
+    SAVED_REPORT_PATHS="${SAVED_REPORT_PATHS}  ur0:$REPORT_NAME (/mnt/ur0/$REPORT_NAME)\n"
+    SAVED_ARCHIVE_PATHS="${SAVED_ARCHIVE_PATHS}  ur0:$ARCHIVE_NAME (/mnt/ur0/$ARCHIVE_NAME)\n"
+fi
+
+# 3. Save to SD2Vita / Memory Card /mnt/ux0 (accessible in VitaOS via VitaShell ux0:)
+if mountpoint -q /mnt/ux0 2>/dev/null; then
+    mkdir -p /mnt/ux0/linux/diagnostics 2>/dev/null || true
+    cp "$MAIN_REPORT" "/mnt/ux0/$REPORT_NAME" 2>/dev/null || true
+    cp "$MAIN_REPORT" "/mnt/ux0/linux/diagnostics/$REPORT_NAME" 2>/dev/null || true
+    [ -f "$STAGE_DIR/$ARCHIVE_NAME" ] && cp "$STAGE_DIR/$ARCHIVE_NAME" "/mnt/ux0/$ARCHIVE_NAME" 2>/dev/null || true
+    SAVED_REPORT_PATHS="${SAVED_REPORT_PATHS}  ux0:$REPORT_NAME (/mnt/ux0/$REPORT_NAME)\n"
+    SAVED_ARCHIVE_PATHS="${SAVED_ARCHIVE_PATHS}  ux0:$ARCHIVE_NAME (/mnt/ux0/$ARCHIVE_NAME)\n"
+fi
+
+# 4. Save to xmc0 or uma0 if mounted
+for alt_mnt in /mnt/xmc0 /mnt/uma0; do
+    if mountpoint -q "$alt_mnt" 2>/dev/null; then
+        cp "$MAIN_REPORT" "$alt_mnt/$REPORT_NAME" 2>/dev/null || true
+        [ -f "$STAGE_DIR/$ARCHIVE_NAME" ] && cp "$STAGE_DIR/$ARCHIVE_NAME" "$alt_mnt/$ARCHIVE_NAME" 2>/dev/null || true
+        alt_name="${alt_mnt##/mnt/}:"
+        SAVED_REPORT_PATHS="${SAVED_REPORT_PATHS}  ${alt_name}$REPORT_NAME ($alt_mnt/$REPORT_NAME)\n"
+    fi
+done
+
+# Flush flash memory buffers
+sync
+
+# Handle specific display modes
+if [ "$MODE" = "full" ]; then
+    cat "$MAIN_REPORT"
+    echo ""
+elif [ "$MODE" = "wifi" ]; then
+    echo ""
+    echo_msg "${C_CYAN}--- Focused Wi-Fi Diagnostics ---${C_RESET}"
+    echo "Interface:  ${WIFI_IFACE:-None detected}"
+    echo "Carrier:    $([ "$WIFI_CARRIER" = "1" ] && echo_msg "${C_GREEN}Associated${C_RESET}" || echo_msg "${C_RED}No Carrier / Disconnected${C_RESET}")"
+    echo "IP Address: ${WIFI_IP:-None}"
+    echo "Gateway:    ${WIFI_GATEWAY:-None}"
+    echo "wpa_state:  ${WPA_WIFI_STATE:-N/A}"
+    echo "Gateway:    $PING_GW"
+    echo "Internet:   $PING_INET"
+    echo "DNS:        $PING_DNS"
+    if [ -n "$SCAN_RESULTS" ]; then
+        echo ""
+        echo "Detected 2.4GHz Networks:"
+        echo "$SCAN_RESULTS"
+    fi
+    echo ""
+elif [ "$MODE" = "storage" ]; then
+    echo ""
+    echo_msg "${C_CYAN}--- Focused Storage & SD Card Diagnostics ---${C_RESET}"
+    echo "ux0 (SD Card): $([ "$UX0_STATUS" = "MOUNTED" ] && echo_msg "${C_GREEN}MOUNTED ($UX0_DEV on /mnt/ux0, $UX0_FS, Free: $UX0_FREE)${C_RESET}" || echo_msg "${C_RED}NOT MOUNTED${C_RESET}")"
+    echo "ur0 (Internal): $([ "$UR0_STATUS" = "MOUNTED" ] && echo_msg "${C_GREEN}MOUNTED (Free: $UR0_FREE)${C_RESET}" || echo_msg "${C_YELLOW}NOT MOUNTED${C_RESET}")"
+    if [ -n "$PROBE_ANALYSIS" ]; then
+        echo ""
+        echo_msg "$PROBE_ANALYSIS"
+    fi
+    echo ""
+fi
+
+# Print on-screen completion summary box
+echo_msg "${C_GREEN}================================================================${C_RESET}"
+echo_msg "${C_BOLD}   Diagnostic Data Collection Complete!${C_RESET}"
+echo_msg "${C_GREEN}================================================================${C_RESET}"
+echo_msg " Hardware:      $HW_MODEL"
+echo_msg " Kernel:        $(uname -r)"
+
+if [ "$UX0_STATUS" = "MOUNTED" ]; then
+    echo_msg " SD Card (ux0): ${C_GREEN}[MOUNTED]${C_RESET} $UX0_DEV ($UX0_FS, Free: $UX0_FREE)"
+else
+    echo_msg " SD Card (ux0): ${C_RED}[NOT MOUNTED]${C_RESET} Check SD2Vita adapter or partition table!"
+fi
+
+if [ "$WIFI_CARRIER" = "1" ] && [ -n "$WIFI_IP" ]; then
+    echo_msg " Wi-Fi Network: ${C_GREEN}[CONNECTED]${C_RESET} IP $WIFI_IP (SSID: $WPA_SSID)"
+elif [ -n "$WIFI_IFACE" ]; then
+    echo_msg " Wi-Fi Network: ${C_YELLOW}[NOT CONNECTED]${C_RESET} wpa_state: ${WPA_WIFI_STATE:-DISCONNECTED}"
+else
+    echo_msg " Wi-Fi Network: ${C_RED}[HARDWARE NOT DETECTED]${C_RESET}"
+fi
+
+echo ""
+echo_msg "${C_BOLD}Diagnostic Report Files Saved:${C_RESET}"
+echo_msg "$SAVED_REPORT_PATHS"
+
+if [ -n "$SAVED_ARCHIVE_PATHS" ]; then
+    echo_msg "${C_BOLD}Full Diagnostic Archives (.tar.gz):${C_RESET}"
+    echo_msg "$SAVED_ARCHIVE_PATHS"
+fi
+
+echo_msg "${C_CYAN}----------------------------------------------------------------${C_RESET}"
+echo_msg "${C_BOLD}How to send these logs for assistance:${C_RESET}"
+echo_msg "  1. Type '${C_CYAN}reboot${C_RESET}' and press Enter to return to VitaOS."
+echo_msg "  2. Open ${C_BOLD}VitaShell${C_RESET} from the LiveArea home screen."
+if [ "$UX0_STATUS" = "MOUNTED" ]; then
+    echo_msg "  3. Navigate to ${C_BOLD}ux0:${C_RESET} and locate ${C_CYAN}vita-diagnostics.txt${C_RESET}."
+else
+    echo_msg "  3. Because your SD card failed to mount, navigate to ${C_BOLD}ur0:${C_RESET}"
+    echo_msg "     (internal memory) and locate ${C_CYAN}vita-diagnostics.txt${C_RESET}."
+fi
+echo_msg "  4. Press ${C_BOLD}SELECT${C_RESET} in VitaShell to connect via USB (or FTP)."
+echo_msg "  5. Copy ${C_CYAN}vita-diagnostics.txt${C_RESET} to your PC and send it via"
+echo_msg "     GitHub issues or Discord to DevWithZachary!"
+echo_msg "${C_GREEN}================================================================${C_RESET}"

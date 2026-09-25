@@ -560,19 +560,16 @@ int main(int argc, char *argv[]) {
     psvDebugScreenSetFgColor(COLOR_CYAN);
     printf("========================================================\n");
     printf(" PlayStation Vita Linux Bootstrapper & Installer\n");
-    printf(" Project LinuxOnVita (v1.2.0)\n");
+    printf(" Project LinuxOnVita (v1.3.0)\n");
     printf("========================================================\n");
     psvDebugScreenSetFgColor(COLOR_WHITE);
     printf(" Port by xerpi, CreepNT, DvaMishkiLapa, DevWithZachary\n\n");
 
-    /* Critical hardware requirement notice (<= 56 chars/line) */
+    /* Hardware requirement notice */
     psvDebugScreenSetFgColor(COLOR_YELLOW);
-    printf(" [!] SONY MEMORY CARD REQUIRED (MSIF HARDWARE)\n");
+    printf(" [!] Sony Memory Card Required (MSIF) - cannot boot from SD2Vita\n");
     psvDebugScreenSetFgColor(COLOR_WHITE);
-    printf(" Linux CANNOT boot from SD2Vita or internal storage.\n");
-    printf(" Boot files MUST be installed on your Sony memory card!\n");
-    printf(" - SD2Vita as ux0: Sony card is usually xmc0: or uma0:\n");
-    printf(" - Standard Vita:  Sony card is ux0:\n\n");
+    printf("     Target must be Sony card (ux0: on standard, xmc0:/uma0: on SD2Vita)\n\n");
 
     /* Storage mounts display (<= 54 chars/line) */
     printf(" Storage Partitions (Target: %s ", target_mount);
