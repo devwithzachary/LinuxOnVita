@@ -37,6 +37,9 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Automatically initializes a high-priority (100) 256MB compressed ZRAM swap pool on boot in `S00mount`, expanding usable RAM to ~768MB - 1GB with near-zero latency to eliminate Out-Of-Memory (OOM) crashes during heavy package installations or compilation.
   - Added support for physical swapfiles on SD card or internal storage (`/mnt/ux0/swapfile`), automatically mounted at boot-time with secondary priority (10).
   - Created `vita-swap` CLI utility for inspecting memory telemetry, creating formatted swapfiles with contiguous blocks, resizing ZRAM on the fly, and persisting auto-mount configurations in `/etc/vita-swap.conf` and `/etc/vita-zram.conf`.
+- **Comprehensive User Guide (`USER_GUIDE.md`):**
+  - Authored an in-depth end-user manual covering console navigation, touchscreen keyboard usage, physical gamepad shortcuts, built-in system tools (`vita-wifi`, `vita-brightness`, `vita-swap`, `vita-doom`), remote SSH workflows, and real-world software installations in Alpine Linux (from micro web servers and network utilities to native C compilation).
+  - Streamlined `README.md` to focus on distribution overview, hardware support matrix, quick installation, and source build instructions.
 
 ---
 
