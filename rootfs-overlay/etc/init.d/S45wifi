@@ -90,8 +90,14 @@ start)
                     echo "$BANNER" > /dev/tty1 2>/dev/null || true
                     echo "$BANNER" > /dev/kmsg 2>/dev/null || true
                     logger -t wifi "$IFACE connected with IP $IP"
-                    # Ensure SSH daemon is active on the new interface
-                    /etc/init.d/S50sshd restart 2>/dev/null || /usr/sbin/sshd 2>/dev/null || true
+                    # Ensure SSH daemon is active
+                    if ! pidof sshd >/dev/null 2>&1; then
+                        if [ -x /etc/init.d/S50sshd ]; then
+                            /etc/init.d/S50sshd start >/dev/null 2>&1 || true
+                        elif [ -x /usr/sbin/sshd ]; then
+                            /usr/sbin/sshd 2>/dev/null || true
+                        fi
+                    fi
                 else
                     echo "[WiFi] $IFACE associated. Waiting for background DHCP..."
                 fi

@@ -15,6 +15,22 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - **Privacy Protection:** Automatically redacts Wi-Fi passwords (`psk="[REDACTED_FOR_PRIVACY]"`) across all dumped configurations and logs so users can safely share reports on GitHub or Discord without exposing sensitive credentials.
   - **Multi-Target Storage Guarantee:** Saves formatted reports (`vita-diagnostics.txt`) and complete raw log tarballs (`vita-diagnostics.tar.gz`) to `/mnt/ux0/`, `/mnt/ur0/`, and `/tmp/`. By saving to internal eMMC (`ur0:`), diagnostic reports remain accessible via VitaShell even if the SD card fails to mount entirely.
 
+### Fixed
+- **Prevented Blockdev Re-Mount Errors (`Can't open blockdev`):**
+  - Resolved kernel block device errors (`/dev/vita/ur0: Can't open blockdev` and `/dev/mmcblk1: Can't open blockdev`) occurring during boot and diagnostic collection.
+  - Replaced legacy `mountpoint` commands with robust `/proc/mounts` checks across `S99bootlog`, `S05vita`, `S00mount`, `vita-diagnostics`, and `alpine-chroot`, guaranteeing partitions are never mounted repeatedly.
+- **Fixed OpenSSH Daemon Restart Failures on DHCP Connection:**
+  - Resolved OpenSSH restart failures (`FAIL`) and host key generation errors reported in `/tmp/wifi.log` when associating to Wi-Fi.
+  - Replaced intrusive daemon restarts in `S45wifi` and `vita-wifi` with non-destructive status checks (`pidof sshd`), allowing OpenSSH to seamlessly accept connections on new IP leases without dropping existing SSH sessions.
+  - Added running and stopped state safeguards to `S50sshd` with `--oknodo` to prevent spurious error logging.
+- **Eliminated Duplicate `tmpfs` and Virtual Filesystem Mounts:**
+  - Fixed duplicate `tmpfs` mounts on `/dev/shm`, `/run`, and `/tmp` in `df -h` caused by conflicting initialization in `inittab` and `S00mount`.
+  - Added `/proc/mounts` verification to `S00mount` before mounting pseudo-filesystems.
+- **Ensured Clean exFAT Unmounting & Storage Buffer Flushing on Shutdown:**
+  - Resolved `exFAT-fs: Volume was not properly unmounted` warnings on reboot.
+  - Added filesystem synchronization (`sync`) steps to `/etc/inittab` before and after service termination, swap deactivation, and filesystem unmounting.
+  - Added background logger process tracking and cleanup to `S99bootlog` to release file handles before unmount.
+
 ---
 
 ## [v1.2.0] - 2026-09-25

@@ -16,6 +16,11 @@ tty1::respawn:/sbin/getty -n -l /usr/bin/vita-login 115200 tty1
 ttyS0::respawn:/sbin/getty -n -l /bin/sh 115200 ttyS0
 
 # Actions on reboot / shutdown
+::shutdown:/bin/sync
 ::shutdown:/etc/init.d/rcK
+::shutdown:/bin/sync
 ::shutdown:/sbin/swapoff -a
+::shutdown:/bin/sync
 ::shutdown:/bin/umount -a -r
+::shutdown:/bin/sync
+

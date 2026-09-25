@@ -11,14 +11,18 @@ umask 077
 start() {
     # Ensure devpts is mounted and /dev/ptmx is accessible for SSH PTY allocation
     mkdir -p /dev/pts /var/run /var/empty
-    if ! mountpoint -q /dev/pts 2>/dev/null; then
+    if ! grep -qs ' /dev/pts ' /proc/mounts; then
         mount -t devpts devpts /dev/pts -o mode=0620,gid=5,ptmxmode=0666 2>/dev/null || true
     fi
     chmod 666 /dev/ptmx 2>/dev/null || true
     chmod 755 /var/empty 2>/dev/null || true
 
     # Create any missing host keys
-    /usr/bin/ssh-keygen -A
+    /usr/bin/ssh-keygen -A >/dev/null 2>&1 || true
+
+    if pidof sshd >/dev/null 2>&1; then
+        return 0
+    fi
 
     printf "Starting %s: " "$DAEMON"
     start-stop-daemon --start --pidfile "$PIDFILE" \
@@ -33,8 +37,11 @@ start() {
 }
 
 stop() {
+    if ! pidof sshd >/dev/null 2>&1; then
+        return 0
+    fi
     printf "Stopping %s: " "$DAEMON"
-    start-stop-daemon --stop --pidfile "$PIDFILE" \
+    start-stop-daemon --stop --oknodo --pidfile "$PIDFILE" \
         --exec "/usr/sbin/$DAEMON"
     status=$?
     if [ "$status" -eq 0 ]; then

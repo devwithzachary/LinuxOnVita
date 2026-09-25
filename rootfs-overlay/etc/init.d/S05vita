@@ -26,7 +26,7 @@ start)
 
     # Mount ur0 (internal eMMC storage) so user configuration is immediately accessible
     mkdir -p /mnt/ur0
-    if ! mountpoint -q /mnt/ur0 2>/dev/null; then
+    if ! grep -qs ' /mnt/ur0 ' /proc/mounts; then
         mount -t exfat -o rw /dev/vita/ur0 /mnt/ur0 2>/dev/null || \
         mount -t vfat -o rw /dev/vita/ur0 /mnt/ur0 2>/dev/null || \
         mount /dev/vita/ur0 /mnt/ur0 2>/dev/null || true
@@ -37,7 +37,7 @@ start)
     for dev in /dev/mmcblk1p1 /dev/mmcblk1 /dev/mmcblk2p1 /dev/mmcblk2; do
         if [ -b "$dev" ]; then
             ln -sf "$dev" /dev/vita/ux0
-            if ! mountpoint -q /mnt/ux0 2>/dev/null; then
+            if ! grep -qs ' /mnt/ux0 ' /proc/mounts; then
                 mount -t exfat -o rw "$dev" /mnt/ux0 2>/dev/null || \
                 mount -t vfat -o rw "$dev" /mnt/ux0 2>/dev/null || \
                 mount -t ext4 -o rw "$dev" /mnt/ux0 2>/dev/null || \
@@ -55,5 +55,10 @@ start)
         chmod 600 "$SWAP_FILE" 2>/dev/null || true
         swapon -p 10 "$SWAP_FILE" >/dev/null 2>&1 || true
     fi
+    ;;
+stop)
+    sync 2>/dev/null || true
+    swapoff -a 2>/dev/null || true
+    sync 2>/dev/null || true
     ;;
 esac

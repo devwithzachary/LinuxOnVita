@@ -309,8 +309,13 @@ EOF
             echo -e "  Network:     ${C_CYAN}${target_ssid}${C_RESET}"
             echo -e "  IP Address:  ${C_GREEN}${ip}${C_RESET}"
             echo -e "  SSH Ready:   ${C_BOLD}ssh root@${ip}${C_RESET}"
-            echo "=================================================="
-            /etc/init.d/S50sshd restart 2>/dev/null || /usr/sbin/sshd 2>/dev/null || true
+            if ! pidof sshd >/dev/null 2>&1; then
+                if [ -x /etc/init.d/S50sshd ]; then
+                    /etc/init.d/S50sshd start >/dev/null 2>&1 || true
+                elif [ -x /usr/sbin/sshd ]; then
+                    /usr/sbin/sshd 2>/dev/null || true
+                fi
+            fi
             return 0
         else
             echo -e "${C_YELLOW}[!] Associated with '${target_ssid}', waiting for DHCP lease in background.${C_RESET}"
