@@ -24,7 +24,7 @@ While the original upstream projects proved that modern Linux can boot on the PS
 - **Full Display Brightness:** Patched baremetal bootloaders to initialize displays at 100% brightness on both OLED and LCD models, plus runtime adjustment via `vita-brightness`.
 - **Interactive On-Device Wi-Fi Manager (`vita-wifi`):** Scan, connect, and switch wireless networks directly on the console with an ASCII signal table. Saves credentials permanently to your memory card without needing to edit config files on a PC. Includes power toggle commands (`vita-wifi off / on`) to extend battery life.
 - **Fast Boot & OpenSSH:** Boots straight into the Linux terminal. Wi-Fi connects automatically with OpenSSH and mDNS (`vita.local`), ready in ~12 seconds. Headless pre-configuration is also supported via `configs/wifi.conf` or `wpa_supplicant.conf`.
-- **Alpine Linux Chroot (`alpine-chroot`):** Run a persistent Alpine Linux userland on storage with live `apk add` package management.
+- **Alpine Linux Chroot (`alpine-chroot`):** Run an isolated, persistent Alpine Linux userland on storage with full `apk add` package management (packages run inside the chroot container).
 - **Storage Auto-Mounting:** Automatically mounts SD2Vita (`/mnt/ux0`), internal memory (`/mnt/ur0`), and secondary storage (`/mnt/uma0`) on boot.
 - **Framebuffer DOOM (`vita-doom`):** Pre-installed pure-C `fbdoom` engine with twin-stick controls, analog deadzones, and input isolation.
 - **All-in-One Installer App (`LinuxOnVita.vpk`):** Graphical bootstrapper with real-time partition detection, memory card mount selector, and 1-click on-device installer.
@@ -217,18 +217,45 @@ vita-doom
 *(Note: Background input daemons and the touch keyboard are automatically suspended while DOOM is running and resumed when you exit).*
 
 ### 5. Installing Packages with Alpine Linux (`alpine-chroot`)
-Vita Linux includes an integrated Alpine Linux environment. Run `alpine-chroot` to launch a persistent Alpine rootfs:
+Vita Linux includes an integrated, persistent Alpine Linux userland with the `apk` package manager.
+
+> [!IMPORTANT]
+> **Package Isolation Notice:**
+> The Alpine userland operates in an **isolated chroot container** (`/mnt/alpine`). Packages installed using `apk` (such as `python3`, `htop`, `git`, `nano`, `gcc`, or `curl`) **only exist and execute within the Alpine chroot environment**.
+> * **They are not accessible from the base host shell:** Running `apk`, `python3`, or `htop` directly at the base Linux prompt (`root@vita:~#`) will report `not found` because the base install is an intentionally lightweight BusyBox system.
+> * **Always enter the chroot first:** Run `alpine-chroot` to enter the Alpine environment (indicated by the cyan `alpine@vita:~#` prompt) where all installed packages and `apk` tools are active in your PATH.
+> * **One-shot execution from base shell:** You can also run commands inside Alpine without opening an interactive shell by running `alpine-chroot run <command>` or `alpine-chroot -- <command>`.
+
+#### Interactive Alpine Shell:
 ```bash
-# Initialize/enter Alpine Linux (stored persistently as an ext4 image)
+# Enter the Alpine environment (stored persistently as an ext4 image)
 alpine-chroot
 
-# Update repositories and install any software
+# Inside Alpine (notice prompt changes to cyan alpine@vita:~#):
 apk update
 apk add fastfetch htop python3 git curl nano gcc musl-dev
 
-# View system information
+# Run your installed packages:
 fastfetch
+python3 -c "print('Hello from Alpine on Vita!')"
+
+# Exit back to the base Linux host shell
+exit
 ```
+
+#### Running Alpine Tools from the Base Host:
+If you are at the base prompt (`root@vita:~#`) and want to execute an Alpine-installed tool without entering the interactive shell:
+```bash
+alpine-chroot run fastfetch
+alpine-chroot -- python3 my_script.py
+```
+
+#### Storage & Options:
+* `alpine-chroot`: Default persistent 1GB ext4 image stored on `/mnt/ux0/alpine.img`.
+* `alpine-chroot --size 2G`: Create a larger 2GB persistent image on storage.
+* `alpine-chroot --dir /mnt/ur0`: Store the image on internal memory (`ur0`).
+* `alpine-chroot --ram`: Launch a temporary in-memory session (changes discarded on reboot).
+* `alpine-chroot --status`: View current chroot mount status and storage usage.
 
 ### 6. Managing Wi-Fi On-Device (`vita-wifi`)
 Manage wireless connections directly on your PS Vita without needing to edit config files on a PC:

@@ -28,6 +28,10 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Overhauled `vita-brightness` to perform automatic hardware model detection:
     - On **PS Vita 1000 (OLED)**: Displays clear hardware notices explaining that the emissive OLED display is locked to 100% full brightness (Level 15 Gamma) at boot and does not have an adjustable LCD backlight, preventing misleading success messages.
     - On **PS Vita 2000 (Slim / LCD)**: Dynamically controls the hardware PWM backlight via `/dev/i2c-1` at address `0x64`, scaling across the hardware duty cycle range (`0x1F` to `0xFF`), and verifies command success.
+- **Alpine Linux Chroot Isolation & Command Execution:**
+  - Clarified environment isolation in documentation and interactive banners, explaining that packages installed via `apk` are confined to the chroot container (`/mnt/alpine`) and are not accessible from the base BusyBox shell.
+  - Added visual environment prompt (`alpine@vita:~#` in cyan) inside the chroot to clearly distinguish between host and chroot sessions.
+  - Added support for running one-shot commands inside Alpine directly from the base shell via `alpine-chroot run <command>`, `alpine-chroot -- <command>`, or `alpine-chroot -c "<command>"`.
 
 ---
 

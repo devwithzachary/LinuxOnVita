@@ -34,7 +34,7 @@ if [ -t 0 ]; then
     echo "     - vita-wifi       : Scan, connect, and manage Wi-Fi networks"
     echo "     - vita-doom       : Play DOOM under Linux Framebuffer (/dev/fb0)"
     echo "     - vita-brightness : Control screen brightness / backlight"
-    echo "     - alpine-chroot   : Enter Alpine Linux with 'apk' package manager"
+    echo "     - alpine-chroot   : Enter Alpine Linux with 'apk' (isolated container)"
     echo "     - reboot          : Clean hardware reset back to VitaOS"
     echo "  ========================================================"
     echo ""
