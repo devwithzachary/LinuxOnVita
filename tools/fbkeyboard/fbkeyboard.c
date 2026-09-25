@@ -21,6 +21,7 @@
 #include <stdint.h>
 #include <poll.h>
 #include <time.h>
+#include <signal.h>
 
 #define FB_DEV "/dev/fb0"
 #define KB_HEIGHT 150
@@ -477,6 +478,22 @@ static void emit_key_or_tty(int uinput_fd, int keycode, int need_shift, const ch
     }
 }
 
+static volatile sig_atomic_t g_resumed = 0;
+
+static void handle_sigcont(int sig) {
+    (void)sig;
+    g_resumed = 1;
+}
+
+static void drain_pending_touch(int fd) {
+    int fl = fcntl(fd, F_GETFL, 0);
+    if (fl < 0) return;
+    fcntl(fd, F_SETFL, fl | O_NONBLOCK);
+    struct input_event dummy;
+    while (read(fd, &dummy, sizeof(dummy)) > 0) {}
+    fcntl(fd, F_SETFL, fl & ~O_NONBLOCK);
+}
+
 int main(int argc, char **argv) {
     (void)argc;
     (void)argv;
@@ -529,6 +546,16 @@ int main(int argc, char **argv) {
         if (touch_fd < 0) sleep(1);
     }
 
+    // Register SIGCONT handler to discard touch events queued while suspended
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = handle_sigcont;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGCONT, &sa, NULL);
+
+    drain_pending_touch(touch_fd);
+
     int flags = fcntl(touch_fd, F_GETFL, 0);
     fcntl(touch_fd, F_SETFL, flags & ~O_NONBLOCK);
 
@@ -543,9 +570,50 @@ int main(int argc, char **argv) {
     pfd.events = POLLIN;
 
     while (1) {
+        if (g_resumed) {
+            g_resumed = 0;
+            drain_pending_touch(touch_fd);
+            is_touching = 0;
+            was_touching = 0;
+            active_key = NULL;
+            if (keyboard_visible) {
+                draw_keyboard();
+            }
+            continue;
+        }
+
         int poll_res = poll(&pfd, 1, 1000);
 
-        if (poll_res <= 0) {
+        if (poll_res < 0) {
+            if (errno == EINTR) {
+                if (g_resumed) {
+                    g_resumed = 0;
+                    drain_pending_touch(touch_fd);
+                    is_touching = 0;
+                    was_touching = 0;
+                    active_key = NULL;
+                    if (keyboard_visible) {
+                        draw_keyboard();
+                    }
+                }
+                continue;
+            }
+            break;
+        }
+
+        if (poll_res == 0) {
+            continue;
+        }
+
+        if (g_resumed) {
+            g_resumed = 0;
+            drain_pending_touch(touch_fd);
+            is_touching = 0;
+            was_touching = 0;
+            active_key = NULL;
+            if (keyboard_visible) {
+                draw_keyboard();
+            }
             continue;
         }
 

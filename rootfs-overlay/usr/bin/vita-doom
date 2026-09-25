@@ -88,6 +88,9 @@ killall -STOP vita-input-mapper 2>/dev/null || true
 killall -STOP fbkeyboard 2>/dev/null || true
 
 cleanup() {
+    # Allow physical buttons (e.g. START + SELECT or Cross) to be released
+    # before resuming background input daemons
+    sleep 0.2 2>/dev/null || true
     killall -CONT vita-input-mapper 2>/dev/null || true
     killall -CONT fbkeyboard 2>/dev/null || true
 }

@@ -22,6 +22,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <dirent.h>
+#include <signal.h>
 #include <linux/input.h>
 #include <linux/uinput.h>
 
@@ -114,6 +115,29 @@ static void emit_key(int uinput_fd, int keycode, int value) {
     }
 }
 
+static volatile sig_atomic_t g_resumed = 0;
+
+static void handle_sigcont(int sig) {
+    (void)sig;
+    g_resumed = 1;
+}
+
+static void drain_pending_events(int fd) {
+    int fl = fcntl(fd, F_GETFL, 0);
+    if (fl < 0) return;
+
+    fcntl(fd, F_SETFL, fl | O_NONBLOCK);
+    struct input_event dummy;
+    int count = 0;
+    while (read(fd, &dummy, sizeof(dummy)) > 0) {
+        count++;
+    }
+    fcntl(fd, F_SETFL, fl & ~O_NONBLOCK);
+    if (count > 0) {
+        printf("[InputMapper] Resumed: drained and discarded %d stale event(s).\n", count);
+    }
+}
+
 int main(int argc, char **argv) {
     (void)argc;
     (void)argv;
@@ -138,12 +162,55 @@ int main(int argc, char **argv) {
         }
     }
 
+    // Register SIGCONT handler to discard stale events queued while suspended
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = handle_sigcont;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0; // Do not restart syscalls so blocking read unblocks with EINTR
+    sigaction(SIGCONT, &sa, NULL);
+
+    // Initial drain of any button events queued before mapper started
+    drain_pending_events(buttons_fd);
+
     // Set non-blocking to blocking for event reading
     int flags = fcntl(buttons_fd, F_GETFL, 0);
     fcntl(buttons_fd, F_SETFL, flags & ~O_NONBLOCK);
 
     struct input_event ev;
-    while (read(buttons_fd, &ev, sizeof(ev)) > 0) {
+    while (1) {
+        if (g_resumed) {
+            g_resumed = 0;
+            drain_pending_events(buttons_fd);
+            continue;
+        }
+
+        ssize_t n = read(buttons_fd, &ev, sizeof(ev));
+        if (n < 0) {
+            if (errno == EINTR) {
+                if (g_resumed) {
+                    g_resumed = 0;
+                    drain_pending_events(buttons_fd);
+                }
+                continue;
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                continue;
+            }
+            perror("[InputMapper] read failed");
+            break;
+        }
+
+        if (g_resumed) {
+            g_resumed = 0;
+            drain_pending_events(buttons_fd);
+            continue;
+        }
+
+        if (n < (ssize_t)sizeof(ev)) {
+            continue;
+        }
+
         if (ev.type != EV_KEY) continue;
 
         int press = ev.value; // 1 = pressed, 0 = released, 2 = repeat

@@ -255,6 +255,7 @@ int tty_is_kbd(int fd)
 static int old_mode = -1;
 static struct termios old_term;
 static int kb = -1; /* keyboard file descriptor */
+static int vita_buttons_fd = -1;
 
 void kbd_shutdown(void)
 {
@@ -266,11 +267,21 @@ void kbd_shutdown(void)
     printf("Exiting normally.\n");
     if (old_mode != -1) {
         ioctl(kb, KDSKBMODE, old_mode);
-        tcsetattr(kb, 0, &old_term);
+        tcsetattr(kb, TCSAFLUSH, &old_term);
     }
 
-    if (kb > 3)
-        close(kb);
+    if (kb >= 0) {
+        tcflush(kb, TCIFLUSH);
+        if (kb > 2)
+            close(kb);
+        kb = -1;
+    }
+    tcflush(0, TCIFLUSH);
+
+    if (vita_buttons_fd >= 0) {
+        close(vita_buttons_fd);
+        vita_buttons_fd = -1;
+    }
 
     exit(0);
 }
@@ -427,8 +438,6 @@ static void UpdateShiftStatus(int pressed, unsigned char key)
 }
 
 
-static int vita_buttons_fd = -1;
-
 static int open_vita_gamepad(void)
 {
     char path[256];
@@ -484,8 +493,6 @@ static void PollVitaGamepad(void)
                 printf("\n[DOOM] START + SELECT pressed - exiting game...\n");
                 fflush(stdout);
                 I_Quit();
-                kbd_shutdown();
-                exit(0);
             }
 
             int key = 0;

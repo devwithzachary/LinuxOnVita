@@ -21,6 +21,12 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Added universal instant exit controller shortcut: pressing **`START + SELECT`** simultaneously now cleanly exits DOOM from any gameplay screen back to the Linux shell.
   - Ensured `I_Quit()` and `I_Error()` restore terminal modes via `kbd_shutdown()` and cleanly exit the process.
   - Updated in-game exit and confirmation prompts to explicitly reference Cross and Circle buttons.
+- **Fixed DOOM Exit Loop & Keystroke Replay (`vita-input-mapper` & `fbdoom`):**
+  - Resolved an issue where exiting `vita-doom` (via `START + SELECT` or the in-game menu) caused DOOM to immediately reload upon returning to the shell before exiting on the second attempt.
+  - Root cause: while `vita-input-mapper` was suspended (`SIGSTOP`) during gameplay, the kernel evdev queue accumulated physical button events (such as D-Pad Up for walking forward and Cross/Start for menu selection). When resumed (`SIGCONT`), `vita-input-mapper` replayed these queued events into `/dev/uinput`, recalling and executing `vita-doom` from the shell's command history.
+  - Added `SIGCONT` signal handling and an automatic evdev queue draining mechanism to `vita-input-mapper` and `fbkeyboard` to discard all stale events buffered during suspension before processing new inputs.
+  - Updated `kbd_shutdown()` in `fbdoom` to use `TCSAFLUSH`, flush terminal input with `tcflush()`, and close gamepad handles.
+  - Added a settling pause in `vita-doom`'s cleanup trap to allow physical button releases to settle before unpausing background input daemons.
 - **Display Brightness & Model-Aware Backlight Control:**
   - Resolved a critical bug in `vita-baremetal-linux-loader` where `sysroot_model_is_vita()` was evaluated before `sysroot_model_is_vita2k()`, causing all consoles (including PS Vita 2000 Slim) to load `vita1000.dtb` which had I2C bus 1 disabled.
   - Corrected DTB loading order so PS TV loads `pstv.dtb`, PS Vita 2000 loads `vita2000.dtb`, and PS Vita 1000 loads `vita1000.dtb`.
