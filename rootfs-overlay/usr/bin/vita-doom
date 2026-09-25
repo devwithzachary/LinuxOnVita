@@ -27,6 +27,12 @@ show_help_missing() {
     echo "   * L-Trigger           : Speed / Run"
     echo "   * Triangle (△)        : Automap"
     echo "   * Start               : Menu / Pause (ESC)"
+    echo "   * Start + Select      : Instant exit to Linux shell"
+    echo ""
+    echo " Display Modes:"
+    echo "   * Fullscreen (default): 960x544 edge-to-edge widescreen"
+    echo "   * 4:3 Aspect Ratio    : vita-doom -aspect (725x544 pillarbox)"
+    echo "   * Integer 2x Scale    : vita-doom -integer (640x400 centered)"
     echo "======================================================="
     exit 1
 }
@@ -80,6 +86,7 @@ fi
 echo "======================================================="
 echo " Starting DOOM on Linux Framebuffer (/dev/fb0)..."
 echo " Active WAD: $SELECTED_WAD"
+echo " Display: Fullscreen 960x544 (edge-to-edge)"
 echo "======================================================="
 
 # Temporarily suspend background input mapper & touch keyboard

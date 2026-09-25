@@ -212,6 +212,20 @@ vita-doom
 * **Start:** Pause / in-game options menu
 * **Start + Select:** Instant quick-exit back to terminal
 
+#### Display Modes:
+By default, `vita-doom` automatically scales to fill 100% of the PlayStation Vita screen:
+* **Fullscreen (Default):** Runs at 960x544 edge-to-edge widescreen with zero black borders using an optimized zero-copy `mmap` blitter.
+* **4:3 Aspect Ratio (Pillarbox):**
+  ```bash
+  vita-doom -aspect
+  ```
+  Scales to full vertical height (544 lines) while preserving the original 4:3 CRT proportions (725x544 centered with side borders).
+* **Integer 2x Scale (640x400):**
+  ```bash
+  vita-doom -integer
+  ```
+  Centers an unscaled 2x pixel-doubled canvas (640x400) in the middle of the screen.
+
 *(Note: Background input daemons and the touch keyboard automatically pause while DOOM is playing and resume cleanly when you exit).*
 
 ---

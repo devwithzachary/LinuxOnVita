@@ -27,6 +27,11 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Added `SIGCONT` signal handling and an automatic evdev queue draining mechanism to `vita-input-mapper` and `fbkeyboard` to discard all stale events buffered during suspension before processing new inputs.
   - Updated `kbd_shutdown()` in `fbdoom` to use `TCSAFLUSH`, flush terminal input with `tcflush()`, and close gamepad handles.
   - Added a settling pause in `vita-doom`'s cleanup trap to allow physical button releases to settle before unpausing background input daemons.
+- **Fullscreen 960x544 Scaling & High-Speed Blitter (`fbdoom`):**
+  - Overhauled `i_video_fbdev.c` in `fbdoom` to scale DOOM to full screen (960x544) edge-to-edge on the PlayStation Vita display by default, eliminating the black side and vertical borders of the previous 640x400 window.
+  - Implemented direct zero-copy memory mapping (`mmap`) of `/dev/fb0` to eliminate per-frame `lseek()` and `write()` kernel syscall overhead.
+  - Engineered an optimized horizontal 3x pixel unrolling and precomputed palette conversion lookup table (`palette32`), coupled with row repetition caching (`memcpy`) to blit frames in under 0.6ms.
+  - Added support for alternative aspect modes: `vita-doom -aspect` for 4:3 pillarbox (725x544) and `vita-doom -integer` for 2x centered windowing (640x400).
 - **Display Brightness & Model-Aware Backlight Control:**
   - Resolved a critical bug in `vita-baremetal-linux-loader` where `sysroot_model_is_vita()` was evaluated before `sysroot_model_is_vita2k()`, causing all consoles (including PS Vita 2000 Slim) to load `vita1000.dtb` which had I2C bus 1 disabled.
   - Corrected DTB loading order so PS TV loads `pstv.dtb`, PS Vita 2000 loads `vita2000.dtb`, and PS Vita 1000 loads `vita1000.dtb`.

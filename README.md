@@ -10,9 +10,30 @@ A complete distribution, automated build environment, and handheld userland for 
 
 While original proof-of-concept projects proved that modern Linux can boot on the PS Vita SoC, they required specialized developer equipment such as soldered UART serial cables. LinuxOnVita bridges the gap into a **fully standalone, interactive handheld Linux device** with out-of-the-box touch typing, physical gamepad navigation, automated on-device Wi-Fi, memory-safe ZRAM swap, full package management (`apk`), and native framebuffer gaming.
 
-<p align="center">
-  <img src="screenshot.png" alt="PlayStation Vita Linux 6.12 Running with Framebuffer Touch Keyboard" width="720">
-</p>
+<div align="center">
+  <table>
+    <tr>
+      <td width="50%" align="center">
+        <img src="screenshot.png" alt="Interactive Welcome Screen & On-Screen Touch Keyboard" /><br />
+        <sub><b>Interactive Welcome Screen & Touch Keyboard</b></sub>
+      </td>
+      <td width="50%" align="center">
+        <img src="screenshot2.png" alt="Native Framebuffer DOOM Running Full Screen (960x544)" /><br />
+        <sub><b>Native Framebuffer DOOM (Full Screen 960x544)</b></sub>
+      </td>
+    </tr>
+    <tr>
+      <td width="50%" align="center">
+        <img src="screenshot3.png" alt="Fastfetch Running inside Alpine Linux Chroot" /><br />
+        <sub><b>Fastfetch & Package Management in Alpine Linux</b></sub>
+      </td>
+      <td width="50%" align="center">
+        <img src="screenshot4.png" alt="Interactive On-Device Wi-Fi Setup (vita-wifi)" /><br />
+        <sub><b>Interactive On-Device Wi-Fi Manager (<code>vita-wifi</code>)</b></sub>
+      </td>
+    </tr>
+  </table>
+</div>
 
 ---
 
