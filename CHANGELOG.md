@@ -7,6 +7,14 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
 
 ## [v1.2.0] - Unreleased
 
+### Added
+- **SD2Vita (Game Card Slot) Power & High-Speed Support:** Enabled hardware power and high-speed bus negotiation for SD2Vita adapters in the Game Card slot (`SDIF1`):
+  - Added Syscon command `0x888` power-on invocation during boot so the physical Game Card slot receives 3.3V VCC.
+  - Configured pervasive pad voltage register (`0xE3100124`) for 3.3V signalling on SDIF1.
+  - Added `broken-cd` and `cap-sd-highspeed` to the `sdif1` Device Tree node in `vita.dtsi`.
+  - Added automatic MMC rescan trigger upon Syscon power stabilization so the microSD card is immediately recognized as `mmcblk1`.
+- **Automatic SD2Vita Auto-Mounting & Symlinks:** Updated `S05vita` and `S00mount` to automatically detect `/dev/mmcblk1p1` or `/dev/mmcblk1`, create the `/dev/vita/ux0` device symlink, and mount the card to `/mnt/ux0`.
+
 ---
 
 ## [v1.1.0] - 2026-09-24

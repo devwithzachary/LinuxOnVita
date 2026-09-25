@@ -260,8 +260,9 @@ poweroff    # Full hardware poweroff via Syscon
 | **Touchscreen** | **Working** | `vita-syscon-ts.c` multi-touch digitizer mapped via `evdev` |
 | **Buttons & D-Pad** | **Working** | Patched `vita-buttons.c` driver with uniform active-low mask and `/dev/uinput` mapping |
 | **Analog Sticks** | **Working** | Syscon `0x180` analog sampling enabled with deadzone filtering |
-| **Storage (eMMC)** | **Working** | Auto-detected SCE partitions (`/dev/mmcblk*p1`-`p12`) |
-| **Storage (SD2Vita / Sony)** | **Working** | Automatically mounted at `/mnt/ux0`, `/mnt/ur0`, and `/mnt/uma0` |
+| **Storage (eMMC / ur0)** | **Working** | Auto-detected SCE partitions (`/dev/mmcblk0p1`-`p12`), `ur0` mounted at `/mnt/ur0` |
+| **Storage (SD2Vita / ux0)** | **Working** | Powered via Syscon `0x888`, auto-mounted at `/mnt/ux0` (`/dev/mmcblk1p1`) |
+| **Storage (Sony Memory Card)** | **Loader Only** | Boot files loaded via baremetal MSIF driver; Linux MSIF driver not yet implemented |
 | **Battery Fuel Gauge** | **Not yet supported** | Isolated on Syscon (Ernie) private I2C bus; runtime streaming unsupported |
 | **UART0 Serial Console** | **Working** | 115200 baud serial debug console |
 | **Bluetooth** | **Not yet supported** | Marvell SD8787 Bluetooth driver not enabled in kernel config |
