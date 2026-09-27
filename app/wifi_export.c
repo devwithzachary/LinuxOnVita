@@ -16,8 +16,7 @@
 
 #define MAX_WLAN 30
 
-void export_wifi(const char *output)
-{
+void export_wifi(const char *output) {
     FILE *fp;
     char path[64];
 
@@ -31,90 +30,65 @@ void export_wifi(const char *output)
         return;
 
     fprintf(fp,
-        "# LinuxOnVita - Wi-Fi Configuration\n"
-        "# Exported from VitaOS\n"
-        "ctrl_interface=/var/run/wpa_supplicant\n"
-        "update_config=1\n"
-        "\n"
+            "# LinuxOnVita - Wi-Fi Configuration\n"
+            "# Exported from VitaOS\n"
+            "ctrl_interface=/var/run/wpa_supplicant\n"
+            "update_config=1\n"
+            "\n"
     );
 
     for (int i = 1; i <= MAX_WLAN; i++) {
-
-        snprintf(path, sizeof(path),
-                 "/CONFIG/NET/%02d/WIFI", i);
+        snprintf(path, sizeof(path), "/CONFIG/NET/%02d/WIFI", i);
 
         memset(ssid, 0, sizeof(ssid));
         memset(psk, 0, sizeof(psk));
         memset(wep_key, 0, sizeof(wep_key));
         wifi_security = 0;
 
-        if (sceRegMgrGetKeyStr(
-                path,
-                "ssid",
-                ssid,
-                sizeof(ssid) - 1) < 0) {
+        if (sceRegMgrGetKeyStr(path, "ssid", ssid, sizeof(ssid) - 1) < 0) {
             continue;
         }
 
         if (ssid[0] == '\0')
             continue;
 
-        sceRegMgrGetKeyInt(
-            path,
-            "wifi_security",
-            &wifi_security
-        );
+        sceRegMgrGetKeyInt(path, "wifi_security", &wifi_security);
 
-        sceRegMgrGetKeyStr(
-            path,
-            "wpa_key",
-            psk,
-            sizeof(psk) - 1
-        );
+        sceRegMgrGetKeyStr(path, "wpa_key", psk, sizeof(psk) - 1);
 
-        sceRegMgrGetKeyStr(
-            path,
-            "wep_key",
-            wep_key,
-            sizeof(wep_key) - 1
-        );
+        sceRegMgrGetKeyStr(path, "wep_key", wep_key, sizeof(wep_key) - 1);
 
         if (wep_key[0] != '\0') {
-
             fprintf(fp,
-                "network={\n"
-                "    ssid=\"%s\"\n"
-                "    key_mgmt=NONE\n"
-                "    wep_key0=\"%s\"\n"
-                "    wep_tx_keyidx=0\n"
-                "}\n"
-                "\n",
-                ssid,
-                wep_key
+                    "network={\n"
+                    "    ssid=\"%s\"\n"
+                    "    key_mgmt=NONE\n"
+                    "    wep_key0=\"%s\"\n"
+                    "    wep_tx_keyidx=0\n"
+                    "}\n"
+                    "\n",
+                    ssid,
+                    wep_key
             );
-
         } else if (psk[0] != '\0') {
-
             fprintf(fp,
-                "network={\n"
-                "    ssid=\"%s\"\n"
-                "    psk=\"%s\"\n"
-                "    key_mgmt=WPA-PSK\n"
-                "}\n"
-                "\n",
-                ssid,
-                psk
+                    "network={\n"
+                    "    ssid=\"%s\"\n"
+                    "    psk=\"%s\"\n"
+                    "    key_mgmt=WPA-PSK\n"
+                    "}\n"
+                    "\n",
+                    ssid,
+                    psk
             );
-
         } else {
-
             fprintf(fp,
-                "network={\n"
-                "    ssid=\"%s\"\n"
-                "    key_mgmt=NONE\n"
-                "}\n"
-                "\n",
-                ssid
+                    "network={\n"
+                    "    ssid=\"%s\"\n"
+                    "    key_mgmt=NONE\n"
+                    "}\n"
+                    "\n",
+                    ssid
             );
         }
     }

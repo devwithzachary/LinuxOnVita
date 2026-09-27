@@ -149,22 +149,18 @@ static void refresh_mounts(void) {
 
 static void format_size(uint64_t bytes, char *out, size_t out_len) {
   if (bytes >= (1024ULL * 1024ULL * 1024ULL)) {
-    unsigned int gb =
-        (unsigned int)(bytes / (1024ULL * 1024ULL * 1024ULL));
+    unsigned int gb = (unsigned int)(bytes / (1024ULL * 1024ULL * 1024ULL));
 
-    unsigned int frac =
-        (unsigned int)((bytes % (1024ULL * 1024ULL * 1024ULL)) /
-                       (1024ULL * 1024ULL * 100ULL));
+    unsigned int frac = (unsigned int)((bytes % (1024ULL * 1024ULL * 1024ULL)) /
+                                       (1024ULL * 1024ULL * 100ULL));
 
     snprintf(out, out_len, "%u.%u GB", gb, frac);
   } else if (bytes >= (1024ULL * 1024ULL)) {
-    unsigned int mb =
-        (unsigned int)(bytes / (1024ULL * 1024ULL));
+    unsigned int mb = (unsigned int)(bytes / (1024ULL * 1024ULL));
 
     snprintf(out, out_len, "%u MB", mb);
   } else if (bytes > 0) {
-    unsigned int kb =
-        (unsigned int)(bytes / 1024ULL);
+    unsigned int kb = (unsigned int)(bytes / 1024ULL);
 
     snprintf(out, out_len, "%u KB", kb);
   } else {
@@ -176,10 +172,8 @@ static void save_mount_preference(const char *mount_name) {
   sceIoMkdir("ur0:data", 0777);
   sceIoMkdir(CONFIG_DIR_UR0, 0777);
 
-  SceUID fd =
-      sceIoOpen(CONFIG_PATH_UR0,
-                SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC,
-                0777);
+  SceUID fd = sceIoOpen(CONFIG_PATH_UR0,
+                        SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
 
   if (fd >= 0) {
     sceIoWrite(fd, mount_name, strlen(mount_name));
@@ -189,10 +183,8 @@ static void save_mount_preference(const char *mount_name) {
   sceIoMkdir("ux0:data", 0777);
   sceIoMkdir(CONFIG_DIR_UX0, 0777);
 
-  fd =
-      sceIoOpen(CONFIG_PATH_UX0,
-                SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC,
-                0777);
+  fd = sceIoOpen(CONFIG_PATH_UX0, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC,
+                 0777);
 
   if (fd >= 0) {
     sceIoWrite(fd, mount_name, strlen(mount_name));
@@ -208,9 +200,7 @@ static void load_mount_preference(void) {
 
   char buf[32];
 
-  for (size_t p = 0;
-       p < sizeof(paths) / sizeof(paths[0]);
-       p++) {
+  for (size_t p = 0; p < sizeof(paths) / sizeof(paths[0]); p++) {
 
     SceUID fd = sceIoOpen(paths[p], SCE_O_RDONLY, 0);
 
@@ -221,10 +211,8 @@ static void load_mount_preference(void) {
       sceIoClose(fd);
 
       if (rd > 0) {
-        while (rd > 0 &&
-               (buf[rd - 1] == '\r' ||
-                buf[rd - 1] == '\n' ||
-                buf[rd - 1] == ' ')) {
+        while (rd > 0 && (buf[rd - 1] == '\r' || buf[rd - 1] == '\n' ||
+                          buf[rd - 1] == ' ')) {
           buf[--rd] = '\0';
         }
 
@@ -242,10 +230,7 @@ static void load_mount_preference(void) {
   for (size_t i = 0; i < NUM_MOUNTS; i++) {
     char test_path[64];
 
-    snprintf(test_path,
-             sizeof(test_path),
-             "%slinux/zImage",
-             g_mounts[i].name);
+    snprintf(test_path, sizeof(test_path), "%slinux/zImage", g_mounts[i].name);
 
     if (file_exists(test_path)) {
       g_selected_mount_idx = i;
@@ -261,8 +246,7 @@ static void load_mount_preference(void) {
   g_selected_mount_idx = 1;
 }
 
-static void check_mount_files(const char *mount,
-                              MountFileStatus *status) {
+static void check_mount_files(const char *mount, MountFileStatus *status) {
   char path[256];
 
   snprintf(path, sizeof(path), "%slinux/zImage", mount);
@@ -274,33 +258,24 @@ static void check_mount_files(const char *mount,
   snprintf(path, sizeof(path), "%slinux/payload.bin", mount);
   status->payload_present = file_exists(path);
 
-  if (!status->payload_present &&
-      file_exists("ux0:linux/payload.bin")) {
+  if (!status->payload_present && file_exists("ux0:linux/payload.bin")) {
     status->payload_present = 1;
   }
 
-  snprintf(path,
-           sizeof(path),
-           "%slinux/baremetal-loader.skprx",
-           mount);
+  snprintf(path, sizeof(path), "%slinux/baremetal-loader.skprx", mount);
 
   status->loader_present = file_exists(path);
 
-  if (!status->loader_present &&
-      file_exists("ux0:linux/baremetal-loader.skprx")) {
+  if (!status->loader_present && file_exists("ux0:linux/baremetal-loader.skprx")) {
     status->loader_present = 1;
   }
 
-  snprintf(path,
-           sizeof(path),
-           "%slinux/wpa_supplicant.conf",
-           mount);
+  snprintf(path, sizeof(path), "%slinux/wpa_supplicant.conf", mount);
 
   status->wifi_present = file_exists(path);
 }
 
-static int are_keyfiles_present_on_mount(
-    const MountFileStatus *status) {
+static int are_keyfiles_present_on_mount(const MountFileStatus *status) {
 
   return status->kernel_present &&
          status->dtb_present &&
@@ -373,9 +348,7 @@ static void mount_partition_interactive(const char *mount) {
   } else {
     psvDebugScreenSetFgColor(COLOR_RED);
 
-    printf(" [FAIL] Could not mount %s (0x%08X)\n\n",
-           mount,
-           res);
+    printf(" [FAIL] Could not mount %s (0x%08X)\n\n", mount, res);
 
     psvDebugScreenSetFgColor(COLOR_WHITE);
 
@@ -386,17 +359,14 @@ static void mount_partition_interactive(const char *mount) {
   }
 }
 
-static int copy_file(const char *src_path,
-                     const char *dst_path,
-                     int overwrite) {
+static int copy_file(const char *src_path, const char *dst_path, int overwrite) {
 
   if (!overwrite && file_exists(dst_path)) {
     printf("  [SKIP] %s (exists)\n", dst_path);
     return 0;
   }
 
-  SceUID src_fd =
-      sceIoOpen(src_path, SCE_O_RDONLY, 0);
+  SceUID src_fd = sceIoOpen(src_path, SCE_O_RDONLY, 0);
 
   if (src_fd < 0) {
     return src_fd;
@@ -404,18 +374,11 @@ static int copy_file(const char *src_path,
 
   SceIoStat stat;
 
-  int has_stat =
-      (sceIoGetstat(src_path, &stat) >= 0);
+  int has_stat = (sceIoGetstat(src_path, &stat) >= 0);
 
-  SceOff total_bytes =
-      has_stat ? stat.st_size : 0;
+  SceOff total_bytes = has_stat ? stat.st_size : 0;
 
-  SceUID dst_fd =
-      sceIoOpen(dst_path,
-                SCE_O_WRONLY |
-                SCE_O_CREAT |
-                SCE_O_TRUNC,
-                0777);
+  SceUID dst_fd = sceIoOpen(dst_path, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
 
   if (dst_fd < 0) {
     sceIoClose(src_fd);
@@ -427,15 +390,9 @@ static int copy_file(const char *src_path,
   SceOff copied = 0;
   int read_bytes;
 
-  while ((read_bytes =
-          sceIoRead(src_fd,
-                    buffer,
-                    sizeof(buffer))) > 0) {
+  while ((read_bytes = sceIoRead(src_fd, buffer, sizeof(buffer))) > 0) {
 
-    int written =
-        sceIoWrite(dst_fd,
-                   buffer,
-                   read_bytes);
+    int written = sceIoWrite(dst_fd, buffer, read_bytes);
 
     if (written != read_bytes) {
       sceIoClose(src_fd);
@@ -445,17 +402,12 @@ static int copy_file(const char *src_path,
 
     copied += written;
 
-    if (total_bytes > 0 &&
-        total_bytes > (1024 * 1024)) {
+    if (total_bytes > 0 && total_bytes > (1024 * 1024)) {
 
-      printf("\r  Copying %s: %u / %u MB (%d%%)",
-             dst_path,
-             (unsigned int)(copied /
-                            (1024 * 1024)),
-             (unsigned int)(total_bytes /
-                            (1024 * 1024)),
-             (int)((copied * 100) /
-                   total_bytes));
+      printf("\r  Copying %s: %u / %u MB (%d%%)", dst_path,
+             (unsigned int)(copied / (1024 * 1024)),
+             (unsigned int)(total_bytes / (1024 * 1024)),
+             (int)((copied * 100) / total_bytes));
     }
   }
 
@@ -463,9 +415,7 @@ static int copy_file(const char *src_path,
   sceIoClose(dst_fd);
 
   if (read_bytes < 0) {
-    printf("  [FAIL] %s (read error 0x%08X)\n",
-           src_path,
-           read_bytes);
+    printf("  [FAIL] %s (read error 0x%08X)\n", src_path, read_bytes);
 
     return read_bytes;
   }
@@ -498,9 +448,7 @@ static int install_linux_files_to_mount(const char *mount) {
 
   sceIoMkdir(linux_dir, 0777);
 
-  int num_files =
-      sizeof(g_bundle_files) /
-      sizeof(g_bundle_files[0]);
+  int num_files = sizeof(g_bundle_files) / sizeof(g_bundle_files[0]);
 
   int success_count = 0;
   int error_count = 0;
@@ -509,69 +457,49 @@ static int install_linux_files_to_mount(const char *mount) {
     char src[256];
     char dst[256];
 
-    snprintf(src,
-             sizeof(src),
-             "app0:data/%s",
-             g_bundle_files[i].src_rel);
+    snprintf(src, sizeof(src), "app0:data/%s", g_bundle_files[i].src_rel);
 
-    snprintf(dst,
-             sizeof(dst),
-             "%slinux/%s",
-             mount,
-             g_bundle_files[i].dst_rel);
+    snprintf(dst, sizeof(dst), "%slinux/%s", mount, g_bundle_files[i].dst_rel);
 
-    int res =
-        copy_file(src,
-                  dst,
-                  g_bundle_files[i].overwrite_if_exists);
+    int res = copy_file(src, dst, g_bundle_files[i].overwrite_if_exists);
 
     if (res == 0) {
       success_count++;
     } else {
       if (g_bundle_files[i].is_mandatory) {
-        printf("  [FAIL] Failed: %s (0x%08X)\n",
-               src,
-               res);
-
+        printf("  [FAIL] Failed: %s (0x%08X)\n", src, res);
         error_count++;
       } else {
-        printf("  [INFO] Optional missing: %s\n",
-               g_bundle_files[i].src_rel);
+        printf("  [INFO] Optional missing: %s\n", g_bundle_files[i].src_rel);
       }
     }
   }
 
-  if (strcmp(mount, "ux0:") != 0 &&
-      dir_exists("ux0:")) {
+  if (strcmp(mount, "ux0:") != 0 && dir_exists("ux0:")) {
 
     sceIoMkdir("ux0:linux", 0777);
 
     copy_file("app0:data/baremetal-loader.skprx",
-              "ux0:linux/baremetal-loader.skprx",
-              1);
+              "ux0:linux/baremetal-loader.skprx", 1);
 
     copy_file("app0:data/baremetal-loader_360.skprx",
-              "ux0:linux/baremetal-loader_360.skprx",
-              1);
+              "ux0:linux/baremetal-loader_360.skprx", 1);
 
     copy_file("app0:data/payload.bin",
-              "ux0:linux/payload.bin",
-              1);
+              "ux0:linux/payload.bin", 1);
   }
 
   if (error_count > 0) {
     psvDebugScreenSetFgColor(COLOR_RED);
 
-    printf("\nInstallation finished with %d critical error(s).\n",
-           error_count);
+    printf("\nInstallation finished with %d critical error(s).\n", error_count);
 
     return -1;
   }
 
   psvDebugScreenSetFgColor(COLOR_GREEN);
 
-  printf("\nInstallation completed successfully! (%d files)\n",
-         success_count);
+  printf("\nInstallation completed successfully! (%d files)\n", success_count);
 
   return 0;
 }
@@ -579,19 +507,14 @@ static int install_linux_files_to_mount(const char *mount) {
 static int copy_boot_files_to_mount(const char *mount) {
   psvDebugScreenClear(COLOR_BLACK);
   psvDebugScreenSetFgColor(COLOR_CYAN);
-
   printf("========================================================\n");
   printf(" Copying Boot Files to %slinux/\n", mount);
   printf("========================================================\n\n");
-
   psvDebugScreenSetFgColor(COLOR_WHITE);
 
   char linux_dir[64];
 
-  snprintf(linux_dir,
-           sizeof(linux_dir),
-           "%slinux",
-           mount);
+  snprintf(linux_dir, sizeof(linux_dir), "%slinux", mount);
 
   sceIoMkdir(linux_dir, 0777);
 
@@ -606,9 +529,7 @@ static int copy_boot_files_to_mount(const char *mount) {
       "baremetal-loader_360.skprx",
   };
 
-  int count =
-      sizeof(boot_files) /
-      sizeof(boot_files[0]);
+  int count = sizeof(boot_files) / sizeof(boot_files[0]);
 
   int copied_count = 0;
 
@@ -616,27 +537,17 @@ static int copy_boot_files_to_mount(const char *mount) {
     char src[256];
     char dst[256];
 
-    snprintf(src,
-             sizeof(src),
-             "app0:data/%s",
-             boot_files[i]);
+    snprintf(src, sizeof(src), "app0:data/%s", boot_files[i]);
 
     if (!file_exists(src)) {
-      snprintf(src,
-               sizeof(src),
-               "ux0:linux/%s",
-               boot_files[i]);
+      snprintf(src, sizeof(src), "ux0:linux/%s", boot_files[i]);
     }
 
     if (!file_exists(src)) {
       continue;
     }
 
-    snprintf(dst,
-             sizeof(dst),
-             "%slinux/%s",
-             mount,
-             boot_files[i]);
+    snprintf(dst, sizeof(dst), "%slinux/%s", mount, boot_files[i]);
 
     if (copy_file(src, dst, 1) == 0) {
       copied_count++;
@@ -645,28 +556,22 @@ static int copy_boot_files_to_mount(const char *mount) {
 
   psvDebugScreenSetFgColor(COLOR_GREEN);
 
-  printf("\nCopied %d boot file(s) to %s/!\n",
-         copied_count,
-         linux_dir);
-
+  printf("\nCopied %d boot file(s) to %s/!\n", copied_count, linux_dir);
   return 0;
 }
 
 static void boot_linux(const char *mount) {
   psvDebugScreenClear(COLOR_BLACK);
   psvDebugScreenSetFgColor(COLOR_CYAN);
-
   printf("========================================================\n");
   printf(" PlayStation Vita Linux 6.12\n");
   printf(" Launching Baremetal Loader...\n");
   printf("========================================================\n\n");
-
   psvDebugScreenSetFgColor(COLOR_WHITE);
 
   printf(" Target Memory Card: %s\n\n", mount);
 
   tai_module_args_t argg;
-
   argg.size = sizeof(argg);
   argg.pid = KERNEL_PID;
   argg.args = 0;
@@ -675,58 +580,37 @@ static void boot_linux(const char *mount) {
 
   char mod_path[128];
 
-  snprintf(mod_path,
-           sizeof(mod_path),
-           "%slinux/baremetal-loader.skprx",
-           mount);
+  snprintf(mod_path, sizeof(mod_path), "%slinux/baremetal-loader.skprx", mount);
 
   SceUID mod_id = -1;
 
   if (file_exists(mod_path)) {
     printf(" Loading %s...\n", mod_path);
-
-    mod_id =
-        taiLoadStartKernelModuleForUser(
-            mod_path,
-            &argg);
+    mod_id = taiLoadStartKernelModuleForUser(mod_path, &argg);
   }
 
-  if (mod_id < 0 &&
-      file_exists("ux0:linux/baremetal-loader.skprx")) {
-
+  if (mod_id < 0 && file_exists("ux0:linux/baremetal-loader.skprx")) {
     printf(" Trying ux0:linux/baremetal-loader.skprx...\n");
 
-    mod_id =
-        taiLoadStartKernelModuleForUser(
-            "ux0:linux/baremetal-loader.skprx",
-            &argg);
+    mod_id = taiLoadStartKernelModuleForUser("ux0:linux/baremetal-loader.skprx",
+                                             &argg);
   }
 
   if (mod_id < 0) {
     char mod_360[128];
 
-    snprintf(mod_360,
-             sizeof(mod_360),
-             "%slinux/baremetal-loader_360.skprx",
-             mount);
+    snprintf(mod_360, sizeof(mod_360), "%slinux/baremetal-loader_360.skprx", mount);
 
     if (file_exists(mod_360)) {
-      printf(" Trying 3.60 loader from %s...\n",
-             mod_360);
-
-      mod_id =
-          taiLoadStartKernelModuleForUser(
-              mod_360,
-              &argg);
+      printf(" Trying 3.60 loader from %s...\n", mod_360);
+      mod_id = taiLoadStartKernelModuleForUser(mod_360, &argg);
     } else if (
-        file_exists("ux0:linux/baremetal-loader_360.skprx")) {
+      file_exists("ux0:linux/baremetal-loader_360.skprx")) {
 
       printf(" Trying 3.60 loader from ux0:linux/...\n");
 
-      mod_id =
-          taiLoadStartKernelModuleForUser(
-              "ux0:linux/baremetal-loader_360.skprx",
-              &argg);
+      mod_id = taiLoadStartKernelModuleForUser("ux0:linux/baremetal-loader_360.skprx",
+                                               &argg);
     }
   }
 
@@ -758,11 +642,7 @@ static void boot_linux(const char *mount) {
 
     wait_button_press(SCE_CTRL_START);
 
-    taiStopUnloadKernelModuleForUser(
-        mod_id,
-        &argg,
-        NULL,
-        NULL);
+    taiStopUnloadKernelModuleForUser(mod_id, &argg, NULL, NULL);
   }
 }
 
@@ -827,11 +707,9 @@ int main(int argc, char *argv[]) {
   while (1) {
     refresh_mounts();
 
-    const char *target_mount =
-        g_mounts[g_selected_mount_idx].name;
+    const char *target_mount = g_mounts[g_selected_mount_idx].name;
 
-    int is_target_mounted =
-        g_mounts[g_selected_mount_idx].is_mounted;
+    int is_target_mounted = g_mounts[g_selected_mount_idx].is_mounted;
 
     MountFileStatus status;
 
@@ -841,11 +719,9 @@ int main(int argc, char *argv[]) {
       check_mount_files(target_mount, &status);
     }
 
-    int installed =
-        are_keyfiles_present_on_mount(&status);
+    int installed = are_keyfiles_present_on_mount(&status);
 
-    int has_bundled =
-        are_bundled_files_present();
+    int has_bundled = are_bundled_files_present();
 
     psvDebugScreenClear(COLOR_BLACK);
 
@@ -873,8 +749,7 @@ int main(int argc, char *argv[]) {
     printf(" - Standard Vita:  Sony card is ux0:\n\n");
 
     /* Storage mounts display (<= 54 chars/line) */
-    printf(" Storage Partitions (Target: %s ",
-           target_mount);
+    printf(" Storage Partitions (Target: %s ", target_mount);
 
     if (is_target_mounted) {
       psvDebugScreenSetFgColor(COLOR_GREEN);
@@ -906,18 +781,12 @@ int main(int argc, char *argv[]) {
         char total_str[16];
         char free_str[16];
 
-        format_size(g_mounts[i].total_bytes,
-                    total_str,
-                    sizeof(total_str));
+        format_size(g_mounts[i].total_bytes, total_str, sizeof(total_str));
 
-        format_size(g_mounts[i].free_bytes,
-                    free_str,
-                    sizeof(free_str));
+        format_size(g_mounts[i].free_bytes, free_str, sizeof(free_str));
 
         if (g_mounts[i].total_bytes > 0) {
-          printf("%s (%s free) ",
-                 total_str,
-                 free_str);
+          printf("%s (%s free) ", total_str, free_str);
         }
 
         psvDebugScreenSetFgColor(COLOR_GREEN);
@@ -946,13 +815,11 @@ int main(int argc, char *argv[]) {
     if (!is_target_mounted) {
       psvDebugScreenSetFgColor(COLOR_RED);
 
-      printf(" Status: Target %s is not mounted!\n",
-             target_mount);
+      printf(" Status: Target %s is not mounted!\n", target_mount);
 
       psvDebugScreenSetFgColor(COLOR_YELLOW);
 
-      printf(" Press [X] to mount %s now.\n",
-             target_mount);
+      printf(" Press [X] to mount %s now.\n", target_mount);
 
       psvDebugScreenSetFgColor(COLOR_WHITE);
 
@@ -961,8 +828,7 @@ int main(int argc, char *argv[]) {
     } else if (!installed) {
       psvDebugScreenSetFgColor(COLOR_YELLOW);
 
-      printf(" Status: Linux files NOT detected in %slinux/\n",
-             target_mount);
+      printf(" Status: Linux files NOT detected in %slinux/\n", target_mount);
 
       psvDebugScreenSetFgColor(COLOR_WHITE);
 
@@ -1012,33 +878,23 @@ int main(int argc, char *argv[]) {
 
     if (is_target_mounted) {
       if (installed) {
-        printf("   [X]        Boot Linux (from %slinux/)\n",
-               target_mount);
-
+        printf("   [X]        Boot Linux (from %slinux/)\n", target_mount);
         if (has_bundled) {
-          printf("   [SQUARE]   Reinstall / update %slinux/\n",
-                 target_mount);
+          printf("   [SQUARE]   Reinstall / update %slinux/\n", target_mount);
         }
-
-        printf("   [TRIANGLE] Copy boot files (zImage/DTB) to %s\n",
-               target_mount);
-
+        printf("   [TRIANGLE] Copy boot files (zImage/DTB) to %s\n", target_mount);
       } else {
         if (has_bundled) {
-          printf("   [X]        Install Linux to %slinux/\n",
-                 target_mount);
+          printf("   [X]        Install Linux to %slinux/\n", target_mount);
         }
 
-        printf("   [TRIANGLE] Copy boot files (zImage/DTB) to %s\n",
-               target_mount);
+        printf("   [TRIANGLE] Copy boot files (zImage/DTB) to %s\n", target_mount);
       }
     } else {
-      printf("   [X]        Mount %s partition\n",
-             target_mount);
+      printf("   [X]        Mount %s partition\n", target_mount);
     }
 
     printf("   [CIRCLE]   Export Wi-Fi VitaOS configuration\n");
-
     printf("   [UP/DOWN]  Change target mount (L/R to cycle)\n");
     printf("   [START]    Exit to LiveArea\n\n");
 
@@ -1074,32 +930,14 @@ int main(int argc, char *argv[]) {
     uint32_t btn =
         wait_button_press(mask);
 
-    if (btn &
-        (SCE_CTRL_UP |
-         SCE_CTRL_LEFT |
-         SCE_CTRL_LTRIGGER)) {
-
-      g_selected_mount_idx =
-          (g_selected_mount_idx +
-           NUM_MOUNTS - 1) %
-          NUM_MOUNTS;
-
-      save_mount_preference(
-          g_mounts[g_selected_mount_idx].name);
-
+    if (btn & (SCE_CTRL_UP | SCE_CTRL_LEFT | SCE_CTRL_LTRIGGER)) {
+      g_selected_mount_idx = (g_selected_mount_idx + NUM_MOUNTS - 1) % NUM_MOUNTS;
+      save_mount_preference(g_mounts[g_selected_mount_idx].name);
       continue;
 
-    } else if (btn &
-               (SCE_CTRL_DOWN |
-                SCE_CTRL_RIGHT |
-                SCE_CTRL_RTRIGGER)) {
-
-      g_selected_mount_idx =
-          (g_selected_mount_idx + 1) %
-          NUM_MOUNTS;
-
-      save_mount_preference(
-          g_mounts[g_selected_mount_idx].name);
+    } else if (btn & (SCE_CTRL_DOWN | SCE_CTRL_RIGHT | SCE_CTRL_RTRIGGER)) {
+      g_selected_mount_idx = (g_selected_mount_idx + 1) % NUM_MOUNTS;
+      save_mount_preference(g_mounts[g_selected_mount_idx].name);
 
       continue;
 
@@ -1107,7 +945,6 @@ int main(int argc, char *argv[]) {
       break;
 
     } else if (btn & SCE_CTRL_CIRCLE) {
-
       export_wifi_interactive();
 
     } else if (btn & SCE_CTRL_CROSS) {
