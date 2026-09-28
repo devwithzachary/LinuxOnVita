@@ -11,6 +11,9 @@ A complete distribution, automated build environment, and handheld userland for 
 While original proof-of-concept projects proved that modern Linux can boot on the PS Vita SoC, they required specialized developer equipment such as soldered UART serial cables. LinuxOnVita bridges the gap into a **fully standalone, interactive handheld Linux device** with out-of-the-box touch typing, physical gamepad navigation, automated on-device Wi-Fi, memory-safe ZRAM swap, full package management (`apk`), and native framebuffer gaming.
 
 <div align="center">
+  <img src="screenshot5.png" alt="Lightweight IceWM Graphical Desktop and Handheld Welcome Guide" width="85%" /><br />
+  <sub><b>Lightweight IceWM Graphical Desktop & Handheld Welcome Guide (<code>alpine-desktop</code>)</b></sub>
+  <br /><br />
   <table>
     <tr>
       <td width="50%" align="center">
