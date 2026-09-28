@@ -27,6 +27,7 @@ set(VITA_MKSFOEX_FLAGS "${VITA_MKSFOEX_FLAGS} -d PARENTAL_LEVEL=1")
 # Add all files needed to compile
 add_executable(${PROJECT_NAME}
   main.c
+  wifi_export.c
   debugScreenFont.c
 )
 
@@ -34,6 +35,7 @@ target_link_libraries(${PROJECT_NAME}
   SceCtrl_stub
   taihen_stub
   SceDisplay_stub
+  SceRegistryMgr_stub
   SceVshBridge_stub
 )
 

@@ -221,27 +221,52 @@ cmd_connect() {
     echo -e "${C_CYAN}Configuring connection to '${target_ssid}'...${C_RESET}"
 
     local tmp_conf="/tmp/wpa_supplicant.conf.new"
-    cat << EOF > "$tmp_conf"
+    local base_conf="/etc/wpa_supplicant.conf"
+
+    if [ -f "$base_conf" ]; then
+        cp "$base_conf" "$tmp_conf"
+    else
+        cat << EOF > "$tmp_conf"
 ctrl_interface=/var/run/wpa_supplicant
 update_config=1
 
 EOF
+    fi
 
-    if [ -n "$target_psk" ]; then
-        cat << EOF >> "$tmp_conf"
+    if ! awk -F= -v ssid="$target_ssid" '
+        /^[[:space:]]*ssid=/ {
+            value = $0
+            sub(/^[[:space:]]*ssid=/, "", value)
+            gsub(/^"/, "", value)
+            gsub(/"$/, "", value)
+
+            if (value == ssid)
+                found = 1
+        }
+        END {
+            exit found ? 0 : 1
+        }
+    ' "$tmp_conf"; then
+        if [ -n "$target_psk" ]; then
+            cat << EOF >> "$tmp_conf"
 network={
     ssid="${target_ssid}"
     psk="${target_psk}"
     key_mgmt=WPA-PSK
 }
+
 EOF
-    else
-        cat << EOF >> "$tmp_conf"
+        else
+            cat << EOF >> "$tmp_conf"
 network={
     ssid="${target_ssid}"
     key_mgmt=NONE
 }
+
 EOF
+        fi
+    else
+        echo -e "${C_YELLOW}[!] Network '${target_ssid}' already exists in configuration. Keeping existing entry.${C_RESET}"
     fi
 
     # Save to /etc/wpa_supplicant.conf (RAM)
@@ -253,8 +278,49 @@ EOF
         if [ -d "$m" ] && touch "$m/.test_rw" 2>/dev/null; then
             rm -f "$m/.test_rw"
             mkdir -p "$m/linux"
-            cp "$tmp_conf" "$m/linux/wpa_supplicant.conf"
-            saved_path="$m/linux/wpa_supplicant.conf"
+
+            local persistent_conf="$m/linux/wpa_supplicant.conf"
+
+            if [ -f "$persistent_conf" ]; then
+                cp "$persistent_conf" "$tmp_conf"
+            fi
+
+            if ! awk -F= -v ssid="$target_ssid" '
+                /^[[:space:]]*ssid=/ {
+                    value = $0
+                    sub(/^[[:space:]]*ssid=/, "", value)
+                    gsub(/^"/, "", value)
+                    gsub(/"$/, "", value)
+
+                    if (value == ssid)
+                        found = 1
+                }
+                END {
+                    exit found ? 0 : 1
+                }
+            ' "$tmp_conf"; then
+                if [ -n "$target_psk" ]; then
+                    cat << EOF >> "$tmp_conf"
+network={
+    ssid="${target_ssid}"
+    psk="${target_psk}"
+    key_mgmt=WPA-PSK
+}
+
+EOF
+                else
+                    cat << EOF >> "$tmp_conf"
+network={
+    ssid="${target_ssid}"
+    key_mgmt=NONE
+}
+
+EOF
+                fi
+            fi
+
+            cp "$tmp_conf" "$persistent_conf"
+            saved_path="$persistent_conf"
             break
         fi
     done
