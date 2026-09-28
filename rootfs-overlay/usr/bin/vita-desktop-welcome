@@ -1,0 +1,113 @@
+#!/bin/sh
+# vita-desktop-welcome: Graphical Welcome and Guide for LinuxOnVita Desktop
+
+export DISPLAY="${DISPLAY:-:0}"
+export HOME=/root
+export GLYCIN_DISABLE_SANDBOX=i-know-the-risks
+
+CONFIG_DIR="/root/.config/linuxonvita"
+CONFIG_FILE="${CONFIG_DIR}/welcome.conf"
+mkdir -p "$CONFIG_DIR"
+
+# Read current startup preference
+SHOW_WELCOME=true
+if [ -f "$CONFIG_FILE" ]; then
+    . "$CONFIG_FILE"
+fi
+
+CHK_STATE="TRUE"
+if [ "$SHOW_WELCOME" = "false" ]; then
+    CHK_STATE="FALSE"
+fi
+
+if ! command -v yad >/dev/null 2>&1; then
+    echo "LinuxOnVita Desktop Welcome Guide requires yad."
+    exit 0
+fi
+
+# Formatted guide text for PS Vita 960x544 screen
+GUIDE_TEXT="=======================================================
+ WELCOME TO LINUXONVITA DESKTOP
+=======================================================
+
+System Overview:
+* OS: Alpine Linux v3.24 (ARMv7 Cortex-A9)
+* Desktop: IceWM on Direct Framebuffer (/dev/fb0)
+* Display: 960x544 at 96 DPI
+* Memory: ~25 MB RAM idle (over 400 MB available for apps)
+* Storage: Persistent ext4 container (/mnt/ux0/alpine.img)
+
+-------------------------------------------------------
+ HANDHELD CONTROLS & SHORTCUTS
+-------------------------------------------------------
+* Left Stick         : 360-degree mouse cursor emulation
+* R Trigger / Cross  : Left Mouse Click (primary click / drag)
+* L Trigger / Circle : Right Mouse Click (context menus)
+* Square (□)         : Middle Click (paste / close tabs)
+* Triangle (△)       : Enter Key (confirm dialogs)
+* Right Stick (Up/Dn): Vertical / horizontal scroll wheel
+* Start Button       : Open IceWM Application Menu
+* Select Button      : Escape Key (Esc)
+* Touchscreen        : Direct finger tap & drag on screen
+* On-Screen Keyboard : Tap Keyboard icon on desktop or menu
+
+-------------------------------------------------------
+ PRE-INSTALLED APPLICATIONS
+-------------------------------------------------------
+* Badwolf Web Browser: Modern WebKitGTK browser with HTML5/CSS3/JS
+* PCManFM            : Lightweight tabbed file & desktop manager
+* Xfce Task Manager  : Live CPU/RAM utilization & process monitor
+* Mousepad           : Text editor with syntax highlighting & tabs
+* Sakura Terminal    : Multi-tabbed terminal emulator
+* Matchbox Keyboard  : Touch virtual on-screen keyboard
+* Feh Image Viewer   : Lightweight image & photo viewer
+* Reboot to VitaOS   : Desktop icon to cleanly reboot back to VitaOS LiveArea
+
+-------------------------------------------------------
+ SOFTWARE & PACKAGE MANAGEMENT (APK CLI)
+-------------------------------------------------------
+Software is managed using the Alpine Package Keeper (apk)
+directly in Sakura Terminal:
+
+* Refresh package indexes:
+  apk update
+
+* Search online repositories:
+  apk search <package-name>
+
+* Install software:
+  apk add <package-name>
+
+* Remove software:
+  apk del <package-name>
+
+* Upgrade entire system:
+  apk upgrade
+
+Browse over 30,000 Alpine packages online at pkgs.alpinelinux.org.
+======================================================="
+
+OUTPUT=$(printf "%b\n" "$GUIDE_TEXT" | yad --text-info \
+    --title="Welcome to LinuxOnVita Desktop" \
+    --window-icon="preferences-desktop" \
+    --width=620 --height=400 --center \
+    --wrap \
+    --checkbox="Show this welcome guide on desktop startup:${CHK_STATE}" \
+    --button="Open Terminal:2" \
+    --button="Close:0")
+
+RET=$?
+
+# Determine checkbox state from output
+if echo "$OUTPUT" | grep -qi "FALSE"; then
+    echo "SHOW_WELCOME=false" > "$CONFIG_FILE"
+elif echo "$OUTPUT" | grep -qi "TRUE"; then
+    echo "SHOW_WELCOME=true" > "$CONFIG_FILE"
+fi
+
+# Open terminal if requested
+if [ $RET -eq 2 ]; then
+    sakura &
+fi
+
+exit 0

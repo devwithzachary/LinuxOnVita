@@ -16,15 +16,22 @@ Welcome to the comprehensive user guide for **LinuxOnVita**. This guide is desig
    - [Screen Brightness Control (`vita-brightness`)](#2-screen-brightness-control-vita-brightness)
    - [Memory Expansion & Swap (`vita-swap`)](#3-memory-expansion--swap-vita-swap)
    - [Framebuffer DOOM (`vita-doom`)](#4-framebuffer-doom-vita-doom)
-   - [Remote SSH & Wireless Terminal](#5-remote-ssh--wireless-terminal)
-   - [Rebooting & Powering Down](#6-rebooting--powering-down)
+   - [Hardware & System Diagnostics (`vita-diagnostics`)](#5-hardware--system-diagnostics-vita-diagnostics--vita-diag)
+   - [Remote SSH & Wireless Terminal](#6-remote-ssh--wireless-terminal)
+   - [Rebooting & Powering Down](#7-rebooting--powering-down)
 5. [Alpine Linux Package Ecosystem (`alpine-chroot`)](#5-alpine-linux-package-ecosystem-alpine-chroot)
    - [Understanding the Isolated Environment](#understanding-the-isolated-environment)
    - [Entering & Exiting Alpine](#entering--exiting-alpine)
    - [Running Commands from the Base Host](#running-commands-from-the-base-host)
    - [Real-World Packages & Use Cases](#real-world-packages--use-cases)
-6. [Managing Files & Storage](#6-managing-files--storage)
-7. [Frequently Asked Questions & Troubleshooting](#7-frequently-asked-questions--troubleshooting)
+6. [Turnkey Graphical Desktop (`alpine-desktop`)](#6-turnkey-graphical-desktop-alpine-desktop)
+   - [Concept & Architecture](#concept--architecture)
+   - [First-Time Automated Setup](#first-time-automated-setup)
+   - [Handheld Desktop Navigation & Controls](#handheld-desktop-navigation--controls)
+   - [Pre-Installed Graphical Applications](#pre-installed-graphical-applications)
+   - [Exiting Back to Console](#exiting-back-to-console)
+7. [Managing Files & Storage](#7-managing-files--storage)
+8. [Frequently Asked Questions & Troubleshooting](#8-frequently-asked-questions--troubleshooting)
 
 ---
 
@@ -73,8 +80,23 @@ The screen will blank briefly, take over the hardware framebuffer, and boot dire
 When upgrading your console from a previous release of LinuxOnVita:
 1. Transfer and install the new `LinuxOnVita.vpk` in VitaShell.
 2. Launch the **LinuxOnVita** bubble from the LiveArea.
-3. **Reinstall / Update Memory Card Files:** Press **SQUARE (□)** to update the Linux setup (`<mount>/linux/`). Because boot files (`zImage`, Device Tree blobs, and baremetal loaders) already exist on your memory card from the previous version, pressing Cross (✕) would continue booting the older kernel and files. Pressing **Square (□)** refreshes and overwrites your memory card with the new release files bundled inside the VPK.
+3. **Reinstall / Update Memory Card Files:** Press **TRIANGLE (△)** to update the Linux setup (`<mount>/linux/`). Because boot files (`zImage`, Device Tree blobs, and baremetal loaders) already exist on your memory card from the previous version, pressing Cross (✕) would continue booting the older kernel and files. Pressing **Triangle (△)** refreshes and overwrites your memory card with the new release files bundled inside the VPK.
 4. Press **CROSS (✕)** to boot into your updated Linux system!
+
+### Booting in Debug Mode (Troubleshooting Boot Issues)
+If Linux fails to boot, freezes, or the screen goes dark without reaching the shell prompt:
+1. Open the **LinuxOnVita** application bubble.
+2. Select your target storage partition (`ux0:`, `xmc0:`, or `uma0:`).
+3. Press **SQUARE (□)** to launch **Debug Mode**.
+4. Debug Mode runs an automated 5-step diagnostic pre-flight sequence directly on-screen:
+   - **Hardware & Firmware Check:** Queries system software version (`3.65`, `3.60`, etc.) and detects your exact hardware model (PS Vita OLED 1000, PS Vita Slim 2000, or PlayStation TV Dolce).
+   - **Memory Card Interface:** Confirms physical insertion of the Sony Memory Card in the hardware MSIF slot.
+   - **Storage Partition Status:** Scans partition mount points, total capacity, and available free space.
+   - **Kernel & DTB Integrity:** Checks file existence and exact byte sizes for `zImage` and model-specific Device Tree blobs (`vita2000.dtb`, `vita1000.dtb`, `pstv.dtb`, or `vita.dtb`).
+   - **Loader Pre-Flight:** Verifies `payload.bin` and `baremetal-loader.skprx`, auto-syncing mirrors to `ux0:linux/` to ensure all loader fallback paths succeed.
+5. If errors are detected, the boot sequence halts safely with an explanation so you can fix missing files without crashing.
+6. If all checks pass, press **CROSS (✕)** to trigger the standby handover into Linux, or press **CIRCLE (○)** to cancel.
+7. **Viewing Saved Logs:** All diagnostic steps, return codes, and kernel-space handover events are flushed synchronously to `ux0:data/LinuxOnVita/boot_debug.log` (with fallback to `ur0:data/LinuxOnVita/boot_debug.log`). You can view the log directly on your Vita by pressing **SELECT** in the LinuxOnVita main menu, or open it in VitaShell to attach to GitHub issues.
 
 ---
 
@@ -237,7 +259,55 @@ By default, `vita-doom` automatically scales to fill 100% of the PlayStation Vit
 
 ---
 
-### 5. Remote SSH & Wireless Terminal
+### 5. Hardware & System Diagnostics (`vita-diagnostics` / `vita-diag`)
+When encountering issues like Wi-Fi failing to connect or an SD card not mounting, `vita-diagnostics` automates the entire debugging and log collection process. It probes hardware devices, verifies drivers and firmware, tests partition filesystems, queries Wi-Fi association state, redacts sensitive passwords for privacy, and saves a comprehensive report to accessible storage.
+
+#### Running Diagnostics:
+```bash
+vita-diagnostics
+# or using the shorthand alias:
+vita-diag
+```
+
+#### What It Checks:
+* **Storage & SD Cards (`--storage`):**
+  - Detects all MMC controllers, partition tables, and SD2Vita adapter devices (`/dev/mmcblk*`).
+  - Verifies whether `/mnt/ux0` (SD card or memory card) is mounted.
+  - If unmounted: safely probe-mounts candidate partitions with read-only checks across `exfat`, `vfat`, and `ext4` to identify why the mount failed, and provides exact commands to mount it.
+  - Inspects internal eMMC storage (`/mnt/ur0`).
+* **Wi-Fi & Networking (`--wifi`):**
+  - Confirms detection of Marvell 88W8787 wireless hardware (`mlan0` / `wlan0`).
+  - Verifies presence and integrity of Marvell firmware (`sd8787_uapsta.bin`) and wireless regulatory database.
+  - Queries `wpa_supplicant` and analyzes association states:
+    - `4WAY_HANDSHAKE`: Alerts if Wi-Fi password may be incorrect.
+    - `SCANNING`: Alerts if SSID was not found, reminding users that PS Vita hardware strictly supports 2.4GHz Wi-Fi (channels 1-13) and cannot connect to 5GHz networks.
+    - `COMPLETED`: Confirms active authentication and association.
+  - Performs live 2.4GHz RF scans and tests network gateway / DNS pings.
+  - **Privacy Guarantee:** Automatically redacts all Wi-Fi passwords (`psk="[REDACTED_FOR_PRIVACY]"`) so diagnostic reports can be shared publicly on Discord or GitHub without leaking private credentials.
+* **Kernel & System Telemetry:**
+  - Captures full kernel ring buffer (`dmesg`), early boot logs (`/tmp/boot.log`), running processes, memory usage, ZRAM compression ratios, and input mapping status.
+
+#### Safe Multi-Target Log Saving:
+Even if your SD card fails to mount, logs are **never lost**. `vita-diagnostics` simultaneously saves to multiple locations:
+1. `ur0:vita-diagnostics.txt` (Internal eMMC flash, accessible on all PS Vita models even if SD card fails).
+2. `ux0:vita-diagnostics.txt` and `ux0:vita-diagnostics.tar.gz` (SD card / Memory Card, if mounted).
+3. `/tmp/vita-diagnostics.txt` (Volatile RAM).
+
+#### How to Retrieve and Send Logs:
+1. After running `vita-diagnostics`, type `reboot` and press Enter to return to VitaOS.
+2. Launch **VitaShell** from the LiveArea home screen.
+3. If your SD card was mounted, navigate to **`ux0:`**. If your SD card failed to mount, navigate to **`ur0:`**.
+4. Press **SELECT** in VitaShell to connect your console to your computer via USB (or FTP).
+5. Copy `vita-diagnostics.txt` (or `vita-diagnostics.tar.gz`) to your computer and attach it to your GitHub issue or share it with DevWithZachary on Discord!
+
+#### Viewing Logs On-Device:
+```bash
+vita-diagnostics --view    # View the most recent report on the terminal
+```
+
+---
+
+### 6. Remote SSH & Wireless Terminal
 Once connected to Wi-Fi, LinuxOnVita automatically starts an OpenSSH server and broadcasts mDNS hostname `vita.local`.
 
 From any computer, tablet, or phone on the same Wi-Fi network:
@@ -250,7 +320,7 @@ Logging in via SSH gives you a full-sized desktop terminal, making it comfortabl
 
 ---
 
-### 6. Rebooting & Powering Down
+### 7. Rebooting & Powering Down
 * **Reboot straight to Sony VitaOS:**
   ```bash
   reboot
@@ -266,7 +336,7 @@ Logging in via SSH gives you a full-sized desktop terminal, making it comfortabl
 
 ## 5. Alpine Linux Package Ecosystem (`alpine-chroot`)
 
-The base LinuxOnVita operating system runs from a lightweight, memory-resident root filesystem (initramfs). To allow installing any modern Linux program, LinuxOnVita integrates **Alpine Linux** with its full-featured `apk` package repository.
+The base LinuxOnVita operating system runs from a lightweight, memory-resident root filesystem (initramfs). To allow installing any modern Linux program, LinuxOnVita integrates **Alpine Linux v3.24** with its full-featured `apk` package repository.
 
 ### Understanding the Isolated Environment
 The Alpine Linux environment runs in an **isolated chroot container** (`/mnt/alpine`):
@@ -402,7 +472,69 @@ cmatrix
 
 ---
 
-## 6. Managing Files & Storage
+## 6. Turnkey Graphical Desktop (`alpine-desktop`)
+
+LinuxOnVita includes an automated turnkey launcher (`alpine-desktop`) that runs an ultra-lightweight **IceWM** desktop environment directly on the PlayStation Vita framebuffer (`/dev/fb0`), requiring zero 3D GPU acceleration and consuming only ~25 MB RAM idle (saving over 100 MB of RAM compared to heavyweight desktops like XFCE).
+
+### Concept & Architecture
+* **X11 Framebuffer Server (`Xfbdev` / `Xorg` fbdev):** Renders the graphical user interface directly into native 960x544 32-bit color screen memory.
+* **Ultra-Low Memory Footprint (~25 MB RAM):** IceWM combined with PCManFM desktop management uses minimal RAM, leaving more than 350 MB of free system memory for running applications and multitasking.
+* **Shared Storage Container:** Reuses the exact same persistent `alpine.img` ext4 container as `alpine-chroot`, ensuring any files created in the desktop are immediately accessible in chroot and vice versa.
+* **Handheld Ergonomics:** Automatically transforms the PS Vita gamepad into a mouse and keyboard controller, accompanied by an on-screen touchscreen keyboard.
+* **Lightweight First-Time Download:** Desktop packages are not bundled in the base VPK to keep downloads minimal. `alpine-desktop` downloads and sets up the environment on-device on first run.
+
+### First-Time Automated Setup
+To set up and launch the desktop, connect your PS Vita to Wi-Fi, then run:
+```bash
+alpine-desktop
+```
+On first launch, `alpine-desktop` automatically:
+1. Verifies active Wi-Fi internet connectivity.
+2. Updates Alpine package indexes.
+3. Installs `icewm`, `pcmanfm`, `xfce4-taskmanager`, `dbus-x11`, `htop`, `mousepad`, `badwolf`, `feh`, `matchbox-keyboard`, `yad`, and `sakura`.
+4. Creates pre-configured X11 framebuffer settings (`/etc/X11/xorg.conf.d/10-fbdev.conf`) calibrated for 96 DPI proportional font rendering.
+5. Configures desktop shortcuts and application menus for the Welcome Guide, Badwolf web browser, PCManFM file manager, Mousepad text editor, Xfce activity monitor, Sakura terminal, and virtual keyboard.
+6. Starts the graphical IceWM desktop session.
+
+Subsequent launches start immediately in seconds with no re-downloading required!
+
+### Handheld Desktop Navigation & Controls
+When `alpine-desktop` starts, `vita-input-mapper` automatically switches into **Desktop Controller Mode**:
+
+| Physical Control | Desktop Action | Description |
+| :--- | :--- | :--- |
+| **Left Analog Stick** | Mouse Cursor | Smooth 360-degree pointer navigation with calibrated half-speed acceleration |
+| **R Trigger** or **Cross (✕)** | Left Mouse Click | Primary click, drag and drop, and window focus |
+| **L Trigger** or **Circle (○)** | Right Mouse Click | Context menus and desktop background options |
+| **Square (□)** | Middle Click | Paste clipboard or close browser tabs |
+| **Triangle (△)** | Enter Key | Confirm dialogs and open highlighted files |
+| **Right Analog Stick** | Scroll Wheel | Smooth vertical and horizontal document and web page scrolling |
+| **Start Button** | Application Menu | Opens the IceWM Applications Menu (Super / Windows key) |
+| **Select Button** | Escape (Esc) | Closes context menus or cancels selections |
+| **D-Pad (Arrows)** | Arrow Keys | Directional navigation inside menus and text documents |
+| **Touchscreen** | Direct Touch | Direct finger tap and drag on the display |
+| **On-Screen Keyboard** | Virtual Typing | Tap the Keyboard icon on the desktop or menu to toggle `matchbox-keyboard` |
+
+### Bundled Graphical Applications
+* **Welcome Guide (`vita-desktop-welcome`):** Graphical handheld guide featuring tabs for system specifications, physical controls, bundled apps, software installation instructions, and desktop startup preferences.
+* **Web Browsing (`badwolf`):** Privacy-oriented, WebKitGTK-based graphical web browser supporting modern HTML5, CSS3, and JavaScript within a handheld memory footprint.
+* **Activity & Process Monitor (`xfce4-taskmanager` / `taskmanager`):** Dedicated task manager displaying live CPU and memory utilization graphs, running processes, and task management directly from the desktop.
+* **On-Screen Keyboard (`matchbox-keyboard`):** Touch-friendly virtual keyboard. Tap the Keyboard icon on the desktop or Start Menu anytime to show or hide the keyboard via `toggle-keyboard`.
+* **File Manager (`pcmanfm`):** Full-featured lightweight file manager with tabbed browsing, desktop wallpaper management, and drag-and-drop support.
+* **Text Editing (`mousepad` / `leafpad`):** Clean graphical notepad with syntax highlighting, tabs, search/replace, and line numbers for code and notes.
+* **Terminal Emulator & Software Management (`sakura`):** Fast GTK terminal emulator with multi-tab support and direct native CLI package management via `apk` (`apk update`, `apk add <pkg>`, `apk search <pkg>`).
+* **Image Viewing (`feh`):** Lightweight image viewer for screenshots, diagrams, and photos.
+
+### Exiting Back to Console
+To exit the graphical desktop session:
+* Select **Log Out** from the bottom-left IceWM start menu.
+* Or press **Ctrl+C** on a physical or virtual keyboard.
+
+`alpine-desktop` will cleanly shut down X11, restore `vita-input-mapper` to standard console terminal mode, unmount bind mounts, and return you to the command prompt.
+
+---
+
+## 7. Managing Files & Storage
 
 LinuxOnVita automatically detects and mounts your physical storage partitions:
 
@@ -419,7 +551,7 @@ Files placed in `ux0:` inside VitaOS or VitaShell are accessible directly under 
 
 ---
 
-## 7. Frequently Asked Questions & Troubleshooting
+## 8. Frequently Asked Questions & Troubleshooting
 
 ### Why is an official Sony memory card required?
 The baremetal loader (`payload.bin`) executes in the early boot stage before Linux or VitaOS drivers are running. It uses Sony's proprietary memory card hardware controller (MSIF). It cannot read from SD2Vita game card adapters or internal eMMC memory.

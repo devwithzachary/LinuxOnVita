@@ -4,13 +4,13 @@
 case "$1" in
     start)
         mkdir -p /dev/pts /dev/shm /run /tmp /proc /sys
-        mount -t proc proc /proc 2>/dev/null || true
-        mount -t sysfs sysfs /sys 2>/dev/null || true
-        mount -t devpts devpts /dev/pts -o mode=0620,gid=5,ptmxmode=0666 2>/dev/null || true
+        grep -qs ' /proc ' /proc/mounts || mount -t proc proc /proc 2>/dev/null || true
+        grep -qs ' /sys ' /proc/mounts || mount -t sysfs sysfs /sys 2>/dev/null || true
+        grep -qs ' /dev/pts ' /proc/mounts || mount -t devpts devpts /dev/pts -o mode=0620,gid=5,ptmxmode=0666 2>/dev/null || true
         chmod 666 /dev/ptmx 2>/dev/null || true
-        mount -t tmpfs tmpfs /dev/shm -o mode=1777 2>/dev/null || true
-        mount -t tmpfs tmpfs /run -o mode=0755,nosuid,nodev 2>/dev/null || true
-        mount -t tmpfs tmpfs /tmp -o mode=1777 2>/dev/null || true
+        grep -qs ' /dev/shm ' /proc/mounts || mount -t tmpfs tmpfs /dev/shm -o mode=1777 2>/dev/null || true
+        grep -qs ' /run ' /proc/mounts || mount -t tmpfs tmpfs /run -o mode=0755,nosuid,nodev 2>/dev/null || true
+        grep -qs ' /tmp ' /proc/mounts || mount -t tmpfs tmpfs /tmp -o mode=1777 2>/dev/null || true
         mount -a 2>/dev/null || true
 
         # Set system hostname
@@ -36,15 +36,17 @@ case "$1" in
         fi
 
         # Mount ux0 (Game card slot / SD2Vita or Sony memory card) if available
-        for dev in /dev/mmcblk1p1 /dev/mmcblk1 /dev/mmcblk2p1 /dev/mmcblk2; do
-            if [ -b "$dev" ] && ! mountpoint -q /mnt/ux0 2>/dev/null; then
-                mount -t exfat -o rw "$dev" /mnt/ux0 2>/dev/null || \
-                mount -t vfat -o rw "$dev" /mnt/ux0 2>/dev/null || \
-                mount -t ext4 -o rw "$dev" /mnt/ux0 2>/dev/null || \
-                mount "$dev" /mnt/ux0 2>/dev/null || true
-                break
-            fi
-        done
+        if ! grep -qs ' /mnt/ux0 ' /proc/mounts; then
+            for dev in /dev/mmcblk1p1 /dev/mmcblk1 /dev/mmcblk2p1 /dev/mmcblk2; do
+                if [ -b "$dev" ]; then
+                    mount -t exfat -o rw "$dev" /mnt/ux0 2>/dev/null || \
+                    mount -t vfat -o rw "$dev" /mnt/ux0 2>/dev/null || \
+                    mount -t ext4 -o rw "$dev" /mnt/ux0 2>/dev/null || \
+                    mount "$dev" /mnt/ux0 2>/dev/null || true
+                    break
+                fi
+            done
+        fi
 
         # Auto-activate physical swapfile if present
         SWAP_FILE=""
@@ -56,7 +58,9 @@ case "$1" in
         fi
         ;;
     stop)
+        sync 2>/dev/null || true
         swapoff -a 2>/dev/null || true
+        sync 2>/dev/null || true
         ;;
     *)
         echo "Usage: $0 {start|stop}"

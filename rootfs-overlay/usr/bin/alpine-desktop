@@ -1,0 +1,1140 @@
+#!/bin/sh
+# alpine-desktop: Turnkey Graphical Desktop for Alpine Linux on PlayStation Vita
+#
+# Launches a lightweight, memory-efficient graphical environment (IceWM)
+# directly on the Linux framebuffer (/dev/fb0) using Xfbdev / Xorg fbdev,
+# without requiring 3D GPU acceleration.
+#
+# Integrates:
+#   - Analog stick mouse cursor emulation (Left Stick = Mouse, R/Cross = Left Click, L/Circle = Right Click)
+#   - Right stick vertical & horizontal scroll wheel emulation
+#   - Physical Vita buttons mapped for desktop navigation (Start = IceWM Menu, Select = Escape, D-Pad = Arrows)
+#   - On-screen touch virtual keyboard (matchbox-keyboard via toggle-keyboard)
+#   - Bundled lightweight applications:
+#       * Badwolf (privacy-oriented WebKitGTK web browser)
+#       * PCManFM (fast file manager & desktop icons)
+#       * Mousepad / Leafpad (text editor with syntax highlighting)
+#       * Xfce Task Manager (GUI activity and resource monitor)
+#       * Welcome Guide (graphical tutorial and controls guide)
+#       * Sakura (lightweight GTK terminal emulator)
+#       * Feh (image viewer)
+#
+# Uses the same persistent ext4 container (alpine.img) as alpine-chroot.
+# Memory footprint: ~20-30 MB RAM (saving over 100 MB compared to XFCE).
+
+set -e
+export GLYCIN_DISABLE_SANDBOX=i-know-the-risks
+
+TARBALL="/usr/share/alpine/alpine-minirootfs-armv7.tar.gz"
+DEFAULT_SIZE_MB=2048
+CUSTOM_SIZE_MB=""
+CUSTOM_DIR=""
+CUSTOM_FILE=""
+DO_RECREATE=0
+FORCE_SETUP=0
+CHECK_STATUS=0
+MOUNT_POINT="/mnt/alpine"
+
+show_usage() {
+    cat << 'EOF'
+Usage: alpine-desktop [OPTIONS]
+
+Turnkey Lightweight Graphical Desktop for Alpine Linux (IceWM on Framebuffer).
+Runs directly on /dev/fb0 without requiring 3D GPU acceleration.
+Ultra-low memory footprint (~25 MB RAM idle vs ~140 MB for XFCE).
+
+Desktop Controls:
+  * Left Analog Stick   : Move Mouse Cursor (calibrated half-speed)
+  * R Trigger / Cross   : Left Click
+  * L Trigger / Circle  : Right Click
+  * Square (□)          : Middle Click
+  * Triangle (△)        : Enter Key
+  * Right Stick (Up/Dn) : Scroll Wheel
+  * Touchscreen         : Direct Touchscreen Input & Tap
+  * Start Button        : Open IceWM Application Menu (Super / Win key)
+  * Select Button       : Escape
+  * On-Screen Keyboard  : Tap Keyboard icon on Taskbar or Desktop
+
+Bundled Applications:
+  * Welcome Guide       : Handheld desktop tutorial & controls overview
+  * On-Screen Keyboard  : Matchbox virtual keyboard (tap to show/hide)
+  * Web Browser         : Badwolf (modern WebKitGTK web browsing)
+  * File Manager        : PCManFM (fast tabbed file manager & desktop icons)
+  * Text Editor         : Mousepad (code notepad with syntax highlighting)
+  * Activity Monitor    : Xfce Task Manager (live CPU, RAM & tasks)
+  * Terminal Emulator   : Sakura (fast tabbed GTK terminal, apk CLI)
+  * Reboot to VitaOS    : Reboot console back to PlayStation Vita LiveArea
+
+Options:
+  --setup              Download and re-install desktop packages & configs
+  --status             Show current desktop installation and container status
+  -s, --size <MB|GB>   Container size if creating fresh image (default: 2048M / 2GB)
+  -d, --dir <PATH>     Directory to store alpine.img (default: /mnt/ux0)
+  -f, --file <PATH>    Exact custom path for the alpine image file
+  --recreate           Delete existing image and create a fresh one from scratch
+  -h, --help           Show this help message
+
+Requirements:
+  Initial setup requires an active Wi-Fi internet connection to download
+  X11, IceWM, and desktop utilities (approx 120 MB download).
+  Connect using 'vita-wifi' before running initial setup.
+EOF
+    exit 0
+}
+
+# Ensure storage partitions are mounted
+ensure_storage_mounted() {
+    mkdir -p /mnt/ur0 /mnt/ux0 "${MOUNT_POINT}" /tmp/alpine
+
+    # Mount ux0 (Game card slot / SD2Vita or Sony memory card)
+    if ! grep -qs ' /mnt/ux0 ' /proc/mounts; then
+        for dev in /dev/mmcblk1p1 /dev/mmcblk1 /dev/mmcblk2p1 /dev/mmcblk2; do
+            if [ -b "$dev" ]; then
+                mount -t exfat -o rw "$dev" /mnt/ux0 2>/dev/null || \
+                mount -t vfat -o rw "$dev" /mnt/ux0 2>/dev/null || \
+                mount -t ext4 -o rw "$dev" /mnt/ux0 2>/dev/null || \
+                mount "$dev" /mnt/ux0 2>/dev/null || true
+                break
+            fi
+        done
+    fi
+
+    # Mount ur0 (Vita internal eMMC)
+    if ! grep -qs ' /mnt/ur0 ' /proc/mounts; then
+        for dev in /dev/vita/ur0 /dev/mmcblk0p12; do
+            if [ -b "$dev" ]; then
+                mount -t exfat -o rw "$dev" /mnt/ur0 2>/dev/null || \
+                mount -t vfat -o rw "$dev" /mnt/ur0 2>/dev/null || \
+                mount -t ext4 -o rw "$dev" /mnt/ur0 2>/dev/null || \
+                mount "$dev" /mnt/ur0 2>/dev/null || true
+                break
+            fi
+        done
+    fi
+}
+
+# Parse command line options
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h|--help)
+            show_usage
+            ;;
+        --setup)
+            FORCE_SETUP=1
+            shift
+            ;;
+        --status)
+            CHECK_STATUS=1
+            shift
+            ;;
+        --recreate)
+            DO_RECREATE=1
+            shift
+            ;;
+        -s|--size)
+            [ -z "${2:-}" ] && { echo "Error: --size requires a size (e.g. 2048 or 2G)"; exit 1; }
+            CUSTOM_SIZE_MB="$2"
+            shift 2
+            ;;
+        -d|--dir)
+            [ -z "${2:-}" ] && { echo "Error: --dir requires a directory path"; exit 1; }
+            CUSTOM_DIR="$2"
+            shift 2
+            ;;
+        -f|--file)
+            [ -z "${2:-}" ] && { echo "Error: --file requires a file path"; exit 1; }
+            CUSTOM_FILE="$2"
+            shift 2
+            ;;
+        *)
+            echo "Unknown option: $1 (run 'alpine-desktop --help' for options)"
+            exit 1
+            ;;
+    esac
+done
+
+ensure_storage_mounted
+
+# Determine target image file
+if [ -n "${CUSTOM_FILE}" ]; then
+    IMG_FILE="${CUSTOM_FILE}"
+elif [ -n "${CUSTOM_DIR}" ]; then
+    IMG_FILE="${CUSTOM_DIR}/alpine.img"
+elif grep -qs ' /mnt/ux0 ' /proc/mounts; then
+    IMG_FILE="/mnt/ux0/alpine.img"
+elif grep -qs ' /mnt/ur0 ' /proc/mounts; then
+    echo "Notice: /mnt/ux0 (SD card) is not mounted. Defaulting to /mnt/ur0 (internal storage)."
+    IMG_FILE="/mnt/ur0/alpine.img"
+else
+    echo "Error: Neither /mnt/ux0 nor /mnt/ur0 storage detected!"
+    echo "A persistent storage device is required to install the graphical desktop."
+    exit 1
+fi
+
+TARGET="${MOUNT_POINT}"
+
+# Show status if requested
+if [ $CHECK_STATUS -eq 1 ]; then
+    echo "========================================================="
+    echo " Alpine Linux Graphical Desktop Status                   "
+    echo "========================================================="
+    echo " Target Image:      ${IMG_FILE}"
+    if [ -f "${IMG_FILE}" ]; then
+        echo " Image File:        Exists ($(ls -lh "${IMG_FILE}" | awk '{print $5}'))"
+    else
+        echo " Image File:        Not created yet"
+    fi
+    if grep -qs " ${TARGET} " /proc/mounts; then
+        echo " Container Mount:   Mounted on ${TARGET}"
+    else
+        echo " Container Mount:   Not currently mounted"
+    fi
+    if [ -f "${TARGET}/usr/bin/icewm" ] || [ -f "${TARGET}/usr/bin/icewm-session" ]; then
+        echo " Desktop Status:    Installed (IceWM Lightweight Ready)"
+    else
+        echo " Desktop Status:    Not installed yet (runs on first launch)"
+    fi
+    echo "========================================================="
+    exit 0
+fi
+
+# Ensure loopback image exists
+if [ $DO_RECREATE -eq 1 ] && [ -f "${IMG_FILE}" ]; then
+    echo "Removing existing ${IMG_FILE} as requested..."
+    umount "${TARGET}" 2>/dev/null || true
+    rm -f "${IMG_FILE}"
+fi
+
+if [ ! -f "${IMG_FILE}" ]; then
+    SIZE_MB=${CUSTOM_SIZE_MB:-$DEFAULT_SIZE_MB}
+    case "${SIZE_MB}" in
+        *G|*g)
+            NUM=$(echo "${SIZE_MB}" | tr -d 'Gg')
+            SIZE_MB=$((NUM * 1024))
+            ;;
+        *M|*m)
+            SIZE_MB=$(echo "${SIZE_MB}" | tr -d 'Mm')
+            ;;
+    esac
+
+    IMG_DIR=$(dirname "${IMG_FILE}")
+    mkdir -p "${IMG_DIR}"
+
+    echo "========================================================="
+    echo " Creating Persistent Alpine Linux Container              "
+    echo "========================================================="
+    echo " Target Path: ${IMG_FILE}"
+    echo " Image Size:  ${SIZE_MB} MB ($((SIZE_MB / 1024)) GB)"
+    echo " Allocating space (please wait)..."
+
+    dd if=/dev/zero of="${IMG_FILE}" bs=1M count="${SIZE_MB}" 2>/dev/null || {
+        echo "Error: Failed to allocate ${SIZE_MB}MB on ${IMG_DIR}!"
+        exit 1
+    }
+
+    echo " Formatting ext4 filesystem..."
+    mke2fs -F "${IMG_FILE}" >/dev/null 2>&1 || true
+    echo " Persistent container created successfully!"
+    echo ""
+fi
+
+# Mount container loopback
+mkdir -p "${TARGET}"
+if ! grep -qs " ${TARGET} " /proc/mounts; then
+    mount -o loop "${IMG_FILE}" "${TARGET}" 2>/dev/null || {
+        echo "Error: Failed to mount ${IMG_FILE} via loopback!"
+        exit 1
+    }
+fi
+
+# Extract base rootfs if fresh container
+if [ ! -f "${TARGET}/bin/sh" ]; then
+    if [ ! -f "${TARBALL}" ]; then
+        echo "Error: Alpine mini-rootfs tarball not found at ${TARBALL}!"
+        exit 1
+    fi
+    echo "=== Initializing Alpine Linux rootfs in ${TARGET} ==="
+    zcat "${TARBALL}" | tar -x -C "${TARGET}"
+
+    mkdir -p "${TARGET}/etc"
+    cp /etc/resolv.conf "${TARGET}/etc/resolv.conf" 2>/dev/null || {
+        echo "nameserver 1.1.1.1" > "${TARGET}/etc/resolv.conf"
+        echo "nameserver 8.8.8.8" >> "${TARGET}/etc/resolv.conf"
+    }
+
+    # Set up APK repositories (Alpine 3.24)
+    if [ ! -s "${TARGET}/etc/apk/repositories" ]; then
+        REPO_BASE="http://dl-cdn.alpinelinux.org/alpine"
+        mkdir -p "${TARGET}/etc/apk"
+        printf '%s/v3.24/main\n%s/v3.24/community\n' "${REPO_BASE}" "${REPO_BASE}" > "${TARGET}/etc/apk/repositories"
+    fi
+    echo "Alpine Linux rootfs initialized."
+    echo ""
+fi
+
+# Ensure APK repositories point to v3.24 (upgrading any older v3.20 configs)
+if [ -f "${TARGET}/etc/apk/repositories" ]; then
+    sed -i 's/v3\.[0-9]*/v3.24/g' "${TARGET}/etc/apk/repositories" 2>/dev/null || true
+fi
+
+# Sync DNS resolution
+[ -f /etc/resolv.conf ] && cp /etc/resolv.conf "${TARGET}/etc/resolv.conf" 2>/dev/null || true
+
+# Bind system pseudo-filesystems
+mkdir -p "${TARGET}/proc" "${TARGET}/sys" "${TARGET}/dev" "${TARGET}/dev/pts" "${TARGET}/dev/shm" "${TARGET}/run"
+grep -qs " ${TARGET}/proc " /proc/mounts || mount -t proc proc "${TARGET}/proc"
+grep -qs " ${TARGET}/sys " /proc/mounts || mount -t sysfs sysfs "${TARGET}/sys"
+grep -qs " ${TARGET}/dev " /proc/mounts || mount --bind /dev "${TARGET}/dev"
+grep -qs " ${TARGET}/dev/pts " /proc/mounts || mount -t devpts devpts "${TARGET}/dev/pts" -o mode=0620,gid=5,ptmxmode=0666 2>/dev/null || true
+grep -qs " ${TARGET}/dev/shm " /proc/mounts || mount -t tmpfs tmpfs "${TARGET}/dev/shm" -o mode=1777 2>/dev/null || true
+grep -qs " ${TARGET}/run " /proc/mounts || mount -t tmpfs tmpfs "${TARGET}/run" -o mode=0755 2>/dev/null || true
+
+cleanup_chroot() {
+    # Restore vita-input-mapper to standard console mode on exit
+    if pidof vita-input-mapper >/dev/null 2>&1; then
+        killall vita-input-mapper 2>/dev/null || true
+        sleep 0.2
+        /usr/bin/vita-input-mapper >/tmp/vita-input-mapper.log 2>&1 &
+    fi
+
+    # Restore console framebuffer keyboard when exiting desktop
+    if ! pidof fbkeyboard >/dev/null 2>&1; then
+        echo "[alpine-desktop] Restoring console touch keyboard (fbkeyboard)..."
+        /usr/bin/fbkeyboard > /tmp/fbkeyboard.log 2>&1 &
+    fi
+
+    # Stop container udevd if running
+    chroot "${TARGET}" killall udevd 2>/dev/null || true
+
+    # Unmount bind mounts
+    umount "${TARGET}/run"     2>/dev/null || true
+    umount "${TARGET}/dev/shm" 2>/dev/null || true
+    umount "${TARGET}/dev/pts" 2>/dev/null || true
+    umount "${TARGET}/dev"     2>/dev/null || true
+    umount "${TARGET}/sys"     2>/dev/null || true
+    umount "${TARGET}/proc"    2>/dev/null || true
+    sync 2>/dev/null || true
+}
+trap cleanup_chroot EXIT INT TERM
+
+# Deploy helper utilities inside target container
+deploy_desktop_helpers() {
+    mkdir -p "${TARGET}/usr/bin" "${TARGET}/usr/share/applications"
+
+    # Install desktop helper scripts from base rootfs
+    cp /usr/bin/vita-desktop-welcome "${TARGET}/usr/bin/vita-desktop-welcome"
+    cp /usr/bin/toggle-keyboard      "${TARGET}/usr/bin/toggle-keyboard"
+    cp /usr/bin/taskmanager          "${TARGET}/usr/bin/taskmanager"
+    cp /usr/bin/vita-reboot          "${TARGET}/usr/bin/vita-reboot"
+    chmod +x "${TARGET}/usr/bin/vita-desktop-welcome" \
+             "${TARGET}/usr/bin/toggle-keyboard" \
+             "${TARGET}/usr/bin/taskmanager" \
+             "${TARGET}/usr/bin/vita-reboot"
+
+    # Install Xfbdev Xorg launcher wrapper inside container
+    cat << 'EOF' > "${TARGET}/usr/bin/Xfbdev"
+#!/bin/sh
+# Xfbdev: Standalone Lightweight X11 on /dev/fb0 for LinuxOnVita
+HAS_DISP=0
+for arg in "$@"; do
+    case "$arg" in
+        :[0-9]*) HAS_DISP=1 ;;
+    esac
+done
+if [ $HAS_DISP -eq 0 ]; then
+    set -- :0 "$@"
+fi
+exec /usr/bin/Xorg "$@" -config /etc/X11/xorg.conf.d/10-fbdev.conf -dpi 96 -retro -nolisten tcp
+EOF
+    chmod +x "${TARGET}/usr/bin/Xfbdev"
+
+    # Wrap matchbox-keyboard so any direct invocation floats without carving workarea
+    if [ -f "${TARGET}/usr/bin/matchbox-keyboard.real" ] || [ -f "${TARGET}/usr/bin/matchbox-keyboard" ]; then
+        if [ -f "${TARGET}/usr/bin/matchbox-keyboard" ] && head -c 4 "${TARGET}/usr/bin/matchbox-keyboard" 2>/dev/null | grep -q 'ELF'; then
+            mv -f "${TARGET}/usr/bin/matchbox-keyboard" "${TARGET}/usr/bin/matchbox-keyboard.real"
+        fi
+        if [ -f "${TARGET}/usr/bin/matchbox-keyboard.real" ]; then
+            cat << 'WRAPPER_EOF' > "${TARGET}/usr/bin/matchbox-keyboard"
+#!/bin/sh
+# Wrapper to run matchbox-keyboard in floating mode without reserving screen workarea
+export DISPLAY="${DISPLAY:-:0}"
+(
+    for i in $(seq 1 40); do
+        if which xprop >/dev/null 2>&1 && xprop -name "Keyboard" >/dev/null 2>&1; then
+            xprop -name "Keyboard" -remove _NET_WM_STRUT_PARTIAL 2>/dev/null || true
+            xprop -name "Keyboard" -remove _NET_WM_STRUT 2>/dev/null || true
+            if which xdotool >/dev/null 2>&1; then
+                xdotool search --name "Keyboard" windowmove 0 334 2>/dev/null || true
+            fi
+            break
+        fi
+        sleep 0.05
+    done
+) &
+exec /usr/bin/matchbox-keyboard.real "$@"
+WRAPPER_EOF
+            chmod +x "${TARGET}/usr/bin/matchbox-keyboard"
+        fi
+    fi
+
+    # Wrap sakura so SHELL is always set even if launched in a restricted subshell
+    if [ -f "${TARGET}/usr/bin/sakura.real" ] || [ -f "${TARGET}/usr/bin/sakura" ]; then
+        if [ -f "${TARGET}/usr/bin/sakura" ] && head -c 4 "${TARGET}/usr/bin/sakura" 2>/dev/null | grep -q 'ELF'; then
+            mv -f "${TARGET}/usr/bin/sakura" "${TARGET}/usr/bin/sakura.real"
+        fi
+        if [ -f "${TARGET}/usr/bin/sakura.real" ]; then
+            cat << 'WRAPPER_EOF' > "${TARGET}/usr/bin/sakura"
+#!/bin/sh
+# Wrapper to ensure SHELL is always exported for sakura VTE terminal
+export SHELL="${SHELL:-/bin/sh}"
+exec /usr/bin/sakura.real "$@"
+WRAPPER_EOF
+            chmod +x "${TARGET}/usr/bin/sakura"
+        fi
+    fi
+
+    # Symlink leafpad -> mousepad
+    chroot "${TARGET}" /bin/sh -c "ln -sf /usr/bin/mousepad /usr/bin/leafpad 2>/dev/null || true"
+
+    # Install XDG desktop files in /usr/share/applications
+    cat << 'EOF' > "${TARGET}/usr/share/applications/welcome.desktop"
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Welcome Guide
+Comment=Welcome to LinuxOnVita Desktop
+Exec=/usr/bin/vita-desktop-welcome
+Icon=preferences-desktop
+Terminal=false
+Categories=System;Utility;
+EOF
+
+    cat << 'EOF' > "${TARGET}/usr/share/applications/toggle-keyboard.desktop"
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=On-Screen Keyboard
+Comment=Toggle Matchbox Virtual Touch Keyboard
+Exec=/usr/bin/toggle-keyboard
+Icon=input-keyboard
+Terminal=false
+Categories=Utility;Accessibility;
+EOF
+
+    cat << 'EOF' > "${TARGET}/usr/share/applications/taskmanager.desktop"
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Activity Monitor
+Comment=Task Manager & System Resource Monitor
+Exec=/usr/bin/taskmanager
+Icon=utilities-system-monitor
+Terminal=false
+Categories=System;Monitor;
+EOF
+
+    cat << 'EOF' > "${TARGET}/usr/share/applications/reboot.desktop"
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Reboot to VitaOS
+Comment=Reboot console and return to PlayStation Vita LiveArea
+Exec=/usr/bin/vita-reboot
+Icon=system-reboot
+Terminal=false
+Categories=System;
+EOF
+}
+
+# Configure X11 Framebuffer & Input Devices (Touchscreen, Buttons, Mouse)
+configure_xorg() {
+    mkdir -p "${TARGET}/etc/X11/xorg.conf.d"
+    cat << 'EOF' > "${TARGET}/etc/X11/xorg.conf.d/10-fbdev.conf"
+# LinuxOnVita Framebuffer & Input Device Configuration
+
+Section "ServerFlags"
+    Option "AutoAddDevices" "true"
+    Option "AutoEnableDevices" "true"
+    Option "DontVTSwitch" "true"
+EndSection
+
+Section "Device"
+    Identifier "VitaFB"
+    Driver     "fbdev"
+    Option     "fbdev" "/dev/fb0"
+    Option     "ShadowFB" "true"
+EndSection
+
+Section "Monitor"
+    Identifier "VitaDisplay"
+    Option     "DPI" "96 x 96"
+    DisplaySize 254 144
+EndSection
+
+Section "Screen"
+    Identifier "Screen0"
+    Device     "VitaFB"
+    Monitor    "VitaDisplay"
+    DefaultDepth 24
+    SubSection "Display"
+        Depth 24
+        Modes "960x544"
+    EndSubSection
+EndSection
+
+# Catchall evdev loader for any event node
+Section "InputClass"
+    Identifier "evdev-all-catchall"
+    MatchDevicePath "/dev/input/event*"
+    Driver "evdev"
+    Option "SendCoreEvents" "true"
+EndSection
+
+# PlayStation Vita Touchscreen Configuration (Hardware evdev digitizer)
+Section "InputClass"
+    Identifier "vita-touchscreen"
+    MatchProduct "*Touchscreen*"
+    MatchDevicePath "/dev/input/event*"
+    Driver "evdev"
+    Option "SendCoreEvents" "true"
+    Option "Calibration" "0 1920 0 1080"
+    Option "EmulateThirdButton" "1"
+    Option "EmulateThirdButtonTimeout" "750"
+    Option "EmulateThirdButtonThreshold" "30"
+EndSection
+
+# PlayStation Vita Controller & Analog Stick Mouse Emulation
+Section "InputClass"
+    Identifier "vita-controller-mouse"
+    MatchProduct "*Vita*|*Virtual*"
+    MatchDevicePath "/dev/input/event*"
+    Driver "evdev"
+    Option "SendCoreEvents" "true"
+EndSection
+
+# PlayStation Vita Hardware Buttons
+Section "InputClass"
+    Identifier "vita-hardware-buttons"
+    MatchProduct "*Buttons*"
+    MatchDevicePath "/dev/input/event*"
+    Driver "evdev"
+    Option "SendCoreEvents" "true"
+EndSection
+EOF
+}
+
+# Configure IceWM Desktop Environment, Menus, Fonts, and Desktop Icons
+configure_icewm() {
+    mkdir -p "${TARGET}/root/.icewm" \
+             "${TARGET}/root/.config/icewm" \
+             "${TARGET}/etc/icewm" \
+             "${TARGET}/usr/share/icewm" \
+             "${TARGET}/root/Desktop" \
+             "${TARGET}/root/.config/pcmanfm/default" \
+             "${TARGET}/root/.config/libfm" \
+             "${TARGET}/etc/xdg/libfm" \
+             "${TARGET}/root/.config/gtk-3.0"
+
+    # Symlink root directories to / for any process running with HOME=/
+    ln -sfn /root/.icewm "${TARGET}/.icewm" 2>/dev/null || true
+    ln -sfn /root/Desktop "${TARGET}/Desktop" 2>/dev/null || true
+    ln -sfn /root/.config "${TARGET}/.config" 2>/dev/null || true
+
+    # 1. IceWM Preferences & Theme Overrides (Tuned for PlayStation Vita 960x544 at 96 DPI)
+    cat << 'EOF' > "${TARGET}/root/.icewm/preferences"
+# IceWM Configuration for LinuxOnVita
+# Screen: 960x544 | Memory-Optimized & Proportional Typography
+
+# Typography & Font Sizes (Tuned for PS Vita 960x544 at 96 DPI)
+TitleFontNameXft="sans-serif:size=9:bold"
+MenuFontNameXft="sans-serif:size=9"
+StatusFontNameXft="monospace:size=8"
+ActiveTaskBarFontNameXft="sans-serif:size=9"
+NormalTaskBarFontNameXft="sans-serif:size=9"
+ToolTipFontNameXft="sans-serif:size=8"
+QuickSwitchFontNameXft="sans-serif:size=9"
+ListBoxFontNameXft="sans-serif:size=9"
+LabelFontNameXft="sans-serif:size=9"
+ClockFontNameXft="monospace:size=8"
+ApmFontNameXft="monospace:size=8"
+InputFontNameXft="monospace:size=9"
+
+TitleFontName="-*-fixed-medium-r-*-*-10-*-*-*-*-*-*-*"
+MenuFontName="-*-fixed-medium-r-*-*-10-*-*-*-*-*-*-*"
+StatusFontName="-*-fixed-medium-r-*-*-9-*-*-*-*-*-*-*"
+QuickSwitchFontName="-*-fixed-medium-r-*-*-10-*-*-*-*-*-*-*"
+NormalTaskBarFontName="-*-fixed-medium-r-*-*-9-*-*-*-*-*-*-*"
+ActiveTaskBarFontName="-*-fixed-medium-r-*-*-9-*-*-*-*-*-*-*"
+ToolTipFontName="-*-fixed-medium-r-*-*-9-*-*-*-*-*-*-*"
+ListBoxFontName="-*-fixed-medium-r-*-*-10-*-*-*-*-*-*-*"
+LabelFontName="-*-fixed-medium-r-*-*-10-*-*-*-*-*-*-*"
+ClockFontName="-*-fixed-medium-r-*-*-9-*-*-*-*-*-*-*"
+ApmFontName="-*-fixed-medium-r-*-*-9-*-*-*-*-*-*-*"
+
+# Window Title Bar & Borders
+TitleBarHeight=20
+BorderSizeX=2
+BorderSizeY=2
+CornerSizeX=16
+CornerSizeY=16
+
+# Taskbar Configuration
+Theme="default/default.theme"
+ShowTaskBar=1
+TaskBarAtTop=0
+TaskBarDoubleHeight=0
+TaskBarShowClock=1
+TaskBarShowAPMStatus=0
+TaskBarShowMailBoxStatus=0
+TaskBarShowCPUStatus=1
+TaskBarShowMEMStatus=1
+TaskBarShowNetStatus=1
+TaskBarShowWorkspaces=1
+TaskBarShowWindows=1
+TaskBarShowShowDesktopButton=1
+TaskBarShowTray=1
+TrayIconSize=16
+
+# Vita Controller Shortcuts
+KeySysMenu="Super_L"
+KeySysWindowList="Alt+Tab"
+KeySysDialog="Alt+F2"
+
+# Icon Paths & Extensions
+IconPath="/usr/share/icons/Adwaita/16x16/apps:/usr/share/icons/Adwaita/24x24/apps:/usr/share/icons/Adwaita/32x32/apps:/usr/share/icons/Adwaita/48x48/apps:/usr/share/icons/Adwaita/16x16/actions:/usr/share/icons/Adwaita/24x24/actions:/usr/share/icons/hicolor/24x24/apps:/usr/share/icons/hicolor/32x32/apps:/usr/share/icons/hicolor/48x48/apps:/usr/share/pixmaps:/usr/share/icewm/icons"
+IconExt=".png:.xpm:.svg"
+EOF
+
+    # IceWM prefoverride (unconditionally overrides theme font sizes)
+    cp "${TARGET}/root/.icewm/preferences" "${TARGET}/root/.icewm/prefoverride"
+
+    # 2. IceWM Taskbar Toolbar (quick-launch shortcuts removed per user preference)
+    cat << 'EOF' > "${TARGET}/root/.icewm/toolbar"
+# IceWM taskbar quick-launch shortcuts removed (use Desktop icons or Start Menu)
+EOF
+
+    # 2b. IceWM Window Options (Keep on-screen keyboard floating OnTop without shrinking workarea)
+    cat << 'EOF' > "${TARGET}/root/.icewm/winoptions"
+# IceWM Window Options for LinuxOnVita
+# Keep on-screen keyboard floating on top without carving workarea
+Keyboard.layer: OnTop
+Keyboard.doNotCover: 0
+Keyboard.ignoreTaskBar: 1
+Keyboard.ignoreWinList: 1
+Keyboard.allWorkspaces: 1
+Keyboard.fMove: 1
+Keyboard.fClose: 1
+Keyboard.dTitleBar: 1
+Keyboard.dBorder: 1
+Keyboard.dClose: 1
+
+matchbox-keyboard.layer: OnTop
+matchbox-keyboard.doNotCover: 0
+matchbox-keyboard.ignoreTaskBar: 1
+matchbox-keyboard.ignoreWinList: 1
+matchbox-keyboard.allWorkspaces: 1
+matchbox-keyboard.fMove: 1
+matchbox-keyboard.fClose: 1
+matchbox-keyboard.dTitleBar: 1
+matchbox-keyboard.dBorder: 1
+matchbox-keyboard.dClose: 1
+EOF
+
+    # 3. IceWM Application Menu
+    cat << 'EOF' > "${TARGET}/root/.icewm/menu"
+prog "Welcome Guide" "preferences-desktop" /usr/bin/vita-desktop-welcome
+prog "On-Screen Keyboard" "input-keyboard" /usr/bin/toggle-keyboard
+prog "File Manager" "system-file-manager" pcmanfm
+prog "Web Browser" "web-browser" badwolf
+prog "Text Editor" "text-editor" mousepad
+prog "Activity Monitor" "utilities-system-monitor" /usr/bin/taskmanager
+prog "Terminal" "utilities-terminal" sakura
+separator
+menu "Accessories" "applications-accessories" {
+    prog "Welcome Guide" "preferences-desktop" /usr/bin/vita-desktop-welcome
+    prog "On-Screen Keyboard" "input-keyboard" /usr/bin/toggle-keyboard
+    prog "Text Editor (Mousepad)" "text-editor" mousepad
+    prog "File Manager (PCManFM)" "system-file-manager" pcmanfm
+    prog "Image Viewer (Feh)" "image-viewer" feh
+}
+menu "Internet" "applications-internet" {
+    prog "Badwolf Web Browser" "web-browser" badwolf
+}
+menu "System" "applications-system" {
+    prog "Activity Monitor (GUI)" "utilities-system-monitor" /usr/bin/taskmanager
+    prog "Process Monitor (htop)" "utilities-terminal" sakura -e htop
+    prog "Process Monitor (top)" "utilities-terminal" sakura -e top
+    prog "Terminal (Sakura)" "utilities-terminal" sakura
+    prog "Reboot to VitaOS" "system-reboot" /usr/bin/vita-reboot
+}
+menu "Settings" "preferences-system" {
+    prog "Welcome Guide" "preferences-desktop" /usr/bin/vita-desktop-welcome
+    prog "Desktop Preferences" "preferences-desktop" pcmanfm --desktop-pref
+}
+separator
+restart "Restart IceWM" "system-restart"
+prog "Reboot to VitaOS" "system-reboot" /usr/bin/vita-reboot
+prog "Log Out" "system-log-out" killall icewm-session
+EOF
+
+    # Mirror configuration to all possible paths IceWM checks
+    cp "${TARGET}/root/.icewm/preferences" "${TARGET}/root/.config/icewm/preferences"
+    cp "${TARGET}/root/.icewm/prefoverride" "${TARGET}/root/.config/icewm/prefoverride"
+    cp "${TARGET}/root/.icewm/toolbar" "${TARGET}/root/.config/icewm/toolbar"
+    cp "${TARGET}/root/.icewm/menu" "${TARGET}/root/.config/icewm/menu"
+    cp "${TARGET}/root/.icewm/winoptions" "${TARGET}/root/.config/icewm/winoptions"
+
+    cp "${TARGET}/root/.icewm/preferences" "${TARGET}/etc/icewm/preferences"
+    cp "${TARGET}/root/.icewm/prefoverride" "${TARGET}/etc/icewm/prefoverride"
+    cp "${TARGET}/root/.icewm/toolbar" "${TARGET}/etc/icewm/toolbar"
+    cp "${TARGET}/root/.icewm/menu" "${TARGET}/etc/icewm/menu"
+    cp "${TARGET}/root/.icewm/winoptions" "${TARGET}/etc/icewm/winoptions"
+
+    cp "${TARGET}/root/.icewm/preferences" "${TARGET}/usr/share/icewm/preferences" 2>/dev/null || true
+    cp "${TARGET}/root/.icewm/prefoverride" "${TARGET}/usr/share/icewm/prefoverride" 2>/dev/null || true
+    cp "${TARGET}/root/.icewm/toolbar" "${TARGET}/usr/share/icewm/toolbar" 2>/dev/null || true
+    cp "${TARGET}/root/.icewm/menu" "${TARGET}/usr/share/icewm/menu" 2>/dev/null || true
+    cp "${TARGET}/root/.icewm/winoptions" "${TARGET}/usr/share/icewm/winoptions" 2>/dev/null || true
+
+    # 4. IceWM Startup script (starts PCManFM desktop manager)
+    cat << 'EOF' > "${TARGET}/root/.icewm/startup"
+#!/bin/sh
+pcmanfm --desktop &
+EOF
+    chmod +x "${TARGET}/root/.icewm/startup"
+    cp "${TARGET}/root/.icewm/startup" "${TARGET}/root/.config/icewm/startup" 2>/dev/null || true
+    cp "${TARGET}/root/.icewm/startup" "${TARGET}/etc/icewm/startup" 2>/dev/null || true
+
+    # 5. GTK 2.0 and 3.0 font configuration (Sans 9)
+    cat << 'EOF' > "${TARGET}/root/.gtkrc-2.0"
+gtk-font-name="Sans 9"
+gtk-icon-theme-name="Adwaita"
+EOF
+    cp "${TARGET}/root/.gtkrc-2.0" "${TARGET}/.gtkrc-2.0" 2>/dev/null || true
+
+    cat << 'EOF' > "${TARGET}/root/.config/gtk-3.0/settings.ini"
+[Settings]
+gtk-font-name=Sans 9
+gtk-icon-theme-name=Adwaita
+EOF
+
+    # 5b. Sakura Terminal configuration (Monospace 9 font, hide bulky scrollbar for 960x544)
+    mkdir -p "${TARGET}/root/.config/sakura"
+    cat << 'EOF' > "${TARGET}/root/.config/sakura/sakura.conf"
+[sakura]
+font=Monospace 9
+show_scrollbar=0
+scroll_lines=1000
+use_palette=1
+word_delimiters=-A-Za-z0-9:./?%_~&#
+EOF
+
+    # 6. PCManFM Desktop background & font configuration
+    cat << 'EOF' > "${TARGET}/root/.config/pcmanfm/default/desktop-items-0.conf"
+[*]
+wallpaper_mode=color
+desktop_bg=#1a1b26
+desktop_fg=#ffffff
+desktop_shadow=#000000
+desktop_font=Sans 9
+show_wm_menu=1
+sort=mtime;ascending;
+show_documents=0
+show_trash=0
+show_mounts=1
+EOF
+
+    # 6b. LibFM configuration (quick_exec=1 executes desktop shortcuts immediately without prompt)
+    cat << 'EOF' > "${TARGET}/root/.config/libfm/libfm.conf"
+[config]
+quick_exec=1
+terminal=sakura
+single_click=0
+use_trash=1
+confirm_del=1
+thumbnail_local=1
+thumbnail_max=2048
+
+[ui]
+big_icon_size=48
+small_icon_size=24
+thumbnail_size=128
+pane_icon_size=24
+show_thumbnail=1
+EOF
+    cp "${TARGET}/root/.config/libfm/libfm.conf" "${TARGET}/etc/xdg/libfm/libfm.conf" 2>/dev/null || true
+
+    # 6c. PCManFM configuration
+    cat << 'EOF' > "${TARGET}/root/.config/pcmanfm/default/pcmanfm.conf"
+[config]
+bm_open_method=0
+
+[volume]
+mount_on_startup=1
+mount_removable=1
+autorun=1
+
+[desktop]
+wallpaper_mode=color
+desktop_bg=#1a1b26
+desktop_fg=#ffffff
+desktop_shadow=#000000
+show_wm_menu=1
+
+[ui]
+win_width=640
+win_height=480
+splitter_pos=150
+side_pane_mode=1
+view_mode=0
+show_hidden=0
+sort_type=0
+sort_by=2
+max_tab_chars=32
+EOF
+    mkdir -p "${TARGET}/etc/xdg/pcmanfm/default"
+    cp "${TARGET}/root/.config/pcmanfm/default/pcmanfm.conf" "${TARGET}/etc/xdg/pcmanfm/default/pcmanfm.conf" 2>/dev/null || true
+
+    # 7. Desktop Shortcuts in /root/Desktop
+    cat << 'EOF' > "${TARGET}/root/Desktop/welcome.desktop"
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Welcome Guide
+Comment=Desktop Guide & Handheld Controls
+Exec=/usr/bin/vita-desktop-welcome
+Icon=preferences-desktop
+Terminal=false
+Categories=System;Utility;
+EOF
+
+    cat << 'EOF' > "${TARGET}/root/Desktop/keyboard.desktop"
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=On-Screen Keyboard
+Comment=Toggle Matchbox Virtual Touch Keyboard
+Exec=/usr/bin/toggle-keyboard
+Icon=input-keyboard
+Terminal=false
+Categories=Utility;Accessibility;
+EOF
+
+    cat << 'EOF' > "${TARGET}/root/Desktop/pcmanfm.desktop"
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=File Manager
+Comment=PCManFM Lightweight File Manager
+Exec=pcmanfm
+Icon=system-file-manager
+Terminal=false
+Categories=System;FileManager;
+EOF
+
+    cat << 'EOF' > "${TARGET}/root/Desktop/browser.desktop"
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Badwolf Web Browser
+Comment=Privacy-Oriented WebKitGTK Browser
+Exec=badwolf
+Icon=web-browser
+Terminal=false
+Categories=Network;WebBrowser;
+EOF
+
+    cat << 'EOF' > "${TARGET}/root/Desktop/editor.desktop"
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Mousepad Text Editor
+Comment=Lightweight Text Editor
+Exec=mousepad
+Icon=text-editor
+Terminal=false
+Categories=Utility;TextEditor;
+EOF
+
+    cat << 'EOF' > "${TARGET}/root/Desktop/taskmanager.desktop"
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Activity Monitor
+Comment=Task Manager & System Resource Monitor
+Exec=/usr/bin/taskmanager
+Icon=utilities-system-monitor
+Terminal=false
+Categories=System;Monitor;
+EOF
+
+    cat << 'EOF' > "${TARGET}/root/Desktop/terminal.desktop"
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Terminal
+Comment=Sakura Lightweight Terminal Emulator
+Exec=sakura
+Icon=utilities-terminal
+Terminal=false
+Categories=System;TerminalEmulator;
+EOF
+
+    cat << 'EOF' > "${TARGET}/root/Desktop/reboot.desktop"
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Reboot to VitaOS
+Comment=Reboot console and return to PlayStation Vita LiveArea
+Exec=/usr/bin/vita-reboot
+Icon=system-reboot
+Terminal=false
+Categories=System;
+EOF
+
+    chmod +x "${TARGET}/root/Desktop/"*.desktop 2>/dev/null || true
+
+    # 8. User .xinitrc for IceWM session
+    cat << 'EOF' > "${TARGET}/root/.xinitrc"
+#!/bin/sh
+# LinuxOnVita IceWM Session Startup Script
+
+export SHELL=/bin/sh
+export HOME=/root
+export USER=root
+export LOGNAME=root
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export DISPLAY="${DISPLAY:-:0}"
+export LANG="${LANG:-C.UTF-8}"
+export LC_ALL="${LC_ALL:-C.UTF-8}"
+export ICEWM_PRIVCFG=/root/.icewm
+export XDG_CONFIG_HOME=/root/.config
+export XDG_DATA_HOME=/root/.local/share
+export GLYCIN_DISABLE_SANDBOX=i-know-the-risks
+
+cd /root
+
+# Force standard 96 DPI in X resources for Xft and GTK applications
+echo "Xft.dpi: 96" | xrdb -merge 2>/dev/null || true
+
+# Start PCManFM desktop manager for background wallpaper & desktop icons
+pidof pcmanfm >/dev/null 2>&1 || pcmanfm --desktop &
+
+# Launch Welcome Guide if enabled (default true on first boot)
+SHOW_WELCOME=true
+if [ -f /root/.config/linuxonvita/welcome.conf ]; then
+    . /root/.config/linuxonvita/welcome.conf
+fi
+if [ "$SHOW_WELCOME" != "false" ]; then
+    /usr/bin/vita-desktop-welcome &
+fi
+
+dbus-uuidgen --ensure 2>/dev/null || true
+
+if which dbus-launch >/dev/null 2>&1; then
+    exec dbus-launch --exit-with-session icewm-session
+else
+    exec icewm-session
+fi
+EOF
+    chmod +x "${TARGET}/root/.xinitrc"
+
+    # Standard user folders
+    mkdir -p "${TARGET}/root/Templates" "${TARGET}/root/Desktop" "${TARGET}/root/Downloads" "${TARGET}/root/Documents"
+
+    # Ensure profile and environment set SHELL and disable glycin sandbox system-wide inside chroot
+    mkdir -p "${TARGET}/etc/profile.d"
+    cat << 'EOF' > "${TARGET}/etc/profile.d/01-glycin.sh"
+export SHELL="${SHELL:-/bin/sh}"
+export GLYCIN_DISABLE_SANDBOX=i-know-the-risks
+EOF
+    chmod 644 "${TARGET}/etc/profile.d/01-glycin.sh"
+    grep -qs "SHELL=" "${TARGET}/etc/environment" 2>/dev/null || echo "SHELL=/bin/sh" >> "${TARGET}/etc/environment"
+    grep -qs "GLYCIN_DISABLE_SANDBOX" "${TARGET}/etc/environment" 2>/dev/null || echo "GLYCIN_DISABLE_SANDBOX=i-know-the-risks" >> "${TARGET}/etc/environment"
+
+    # Regenerate gdk-pixbuf loaders cache, mime database, and icon cache if tools exist
+    chroot "${TARGET}" /bin/sh -c "
+        export GLYCIN_DISABLE_SANDBOX=i-know-the-risks
+        [ -x /usr/bin/gdk-pixbuf-query-loaders ] && gdk-pixbuf-query-loaders --update-cache 2>/dev/null || true
+        [ -x /usr/bin/update-mime-database ] && update-mime-database /usr/share/mime 2>/dev/null || true
+        if [ -x /usr/bin/gtk-update-icon-cache ]; then
+            gtk-update-icon-cache -f -q /usr/share/icons/Adwaita 2>/dev/null || true
+            gtk-update-icon-cache -f -q /usr/share/icons/hicolor 2>/dev/null || true
+        fi
+        [ -x /usr/bin/bwrap ] && chmod u+s /usr/bin/bwrap 2>/dev/null || true
+    "
+}
+
+# Check if desktop environment is installed
+NEEDS_SETUP=0
+if [ $FORCE_SETUP -eq 1 ]; then
+    NEEDS_SETUP=1
+elif [ ! -f "${TARGET}/usr/bin/icewm" ] || [ ! -f "${TARGET}/usr/bin/pcmanfm" ] || [ ! -f "${TARGET}/usr/bin/yad" ]; then
+    NEEDS_SETUP=1
+fi
+
+if [ $NEEDS_SETUP -eq 1 ]; then
+    echo "========================================================="
+    echo "  Turnkey Lightweight Desktop Setup for Alpine Linux     "
+    echo "========================================================="
+    echo " First-time setup detected."
+    echo " Checking network connection..."
+
+    # Check internet connectivity before attempting apk install
+    ONLINE=0
+    if ping -c 1 -W 2 1.1.1.1 >/dev/null 2>&1 || ping -c 1 -W 2 dl-cdn.alpinelinux.org >/dev/null 2>&1; then
+        ONLINE=1
+    fi
+
+    if [ $ONLINE -eq 0 ]; then
+        echo ""
+        echo " [!] No internet connection detected."
+        echo " Desktop setup requires an active Wi-Fi connection to download:"
+        echo "   * X11 Framebuffer Server (Xorg fbdev)"
+        echo "   * IceWM Lightweight Window Manager (~25 MB RAM)"
+        echo "   * Matchbox On-Screen Virtual Keyboard"
+        echo "   * PCManFM (File Manager), Badwolf (Web Browser), Mousepad (Editor)"
+        echo "   * Xfce Task Manager, Sakura (Terminal), Feh (Image Viewer), YAD"
+        echo ""
+        echo " Connect to Wi-Fi now using:"
+        echo "   vita-wifi connect \"YourWiFiSSID\" \"YourPassword\""
+        echo ""
+        echo " Once connected, re-run 'alpine-desktop' to complete setup."
+        echo "========================================================="
+        exit 1
+    fi
+
+    echo " [OK] Network connection verified."
+    echo ""
+    echo " Downloading and installing lightweight desktop packages..."
+    echo " (This will take a few minutes depending on Wi-Fi speed)"
+    echo ""
+
+    # Install lightweight desktop packages inside chroot
+    chroot "${TARGET}" /bin/sh -c "
+        set -e
+        apk update
+        apk add --no-cache \
+            xinit \
+            xorg-server \
+            xf86-video-fbdev \
+            xf86-input-evdev \
+            xf86-input-libinput \
+            eudev \
+            dbus \
+            dbus-x11 \
+            icewm \
+            pcmanfm \
+            xfce4-taskmanager \
+            htop \
+            mousepad \
+            badwolf \
+            feh \
+            matchbox-keyboard \
+            yad \
+            sakura \
+            xprop \
+            xdotool \
+            font-dejavu \
+            adwaita-icon-theme \
+            hicolor-icon-theme \
+            shared-mime-info \
+            librsvg \
+            gdk-pixbuf \
+            gtk-update-icon-cache
+    "
+
+    # Generate D-Bus machine ID
+    chroot "${TARGET}" /bin/sh -c "dbus-uuidgen --ensure 2>/dev/null || true"
+
+    echo "========================================================="
+    echo " [SUCCESS] Alpine Linux Graphical Desktop Installed!   "
+    echo "========================================================="
+    echo ""
+fi
+
+# Always ensure X11 configuration, desktop helpers, and IceWM configs are up to date
+configure_xorg
+deploy_desktop_helpers
+configure_icewm
+
+# Ensure Swap is active for smooth desktop multitasking
+/etc/init.d/S00mount start >/dev/null 2>&1 || true
+
+echo "========================================================="
+echo "  Launching Alpine Linux Desktop on PlayStation Vita     "
+echo "========================================================="
+echo " Environment:  IceWM on Linux Framebuffer (/dev/fb0)"
+echo " Memory Usage: ~25 MB RAM (Ultra-Lightweight)"
+echo " Display Res:  960x544 (32-bit color, 96 DPI)"
+echo " Hardware:     ARMv7 Cortex-A9"
+echo ""
+echo " Controls:"
+echo "   * Left Analog Stick   : Move Mouse Cursor (calibrated speed)"
+echo "   * R Trigger / Cross   : Left Click"
+echo "   * L Trigger / Circle  : Right Click"
+echo "   * Square (□)          : Middle Click"
+echo "   * Triangle (△)        : Enter Key"
+echo "   * Right Stick (Up/Dn) : Scroll Wheel"
+echo "   * Touchscreen         : Direct Screen Interaction & Tap"
+echo "   * Start Button        : Open IceWM Application Menu"
+echo "   * Select Button       : Escape"
+echo "   * On-Screen Keyboard  : Tap Desktop Keyboard Icon"
+echo ""
+echo " Applications:"
+echo "   * Welcome Guide       : Handheld tutorial & controls overview"
+echo "   * On-Screen Keyboard  : Matchbox virtual keyboard (toggle)"
+echo "   * File Manager        : PCManFM (files & desktop icons)"
+echo "   * Web Browser         : Badwolf (modern WebKitGTK browser)"
+echo "   * Text Editor         : Mousepad / Leafpad"
+echo "   * Activity Monitor    : Xfce Task Manager (CPU, RAM & tasks)"
+echo "   * Terminal            : Sakura (install software with 'apk')"
+echo "   * Reboot to VitaOS    : Reboot console back to VitaOS LiveArea"
+echo ""
+echo " Exit Desktop: Select 'Log Out' from IceWM menu or press Ctrl+C"
+echo "========================================================="
+
+# Suspend console touch keyboard so it does not intercept touch or render over desktop
+if pidof fbkeyboard >/dev/null 2>&1; then
+    echo "[alpine-desktop] Suspending console touch keyboard (fbkeyboard)..."
+    killall fbkeyboard 2>/dev/null || true
+    sleep 0.2
+fi
+
+# Switch vita-input-mapper to Desktop Mode (Analog stick mouse emulation)
+if pidof vita-input-mapper >/dev/null 2>&1; then
+    killall vita-input-mapper 2>/dev/null || true
+    sleep 0.2
+fi
+/usr/bin/vita-input-mapper --desktop >/tmp/vita-input-mapper.log 2>&1 &
+sleep 0.5
+
+# Start udev daemon inside container if available to ensure full device discovery
+if [ -x "${TARGET}/sbin/udevd" ]; then
+    mkdir -p "${TARGET}/run/udev"
+    chroot "${TARGET}" /sbin/udevd --daemon 2>/dev/null || true
+    chroot "${TARGET}" /bin/udevadm trigger --action=add 2>/dev/null || true
+    chroot "${TARGET}" /bin/udevadm settle 2>/dev/null || true
+fi
+
+# Start X11 Framebuffer server and IceWM desktop inside chroot
+chroot "${TARGET}" env -i \
+    SHELL=/bin/sh \
+    HOME=/root \
+    USER=root \
+    LOGNAME=root \
+    PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    DISPLAY=:0 \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    ICEWM_PRIVCFG=/root/.icewm \
+    XDG_CONFIG_HOME=/root/.config \
+    XDG_DATA_HOME=/root/.local/share \
+    GLYCIN_DISABLE_SANDBOX=i-know-the-risks \
+    /bin/sh -l -c "cd /root && xinit /root/.xinitrc -- /usr/bin/Xfbdev :0" || {
+    echo ""
+    echo "[!] Desktop session ended."
+}
+
+echo "Desktop session finished. Restored console mode."
+exit 0

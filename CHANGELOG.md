@@ -5,6 +5,79 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
 
 ---
 
+## [v1.3.0] - 2026-09-28
+
+### Added
+- **Bootstrapper Debug Mode & Diagnostic Logger (`LinuxOnVita.vpk`):**
+  - Added a dedicated "Debug Mode" boot option (`[SQUARE]`) in the bootstrapper VPK based on GitHub Issue #12 to trace, display, and record every step of the Linux bootloader handover.
+  - **Granular Step-by-Step Reporting:** Inspects system firmware version, hardware model identification (`PCH-1000`, `PCH-2000` Slim, or `Dolce` PSTV), physical Sony memory card MSIF presence, storage mount statuses (`ux0:`, `uma0:`, `xmc0:`, `imc0:`), file integrity and exact byte sizes for `zImage`, `vita.dtb`, `vita2000.dtb`, `vita1000.dtb`, `pstv.dtb`, `payload.bin`, and `baremetal-loader.skprx`.
+  - **Dual Persistent Log File Output (`boot_debug.log`):** Writes all boot events with synchronous disk flushing (`sceIoSyncByFd`) to `ux0:data/LinuxOnVita/boot_debug.log` (with fallback to `ur0:data/LinuxOnVita/boot_debug.log`). Ensures logs survive crashes, freezes, and hard hangs so users can inspect them via VitaShell or copy them for bug reports.
+  - **Pre-Flight Safety Assessment:** Prevents console blackscreens and freezes by evaluating prerequisites prior to kernel handover, aborting safely if critical boot files or physical memory card requirements are not met.
+  - **Integrated On-Screen Log Viewer (`[SELECT]`):** Built-in scrollable log viewer in the VPK main menu allowing users to inspect previous boot logs directly on the console screen without needing a PC or external file manager.
+- **Hardware & System Diagnostic Tool (`vita-diagnostics` / `vita-diag`):**
+  - Created an on-device diagnostic program (`vita-diagnostics`, with `vita-diag` alias) to help users troubleshoot and collect system logs when experiencing Wi-Fi connection issues or SD card mounting failures.
+  - **Storage & SD Card Diagnosis:** Inspects MMC controllers (`/dev/mmcblk*`), partition tables, and mount statuses. If `/mnt/ux0` fails to mount, automatically executes safe read-only test-probes against candidate devices across `exfat`, `vfat`, and `ext4`, reporting the exact failure cause and recommended mount commands.
+  - **Wi-Fi & Network Diagnosis:** Verifies Marvell 88W8787 wireless hardware and firmware, inspects `wpa_supplicant` status, analyzes authentication states (`4WAY_HANDSHAKE` password issues, `SCANNING` 2.4GHz vs 5GHz reminders), runs live 2.4GHz RF scans, and tests gateway and DNS ping connectivity.
+  - **Privacy Protection:** Automatically redacts Wi-Fi passwords (`psk="[REDACTED_FOR_PRIVACY]"`) across all dumped configurations and logs so users can safely share reports on GitHub or Discord without exposing sensitive credentials.
+  - **Multi-Target Storage Guarantee:** Saves formatted reports (`vita-diagnostics.txt`) and complete raw log tarballs (`vita-diagnostics.tar.gz`) to `/mnt/ux0/`, `/mnt/ur0/`, and `/tmp/`. By saving to internal eMMC (`ur0:`), diagnostic reports remain accessible via VitaShell even if the SD card fails to mount entirely.
+- **Upgraded Base Alpine Linux Container to v3.24:**
+  - Upgraded the bundled mini-rootfs tarball from Alpine 3.20 to the latest stable **Alpine Linux v3.24** (`alpine-minirootfs-3.24.2-armv7.tar.gz`).
+  - Configured `alpine-chroot` and `alpine-desktop` to default to Alpine 3.24 package mirrors (`main` and `community`).
+  - Added automatic repository migration so existing containers seamlessly transition to v3.24 package repositories on next launch.
+- **Enabled System V IPC & Security Namespaces (`CONFIG_SYSVIPC=y`, `CONFIG_USER_NS=y`, `CONFIG_SECCOMP=y`):**
+  - Enabled `CONFIG_SYSVIPC=y`, `CONFIG_SYSVIPC_SYSCTL=y`, `CONFIG_USER_NS=y`, `CONFIG_SECCOMP=y`, and `CONFIG_SECCOMP_FILTER=y` in `configs/kernel/vita_defconfig`.
+  - Provides full System V IPC support (`shmget`, `shmat`, `shmdt`, `shmctl`, `semget`, `msgget`) across userland processes, eliminating "function not implemented" errors, enabling MIT-SHM shared memory performance in X11 applications, and ensuring modern container sandbox compatibility.
+- **Turnkey Graphical Desktop for Alpine Linux (`alpine-desktop`):**
+  - Implemented an automated launcher (`alpine-desktop`) that runs a lightweight, memory-optimized **IceWM** desktop environment directly on the PlayStation Vita framebuffer (`/dev/fb0`) via X11 (`Xfbdev` / `Xorg` fbdev), requiring zero 3D GPU acceleration.
+  - **Ultra-Low Memory Footprint (~25 MB RAM):** Built on IceWM and PCManFM to consume only ~25 MB RAM, reserving maximal system memory for applications and multitasking.
+  - **Shared Storage Container:** Utilizes the same persistent `alpine.img` ext4 container as `alpine-chroot`, sharing installed tools and user files seamlessly.
+  - **On-Demand First-Launch Setup:** Keeps the base system download small by downloading and configuring IceWM, X11, and graphical apps only when the user invokes `alpine-desktop`.
+  - **Touchscreen & Display Integration:** Native touchscreen support with automatic coordinate calibration (`0 1920 0 1080`), direct touch pointer events, and long-press right-click emulation (`EmulateThirdButton`). Automatically suspends the console `fbkeyboard` during desktop sessions to prevent background typing.
+  - **Calibrated Proportional Typography (96 DPI):** Configured X11 framebuffer monitor definitions and Xorg server flags for standard 96 DPI display scaling. Tuned IceWM theme overrides (`prefoverride`) and GTK settings (`Sans 9`) so window titles, start menus, tooltips, and dialog text render at clean, readable, and proportional sizes on the 960x544 screen.
+  - **Bundled Graphical Applications Suite:**
+    - **Welcome & Control Guide (`vita-desktop-welcome`):** Graphical handheld guide featuring tabbed documentation for system specs, controller inputs, bundled applications, native APK package management, and startup launch preferences.
+    - **Web Browser (`badwolf`):** Privacy-oriented, WebKitGTK-based graphical web browser supporting modern HTML5, CSS3, and JavaScript within a handheld memory footprint.
+    - **Activity & Resource Monitor (`xfce4-taskmanager` / `taskmanager`):** Full-featured GTK task manager displaying live CPU and memory utilization graphs, running process trees, and task controls powered by `dbus-x11`.
+    - **On-Screen Keyboard (`matchbox-keyboard`):** Touch virtual keyboard with a dedicated show/hide toggle script (`toggle-keyboard`), accessible via desktop shortcut and application menu. Configured in floating mode (`layer: OnTop`) so it hovers cleanly above application windows without carving or shrinking the 960x544 desktop workspace.
+    - **File Manager (`pcmanfm`):** Fast tabbed file manager managing files, removable storage, and desktop icons.
+    - **Text Editor (`mousepad` / `leafpad`):** Modern text editor with syntax highlighting, search/replace, and line numbering.
+    - **Terminal Emulator (`sakura`):** Multi-tabbed GTK terminal with customizable fonts, pre-configured shell environment, clean Monospace 9 typography, and direct native CLI access for `apk` package management.
+    - **Image Viewer (`feh`):** Lightweight image viewer for photos and screenshots.
+    - **Reboot to VitaOS (`vita-reboot`):** Dedicated desktop shortcut and application menu entry to safely sync all storage filesystems and reboot the console directly back to Sony VitaOS (LiveArea), featuring a clean confirmation dialog to prevent accidental triggers.
+  - **Analog Stick Mouse Emulation (`vita-input-mapper --desktop`):**
+    - Continuous analog stick mouse cursor emulation: Left stick controls 360-degree pointer movement with dynamic non-linear acceleration and a sub-pixel fractional accumulator for pixel-perfect precision on checkboxes, icons, and menus while retaining brisk screen traversal.
+    - Proportional right analog stick controls vertical and horizontal scroll wheel navigation (`REL_WHEEL` and `REL_HWHEEL`), scaling naturally with stick deflection.
+    - Physical button triggers mapped ergonomically: Cross (✕) and R-Trigger for Left Click, Circle (○) and L-Trigger for Right Click, Square (□) for Middle Click, Start for IceWM Application Menu, and Select for Escape.
+    - Seamlessly transitions between Desktop Mouse Mode and Terminal Keystroke Mode upon starting and exiting `alpine-desktop`.
+  - **Streamlined Handheld Architecture & Instant Startup:** Desktop helper utilities (`vita-desktop-welcome`, `toggle-keyboard`, `taskmanager`) are deployed directly from the bundled rootfs, allowing `alpine-desktop` to initialize and launch X11 instantly without repetitive runtime connectivity checks.
+
+### Fixed
+- **Baremetal Loader Standby Handover & Suspend Interception (`baremetal-loader.skprx`):**
+  - Resolved an issue reported in GitHub Issue #12 where launching Linux on PS Vita Slim (PCH-2000) or certain firmware versions caused an immediate black screen with the power LED remaining green.
+  - Expanded `ksceSysconResetDevice_hook_func` to intercept both `SCE_SYSCON_RESET_TYPE_POWEROFF` (0x00) and `SCE_SYSCON_RESET_TYPE_SUSPEND` (0x01), ensuring standby transitions always configure the payload and trigger `SCE_SYSCON_RESET_TYPE_SOFT_RESET` rather than placing the console into a sleep state.
+  - Added kernel-space persistent logging so `baremetal-loader.skprx` appends payload allocation details, memory addresses, and Syscon reset hook events directly to `boot_debug.log`.
+- **Syscon Analog Stick Sampling Initialization (`vita-buttons` & baremetal loader):**
+  - Resolved an issue where thumb sticks did not report movement in Linux.
+  - Fixed a command payload length calculation bug in `vita-buttons.c`: Syscon command `0x180` (enable analog sampling) was called with `cmd_len = 1` instead of `cmd_len = 2`. Because `1` represents zero data payload bytes, the checksum byte overwrote the sampling mode parameter, causing Syscon to ignore the enable request.
+  - Added `vita_syscon_buttons_open` callback to re-assert Syscon command `0x180` whenever the input device node is opened.
+  - Added early analog stick initialization (`ctrl_set_analog_sampling(1)`) during the baremetal bootloader handover.
+- **Prevented Blockdev Re-Mount Errors (`Can't open blockdev`):**
+  - Resolved kernel block device errors (`/dev/vita/ur0: Can't open blockdev` and `/dev/mmcblk1: Can't open blockdev`) occurring during boot and diagnostic collection.
+  - Replaced legacy `mountpoint` commands with robust `/proc/mounts` checks across `S99bootlog`, `S05vita`, `S00mount`, `vita-diagnostics`, and `alpine-chroot`, guaranteeing partitions are never mounted repeatedly.
+- **Fixed OpenSSH Daemon Restart Failures on DHCP Connection:**
+  - Resolved OpenSSH restart failures (`FAIL`) and host key generation errors reported in `/tmp/wifi.log` when associating to Wi-Fi.
+  - Replaced intrusive daemon restarts in `S45wifi` and `vita-wifi` with non-destructive status checks (`pidof sshd`), allowing OpenSSH to seamlessly accept connections on new IP leases without dropping existing SSH sessions.
+  - Added running and stopped state safeguards to `S50sshd` with `--oknodo` to prevent spurious error logging.
+- **Eliminated Duplicate `tmpfs` and Virtual Filesystem Mounts:**
+  - Fixed duplicate `tmpfs` mounts on `/dev/shm`, `/run`, and `/tmp` in `df -h` caused by conflicting initialization in `inittab` and `S00mount`.
+  - Added `/proc/mounts` verification to `S00mount` before mounting pseudo-filesystems.
+- **Ensured Clean exFAT Unmounting & Storage Buffer Flushing on Shutdown:**
+  - Resolved `exFAT-fs: Volume was not properly unmounted` warnings on reboot.
+  - Added filesystem synchronization (`sync`) steps to `/etc/inittab` before and after service termination, swap deactivation, and filesystem unmounting.
+  - Added background logger process tracking and cleanup to `S99bootlog` to release file handles before unmount.
+
+---
+
 ## [v1.2.0] - 2026-09-25
 
 ### Added

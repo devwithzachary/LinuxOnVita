@@ -59,7 +59,7 @@ if [ ! -f "${ALPINE_TAR}" ]; then
     echo "Downloading Alpine Linux ARMv7 mini-rootfs..."
     mkdir -p "${ROOTFS_OVERLAY}/usr/share/alpine"
     curl -fsSL -o "${ALPINE_TAR}" \
-        https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/armv7/alpine-minirootfs-3.20.0-armv7.tar.gz
+        https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/armv7/alpine-minirootfs-3.24.2-armv7.tar.gz
 fi
 
 # 2. Clone or update vita-linux-port (shallow submodules to avoid OOM memory limits)

@@ -11,6 +11,9 @@ A complete distribution, automated build environment, and handheld userland for 
 While original proof-of-concept projects proved that modern Linux can boot on the PS Vita SoC, they required specialized developer equipment such as soldered UART serial cables. LinuxOnVita bridges the gap into a **fully standalone, interactive handheld Linux device** with out-of-the-box touch typing, physical gamepad navigation, automated on-device Wi-Fi, memory-safe ZRAM swap, full package management (`apk`), and native framebuffer gaming.
 
 <div align="center">
+  <img src="screenshot5.png" alt="Lightweight IceWM Graphical Desktop and Handheld Welcome Guide" width="85%" /><br />
+  <sub><b>Lightweight IceWM Graphical Desktop & Handheld Welcome Guide (<code>alpine-desktop</code>)</b></sub>
+  <br /><br />
   <table>
     <tr>
       <td width="50%" align="center">
@@ -37,11 +40,11 @@ While original proof-of-concept projects proved that modern Linux can boot on th
 
 ---
 
-## 📚 Complete User Guide
+## 📚 Documentation & Roadmap
 
 > [!TIP]
-> **Looking for the comprehensive user manual?**
-> Check out the **[Complete User Guide](USER_GUIDE.md)** for detailed walkthroughs on every built-in utility (`vita-wifi`, `vita-brightness`, `vita-swap`, `vita-doom`), on-screen touch typing, physical gamepad controls, remote SSH access, and real-world software you can install with Alpine Linux (from Python file servers to native C compilers).
+> * Looking for the comprehensive user manual? Check out the **[Complete User Guide](USER_GUIDE.md)** for detailed walkthroughs on every built-in utility (`vita-wifi`, `vita-brightness`, `vita-swap`, `vita-doom`, `alpine-desktop`), on-screen touch typing, physical gamepad controls, remote SSH access, and package management.
+> * Want to see what is coming next? Check out the **[Project Roadmap](ROADMAP.md)** for upcoming release plans from v1.4.0 through v1.8.0 and beyond.
 
 ---
 
@@ -82,7 +85,7 @@ While original proof-of-concept projects proved that modern Linux can boot on th
 
 > [!IMPORTANT]
 > **Updating from an Earlier Version:**
-> If you already have an older version of LinuxOnVita installed, transfer and install the latest `LinuxOnVita.vpk` in VitaShell, launch the app, and press **SQUARE (□)** to reinstall and update the Linux setup (`<mount>/linux/`). Pressing CROSS (✕) immediately would otherwise boot the older kernel and loaders already on your memory card.
+> If you already have an older version of LinuxOnVita installed, transfer and install the latest `LinuxOnVita.vpk` in VitaShell, launch the app, and press **TRIANGLE (△)** to reinstall and update the Linux setup (`<mount>/linux/`). Pressing CROSS (✕) immediately would otherwise boot the older kernel and loaders already on your memory card. To launch Linux with step-by-step diagnostic logging, press **SQUARE (□)** instead.
 
 For full usage instructions, gamepad shortcuts, and Wi-Fi setup, see the **[Complete User Guide](USER_GUIDE.md)**.
 
