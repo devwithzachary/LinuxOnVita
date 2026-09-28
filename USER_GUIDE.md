@@ -24,8 +24,14 @@ Welcome to the comprehensive user guide for **LinuxOnVita**. This guide is desig
    - [Entering & Exiting Alpine](#entering--exiting-alpine)
    - [Running Commands from the Base Host](#running-commands-from-the-base-host)
    - [Real-World Packages & Use Cases](#real-world-packages--use-cases)
-6. [Managing Files & Storage](#6-managing-files--storage)
-7. [Frequently Asked Questions & Troubleshooting](#7-frequently-asked-questions--troubleshooting)
+6. [Turnkey Graphical Desktop (`alpine-desktop`)](#6-turnkey-graphical-desktop-alpine-desktop)
+   - [Concept & Architecture](#concept--architecture)
+   - [First-Time Automated Setup](#first-time-automated-setup)
+   - [Handheld Desktop Navigation & Controls](#handheld-desktop-navigation--controls)
+   - [Pre-Installed Graphical Applications](#pre-installed-graphical-applications)
+   - [Exiting Back to Console](#exiting-back-to-console)
+7. [Managing Files & Storage](#7-managing-files--storage)
+8. [Frequently Asked Questions & Troubleshooting](#8-frequently-asked-questions--troubleshooting)
 
 ---
 
@@ -315,7 +321,7 @@ Logging in via SSH gives you a full-sized desktop terminal, making it comfortabl
 
 ## 5. Alpine Linux Package Ecosystem (`alpine-chroot`)
 
-The base LinuxOnVita operating system runs from a lightweight, memory-resident root filesystem (initramfs). To allow installing any modern Linux program, LinuxOnVita integrates **Alpine Linux** with its full-featured `apk` package repository.
+The base LinuxOnVita operating system runs from a lightweight, memory-resident root filesystem (initramfs). To allow installing any modern Linux program, LinuxOnVita integrates **Alpine Linux v3.24** with its full-featured `apk` package repository.
 
 ### Understanding the Isolated Environment
 The Alpine Linux environment runs in an **isolated chroot container** (`/mnt/alpine`):
@@ -451,7 +457,69 @@ cmatrix
 
 ---
 
-## 6. Managing Files & Storage
+## 6. Turnkey Graphical Desktop (`alpine-desktop`)
+
+LinuxOnVita includes an automated turnkey launcher (`alpine-desktop`) that runs an ultra-lightweight **IceWM** desktop environment directly on the PlayStation Vita framebuffer (`/dev/fb0`), requiring zero 3D GPU acceleration and consuming only ~25 MB RAM idle (saving over 100 MB of RAM compared to heavyweight desktops like XFCE).
+
+### Concept & Architecture
+* **X11 Framebuffer Server (`Xfbdev` / `Xorg` fbdev):** Renders the graphical user interface directly into native 960x544 32-bit color screen memory.
+* **Ultra-Low Memory Footprint (~25 MB RAM):** IceWM combined with PCManFM desktop management uses minimal RAM, leaving more than 350 MB of free system memory for running applications and multitasking.
+* **Shared Storage Container:** Reuses the exact same persistent `alpine.img` ext4 container as `alpine-chroot`, ensuring any files created in the desktop are immediately accessible in chroot and vice versa.
+* **Handheld Ergonomics:** Automatically transforms the PS Vita gamepad into a mouse and keyboard controller, accompanied by an on-screen touchscreen keyboard.
+* **Lightweight First-Time Download:** Desktop packages are not bundled in the base VPK to keep downloads minimal. `alpine-desktop` downloads and sets up the environment on-device on first run.
+
+### First-Time Automated Setup
+To set up and launch the desktop, connect your PS Vita to Wi-Fi, then run:
+```bash
+alpine-desktop
+```
+On first launch, `alpine-desktop` automatically:
+1. Verifies active Wi-Fi internet connectivity.
+2. Updates Alpine package indexes.
+3. Installs `icewm`, `pcmanfm`, `xfce4-taskmanager`, `dbus-x11`, `htop`, `mousepad`, `badwolf`, `feh`, `matchbox-keyboard`, `yad`, and `sakura`.
+4. Creates pre-configured X11 framebuffer settings (`/etc/X11/xorg.conf.d/10-fbdev.conf`) calibrated for 96 DPI proportional font rendering.
+5. Configures desktop shortcuts and application menus for the Welcome Guide, Badwolf web browser, PCManFM file manager, Mousepad text editor, Xfce activity monitor, Sakura terminal, and virtual keyboard.
+6. Starts the graphical IceWM desktop session.
+
+Subsequent launches start immediately in seconds with no re-downloading required!
+
+### Handheld Desktop Navigation & Controls
+When `alpine-desktop` starts, `vita-input-mapper` automatically switches into **Desktop Controller Mode**:
+
+| Physical Control | Desktop Action | Description |
+| :--- | :--- | :--- |
+| **Left Analog Stick** | Mouse Cursor | Smooth 360-degree pointer navigation with calibrated half-speed acceleration |
+| **R Trigger** or **Cross (✕)** | Left Mouse Click | Primary click, drag and drop, and window focus |
+| **L Trigger** or **Circle (○)** | Right Mouse Click | Context menus and desktop background options |
+| **Square (□)** | Middle Click | Paste clipboard or close browser tabs |
+| **Triangle (△)** | Enter Key | Confirm dialogs and open highlighted files |
+| **Right Analog Stick** | Scroll Wheel | Smooth vertical and horizontal document and web page scrolling |
+| **Start Button** | Application Menu | Opens the IceWM Applications Menu (Super / Windows key) |
+| **Select Button** | Escape (Esc) | Closes context menus or cancels selections |
+| **D-Pad (Arrows)** | Arrow Keys | Directional navigation inside menus and text documents |
+| **Touchscreen** | Direct Touch | Direct finger tap and drag on the display |
+| **On-Screen Keyboard** | Virtual Typing | Tap the Keyboard icon on the desktop or menu to toggle `matchbox-keyboard` |
+
+### Bundled Graphical Applications
+* **Welcome Guide (`vita-desktop-welcome`):** Graphical handheld guide featuring tabs for system specifications, physical controls, bundled apps, software installation instructions, and desktop startup preferences.
+* **Web Browsing (`badwolf`):** Privacy-oriented, WebKitGTK-based graphical web browser supporting modern HTML5, CSS3, and JavaScript within a handheld memory footprint.
+* **Activity & Process Monitor (`xfce4-taskmanager` / `taskmanager`):** Dedicated task manager displaying live CPU and memory utilization graphs, running processes, and task management directly from the desktop.
+* **On-Screen Keyboard (`matchbox-keyboard`):** Touch-friendly virtual keyboard. Tap the Keyboard icon on the desktop or Start Menu anytime to show or hide the keyboard via `toggle-keyboard`.
+* **File Manager (`pcmanfm`):** Full-featured lightweight file manager with tabbed browsing, desktop wallpaper management, and drag-and-drop support.
+* **Text Editing (`mousepad` / `leafpad`):** Clean graphical notepad with syntax highlighting, tabs, search/replace, and line numbers for code and notes.
+* **Terminal Emulator & Software Management (`sakura`):** Fast GTK terminal emulator with multi-tab support and direct native CLI package management via `apk` (`apk update`, `apk add <pkg>`, `apk search <pkg>`).
+* **Image Viewing (`feh`):** Lightweight image viewer for screenshots, diagrams, and photos.
+
+### Exiting Back to Console
+To exit the graphical desktop session:
+* Select **Log Out** from the bottom-left IceWM start menu.
+* Or press **Ctrl+C** on a physical or virtual keyboard.
+
+`alpine-desktop` will cleanly shut down X11, restore `vita-input-mapper` to standard console terminal mode, unmount bind mounts, and return you to the command prompt.
+
+---
+
+## 7. Managing Files & Storage
 
 LinuxOnVita automatically detects and mounts your physical storage partitions:
 
@@ -468,7 +536,7 @@ Files placed in `ux0:` inside VitaOS or VitaShell are accessible directly under 
 
 ---
 
-## 7. Frequently Asked Questions & Troubleshooting
+## 8. Frequently Asked Questions & Troubleshooting
 
 ### Why is an official Sony memory card required?
 The baremetal loader (`payload.bin`) executes in the early boot stage before Linux or VitaOS drivers are running. It uses Sony's proprietary memory card hardware controller (MSIF). It cannot read from SD2Vita game card adapters or internal eMMC memory.

@@ -281,20 +281,20 @@ if [ ! -f "${TARGET}/bin/sh" ]; then
         echo "nameserver 8.8.8.8" >> "${TARGET}/etc/resolv.conf"
     }
 
-    # Set up APK repositories
-    # Detect Alpine version from the tarball filename, fall back to 'edge'
-    ALPINE_VER=$(echo "${TARBALL}" | grep -o 'minirootfs-[0-9.]*' | grep -o '[0-9.]*' | cut -d. -f1,2 || echo "edge")
-    if [ -z "${ALPINE_VER}" ]; then ALPINE_VER="edge"; fi
-    REPO_BASE="http://dl-cdn.alpinelinux.org/alpine"
-    mkdir -p "${TARGET}/etc/apk"
-    if [ "${ALPINE_VER}" = "edge" ]; then
-        printf '%s/edge/main\n%s/edge/community\n' "${REPO_BASE}" "${REPO_BASE}" > "${TARGET}/etc/apk/repositories"
-    else
-        printf '%s/v%s/main\n%s/v%s/community\n' "${REPO_BASE}" "${ALPINE_VER}" "${REPO_BASE}" "${ALPINE_VER}" > "${TARGET}/etc/apk/repositories"
+    # Set up APK repositories (Alpine 3.24)
+    if [ ! -s "${TARGET}/etc/apk/repositories" ]; then
+        REPO_BASE="http://dl-cdn.alpinelinux.org/alpine"
+        mkdir -p "${TARGET}/etc/apk"
+        printf '%s/v3.24/main\n%s/v3.24/community\n' "${REPO_BASE}" "${REPO_BASE}" > "${TARGET}/etc/apk/repositories"
     fi
 
     echo "Alpine Linux rootfs initialized successfully."
     echo ""
+fi
+
+# Ensure APK repositories point to v3.24 (upgrading any older v3.20 configs)
+if [ -f "${TARGET}/etc/apk/repositories" ]; then
+    sed -i 's/v3\.[0-9]*/v3.24/g' "${TARGET}/etc/apk/repositories" 2>/dev/null || true
 fi
 
 # Always sync active host DNS into chroot
@@ -324,13 +324,18 @@ trap cleanup_chroot EXIT INT TERM
 mkdir -p "${TARGET}/etc/profile.d"
 echo "vita-alpine" > "${TARGET}/etc/hostname" 2>/dev/null || true
 cat << 'EOF' > "${TARGET}/etc/profile.d/00-vita-prompt.sh"
+export SHELL="${SHELL:-/bin/sh}"
 export PS1='\[\033[01;36m\]alpine@vita\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]# '
 EOF
 chmod 644 "${TARGET}/etc/profile.d/00-vita-prompt.sh"
+cat << 'EOF' > "${TARGET}/etc/profile.d/01-glycin.sh"
+export GLYCIN_DISABLE_SANDBOX=i-know-the-risks
+EOF
+chmod 644 "${TARGET}/etc/profile.d/01-glycin.sh"
 
 if [ -z "${EXEC_CMD:-}" ]; then
     echo "========================================================="
-    echo " 🏔️  Welcome to Alpine Linux Userland (chroot)           "
+    echo " Welcome to Alpine Linux Userland (chroot)              "
     echo "========================================================="
     if [ $USE_RAM -eq 1 ]; then
         echo " Mode:      Volatile RAM (changes lost on reboot)"

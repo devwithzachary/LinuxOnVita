@@ -1,0 +1,26 @@
+#!/bin/sh
+# toggle-keyboard: Show or hide the virtual matchbox-keyboard in floating mode
+
+export DISPLAY="${DISPLAY:-:0}"
+
+if pidof matchbox-keyboard >/dev/null 2>&1 || pidof matchbox-keyboard.real >/dev/null 2>&1; then
+    killall matchbox-keyboard matchbox-keyboard.real 2>/dev/null || true
+else
+    # Launch matchbox-keyboard in background
+    matchbox-keyboard &
+
+    # Strip EWMH struts so keyboard floats on top without resizing/shrinking maximized windows
+    (
+        for i in $(seq 1 40); do
+            if which xprop >/dev/null 2>&1 && xprop -name "Keyboard" >/dev/null 2>&1; then
+                xprop -name "Keyboard" -remove _NET_WM_STRUT_PARTIAL 2>/dev/null || true
+                xprop -name "Keyboard" -remove _NET_WM_STRUT 2>/dev/null || true
+                if which xdotool >/dev/null 2>&1; then
+                    xdotool search --name "Keyboard" windowmove 0 334 2>/dev/null || true
+                fi
+                break
+            fi
+            sleep 0.05
+        done
+    ) &
+fi

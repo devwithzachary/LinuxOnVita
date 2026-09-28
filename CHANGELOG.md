@@ -14,8 +14,59 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - **Wi-Fi & Network Diagnosis:** Verifies Marvell 88W8787 wireless hardware and firmware, inspects `wpa_supplicant` status, analyzes authentication states (`4WAY_HANDSHAKE` password issues, `SCANNING` 2.4GHz vs 5GHz reminders), runs live 2.4GHz RF scans, and tests gateway and DNS ping connectivity.
   - **Privacy Protection:** Automatically redacts Wi-Fi passwords (`psk="[REDACTED_FOR_PRIVACY]"`) across all dumped configurations and logs so users can safely share reports on GitHub or Discord without exposing sensitive credentials.
   - **Multi-Target Storage Guarantee:** Saves formatted reports (`vita-diagnostics.txt`) and complete raw log tarballs (`vita-diagnostics.tar.gz`) to `/mnt/ux0/`, `/mnt/ur0/`, and `/tmp/`. By saving to internal eMMC (`ur0:`), diagnostic reports remain accessible via VitaShell even if the SD card fails to mount entirely.
+- **Upgraded Base Alpine Linux Container to v3.24:**
+  - Upgraded the bundled mini-rootfs tarball from Alpine 3.20 to the latest stable **Alpine Linux v3.24** (`alpine-minirootfs-3.24.2-armv7.tar.gz`).
+  - Configured `alpine-chroot` and `alpine-desktop` to default to Alpine 3.24 package mirrors (`main` and `community`).
+  - Added automatic repository migration so existing containers seamlessly transition to v3.24 package repositories on next launch.
+- **Enabled System V IPC & Security Namespaces (`CONFIG_SYSVIPC=y`, `CONFIG_USER_NS=y`, `CONFIG_SECCOMP=y`):**
+  - Enabled `CONFIG_SYSVIPC=y`, `CONFIG_SYSVIPC_SYSCTL=y`, `CONFIG_USER_NS=y`, `CONFIG_SECCOMP=y`, and `CONFIG_SECCOMP_FILTER=y` in `configs/kernel/vita_defconfig`.
+  - Provides full System V IPC support (`shmget`, `shmat`, `shmdt`, `shmctl`, `semget`, `msgget`) across userland processes, eliminating "function not implemented" errors, enabling MIT-SHM shared memory performance in X11 applications, and ensuring modern container sandbox compatibility.
+- **Turnkey Graphical Desktop for Alpine Linux (`alpine-desktop`):**
+  - Implemented an automated launcher (`alpine-desktop`) that runs a lightweight, memory-optimized **IceWM** desktop environment directly on the PlayStation Vita framebuffer (`/dev/fb0`) via X11 (`Xfbdev` / `Xorg` fbdev), requiring zero 3D GPU acceleration.
+  - **Ultra-Low Memory Footprint (~25 MB RAM):** Built on IceWM and PCManFM to consume only ~25 MB RAM, reserving maximal system memory for applications and multitasking.
+  - **Shared Storage Container:** Utilizes the same persistent `alpine.img` ext4 container as `alpine-chroot`, sharing installed tools and user files seamlessly.
+  - **On-Demand First-Launch Setup:** Keeps the base system download small by downloading and configuring IceWM, X11, and graphical apps only when the user invokes `alpine-desktop`.
+  - **Touchscreen & Display Integration:** Native touchscreen support with automatic coordinate calibration (`0 1920 0 1080`), direct touch pointer events, and long-press right-click emulation (`EmulateThirdButton`). Automatically suspends the console `fbkeyboard` during desktop sessions to prevent background typing.
+  - **Calibrated Proportional Typography (96 DPI):** Configured X11 framebuffer monitor definitions and Xorg server flags for standard 96 DPI display scaling. Tuned IceWM theme overrides (`prefoverride`) and GTK settings (`Sans 9`) so window titles, start menus, tooltips, and dialog text render at clean, readable, and proportional sizes on the 960x544 screen.
+  - **Bundled Graphical Applications Suite:**
+    - **Welcome & Control Guide (`vita-desktop-welcome`):** Graphical handheld guide featuring tabbed documentation for system specs, controller inputs, bundled applications, native APK package management, and startup launch preferences.
+    - **Web Browser (`badwolf`):** Privacy-oriented, WebKitGTK-based graphical web browser supporting modern HTML5, CSS3, and JavaScript within a handheld memory footprint.
+    - **Activity & Resource Monitor (`xfce4-taskmanager` / `taskmanager`):** Full-featured GTK task manager displaying live CPU and memory utilization graphs, running process trees, and task controls powered by `dbus-x11`.
+    - **On-Screen Keyboard (`matchbox-keyboard`):** Touch virtual keyboard with a dedicated show/hide toggle script (`toggle-keyboard`), accessible via desktop shortcut and application menu.
+    - **File Manager (`pcmanfm`):** Fast tabbed file manager managing files, removable storage, and desktop icons.
+    - **Text Editor (`mousepad` / `leafpad`):** Modern text editor with syntax highlighting, search/replace, and line numbering.
+    - **Terminal Emulator (`sakura`):** Multi-tabbed GTK terminal with customizable fonts and direct native CLI access for `apk` package management.
+    - **Image Viewer (`feh`):** Lightweight image viewer for photos and screenshots.
+    - **Reboot to VitaOS (`vita-reboot`):** Dedicated desktop shortcut and application menu entry to safely sync all storage filesystems and reboot the console directly back to Sony VitaOS (LiveArea), featuring a clean confirmation dialog to prevent accidental triggers.
+  - **Analog Stick Mouse Emulation (`vita-input-mapper --desktop`):**
+    - Engineered continuous analog stick mouse cursor emulation: Left stick controls 360-degree pointer movement with dynamic non-linear acceleration.
+    - Tuned pointer speed and acceleration curve for precise single-pixel control and comfortable desktop navigation.
+    - Right analog stick controls vertical and horizontal scroll wheel navigation (`REL_WHEEL` and `REL_HWHEEL`).
+    - Physical button triggers mapped ergonomically: Cross (✕) and R-Trigger for Left Click, Circle (○) and L-Trigger for Right Click, Square (□) for Middle Click, Start for IceWM Application Menu, and Select for Escape.
+    - **Streamlined Handheld Architecture & Instant Startup:** Removed defensive legacy development fallbacks and repetitive runtime package-by-package connectivity pings. Desktop helper utilities (`vita-desktop-welcome`, `toggle-keyboard`, `taskmanager`) are deployed directly from the bundled rootfs, allowing `alpine-desktop` to initialize and launch X11 instantly.
+    - Seamlessly transitions between Desktop Mouse Mode and Terminal Keystroke Mode upon starting and exiting `alpine-desktop`.
 
 ### Fixed
+- **Analog Stick Mouse Micro-Movement & Sub-Pixel Accumulator (`vita-input-mapper`):**
+  - Resolved an issue where analog stick mouse acceleration was excessively fast, preventing fine cursor movements and making small UI targets difficult to click.
+  - Implemented a sub-pixel fractional accumulator so low stick deflections smoothly emit sub-pixel movements (0.4 to 10 pixels per second) rather than forcing an immediate minimum 1-pixel jump at every 60 Hz tick.
+  - Replaced the aggressive quadratic acceleration curve with a dual linear and quadratic response curve capped at ~340 pixels per second for maximum stick tilt, providing pixel-perfect precision on checkboxes, icons, and menus while retaining brisk screen traversal.
+  - Added proportional right stick scrolling so vertical and horizontal scroll rates scale naturally with tilt displacement.
+- **Sakura Terminal Shell Initialization & Prompt Fix (`assertion 'argv[0] != nullptr' failed`):**
+  - Resolved an issue where opening the Sakura terminal emulator displayed an empty black window with a blinking cursor and no interactive shell prompt.
+  - Root-caused the VTE critical error (`vte_pty_spawn_with_fds_async: assertion 'argv[0] != nullptr' failed`) to an unset `SHELL` environment variable in the desktop session (`env -i`). Sakura relies on `g_getenv("SHELL")` when launched without `-e`; if unset, `sakura.argv[0]` becomes null.
+  - Explicitly exported `SHELL=/bin/sh` across `.xinitrc`, desktop startup `env -i`, `profile.d`, `/etc/environment`, and installed an automated wrapper for `/usr/bin/sakura` to guarantee an active shell session.
+  - Pre-seeded `~/.config/sakura/sakura.conf` with clean Monospace 9 typography and hidden scrollbar optimized for 960x544 screen space.
+- **On-Screen Keyboard Floating Mode & Workarea Fix (`matchbox-keyboard` / `toggle-keyboard`):**
+  - Resolved an issue where launching the virtual on-screen keyboard caused maximized application windows to shrink down to roughly one-third of the screen.
+  - Neutralized `_NET_WM_STRUT_PARTIAL` and `_NET_WM_STRUT` window properties so IceWM maintains the full 960x518 desktop workspace.
+  - Configured IceWM `winoptions` (`layer: OnTop`, `allWorkspaces: 1`, `doNotCover: 0`, `fMove: 1`) and position helpers (`xdotool`, `xprop`) to keep the keyboard floating on top above full-screen windows and easily draggable via touch or analog mouse.
+  - Installed a wrapper script for `/usr/bin/matchbox-keyboard` and updated `/usr/bin/toggle-keyboard` so any launch method automatically floats without carving screen area.
+- **Syscon Analog Stick Sampling Initialization (`vita-buttons` & baremetal loader):**
+  - Resolved an issue where thumb sticks did not report movement in Linux.
+  - Fixed a command payload length calculation bug in `vita-buttons.c`: Syscon command `0x180` (enable analog sampling) was called with `cmd_len = 1` instead of `cmd_len = 2`. Because `1` represents zero data payload bytes, the checksum byte overwrote the sampling mode parameter, causing Syscon to ignore the enable request.
+  - Added `vita_syscon_buttons_open` callback to re-assert Syscon command `0x180` whenever the input device node is opened.
+  - Added early analog stick initialization (`ctrl_set_analog_sampling(1)`) during the baremetal bootloader handover.
 - **Prevented Blockdev Re-Mount Errors (`Can't open blockdev`):**
   - Resolved kernel block device errors (`/dev/vita/ur0: Can't open blockdev` and `/dev/mmcblk1: Can't open blockdev`) occurring during boot and diagnostic collection.
   - Replaced legacy `mountpoint` commands with robust `/proc/mounts` checks across `S99bootlog`, `S05vita`, `S00mount`, `vita-diagnostics`, and `alpine-chroot`, guaranteeing partitions are never mounted repeatedly.

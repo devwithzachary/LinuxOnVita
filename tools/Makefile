@@ -12,7 +12,7 @@ fbkeyboard/fbkeyboard: fbkeyboard/fbkeyboard.c
 	$(CC) $(CFLAGS) -o $@ $<
 
 vita-input-mapper/vita-input-mapper: vita-input-mapper/vita-input-mapper.c
-	$(CC) $(CFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) -o $@ $< -lm
 
 fbdoom/fbdoom:
 	$(MAKE) -C fbdoom CROSS_COMPILE=$(CROSS_COMPILE) NOSDL=1

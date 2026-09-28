@@ -15,7 +15,7 @@ if [ -t 0 ]; then
     fi
 
     echo "  ========================================================"
-    echo "   🎮 Welcome to PlayStation Vita Linux 6.12!             "
+    echo "   Welcome to PlayStation Vita Linux 6.12!                "
     echo "  ========================================================"
     echo ""
     echo "   * System:     ARMv7 Cortex-A9 Quad-Core (SMP active)   "
@@ -33,10 +33,11 @@ if [ -t 0 ]; then
     echo "   Useful Commands:"
     echo "     - vita-wifi        : Scan, connect, and manage Wi-Fi networks"
     echo "     - vita-diagnostics : Gather logs & troubleshoot Wi-Fi / SD cards"
+    echo "     - alpine-desktop   : Launch IceWM graphical desktop with mouse emulation"
+    echo "     - alpine-chroot    : Enter Alpine Linux with 'apk' (isolated container)"
     echo "     - vita-doom        : Play DOOM under Linux Framebuffer (/dev/fb0)"
     echo "     - vita-brightness  : Control screen brightness / backlight"
     echo "     - vita-swap        : Manage compressed ZRAM memory & swapfiles"
-    echo "     - alpine-chroot    : Enter Alpine Linux with 'apk' (isolated container)"
     echo "     - reboot           : Clean hardware reset back to VitaOS"
     echo "  ========================================================"
     echo ""

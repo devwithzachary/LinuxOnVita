@@ -1,0 +1,21 @@
+#!/bin/sh
+# taskmanager: System Activity and Process Monitor launcher for LinuxOnVita
+# Launches graphical xfce4-taskmanager, or terminal htop/top fallback
+
+export DISPLAY="${DISPLAY:-:0}"
+export GLYCIN_DISABLE_SANDBOX=i-know-the-risks
+if which xfce4-taskmanager >/dev/null 2>&1; then
+    exec xfce4-taskmanager "$@"
+elif which htop >/dev/null 2>&1; then
+    if which sakura >/dev/null 2>&1; then
+        exec sakura -e htop
+    else
+        exec htop
+    fi
+else
+    if which sakura >/dev/null 2>&1; then
+        exec sakura -e top
+    else
+        exec top
+    fi
+fi

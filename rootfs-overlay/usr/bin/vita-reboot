@@ -1,0 +1,19 @@
+#!/bin/sh
+# vita-reboot: Reboot LinuxOnVita and return to Sony VitaOS LiveArea
+
+export DISPLAY="${DISPLAY:-:0}"
+
+# If running in graphical desktop and not forced, ask for confirmation
+if [ -n "$DISPLAY" ] && [ "$1" != "-f" ] && [ "$1" != "--now" ] && command -v yad >/dev/null 2>&1; then
+    yad --question \
+        --title="Reboot to VitaOS" \
+        --window-icon="system-reboot" \
+        --text="Reboot console and return to PlayStation Vita LiveArea?" \
+        --button="Cancel:1" \
+        --button="Reboot:0" \
+        --center --width=380 2>/dev/null || exit 0
+fi
+
+echo "Rebooting to PlayStation Vita LiveArea..."
+sync
+reboot 2>/dev/null || reboot -f 2>/dev/null || busybox reboot -f

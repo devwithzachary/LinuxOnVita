@@ -37,11 +37,11 @@ While original proof-of-concept projects proved that modern Linux can boot on th
 
 ---
 
-## 📚 Complete User Guide
+## 📚 Documentation & Roadmap
 
 > [!TIP]
-> **Looking for the comprehensive user manual?**
-> Check out the **[Complete User Guide](USER_GUIDE.md)** for detailed walkthroughs on every built-in utility (`vita-wifi`, `vita-brightness`, `vita-swap`, `vita-doom`), on-screen touch typing, physical gamepad controls, remote SSH access, and real-world software you can install with Alpine Linux (from Python file servers to native C compilers).
+> * Looking for the comprehensive user manual? Check out the **[Complete User Guide](USER_GUIDE.md)** for detailed walkthroughs on every built-in utility (`vita-wifi`, `vita-brightness`, `vita-swap`, `vita-doom`, `alpine-desktop`), on-screen touch typing, physical gamepad controls, remote SSH access, and package management.
+> * Want to see what is coming next? Check out the **[Project Roadmap](ROADMAP.md)** for upcoming release plans from v1.4.0 through v1.8.0 and beyond.
 
 ---
 

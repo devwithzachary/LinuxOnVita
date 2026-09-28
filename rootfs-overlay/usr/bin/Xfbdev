@@ -1,0 +1,4 @@
+#!/bin/sh
+# Xfbdev: Standalone Lightweight X11 on /dev/fb0 for LinuxOnVita
+# Launches the Turnkey Alpine Linux Graphical Desktop
+exec /usr/bin/alpine-desktop "$@"
