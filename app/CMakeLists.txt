@@ -36,6 +36,7 @@ target_link_libraries(${PROJECT_NAME}
   taihen_stub
   SceDisplay_stub
   SceVshBridge_stub
+  SceSysmem_stub
 )
 
 # Create Vita SELF

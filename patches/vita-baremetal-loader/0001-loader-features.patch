@@ -1,12 +1,12 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: DevWithZachary <devwithzachary@pm.me>
 Date: Tue, 22 Sep 2026 16:36:00 +0100
-Subject: [PATCH] Multi-path payload loading and 100% display brightness
+Subject: [PATCH] Multi-path payload loading, debug logging, and standby support
 
 ---
  config.h |  2 +-
- main.c   | 21 ++++++++++++++++++++-
- 2 files changed, 21 insertions(+), 2 deletions(-)
+ main.c   | 49 +++++++++++++++++++++++++++++++++++++++++++++++++-
+ 2 files changed, 49 insertions(+), 2 deletions(-)
 
 diff --git a/config.h b/config.h
 index e823b0a..c768aa0 100644
@@ -17,10 +17,59 @@ index e823b0a..c768aa0 100644
 +#define PAYLOAD_PATH	"ux0:linux/payload.bin"
  #define PAYLOAD_PADDR	0x40300000
 diff --git a/main.c b/main.c
-index ffa2a2c..bcc98a9 100644
+index ffa2a2c..9c1d28f 100644
 --- a/main.c
 +++ b/main.c
-@@ -179,9 +179,31 @@ int module_start(SceSize argc, const void *args)
+@@ -14,11 +14,30 @@
+ #include <taihen.h>
+ #include "config.h"
+ 
++static void log_to_file(const char *msg)
++{
++	if (!msg)
++		return;
++	SceUID fd = ksceIoOpen("ux0:data/LinuxOnVita/boot_debug.log",
++	                       SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0777);
++	if (fd < 0) {
++		fd = ksceIoOpen("ur0:data/LinuxOnVita/boot_debug.log",
++		                SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0777);
++	}
++	if (fd >= 0) {
++		ksceIoWrite(fd, msg, strlen(msg));
++		int sync_status = 0;
++		ksceIoSyncByFd(fd, &sync_status);
++		ksceIoClose(fd);
++	}
++}
++
+ #define LOG(s, ...) \
+ 	do { \
+ 		char _buffer[256]; \
+ 		snprintf(_buffer, sizeof(_buffer), s, ##__VA_ARGS__); \
+ 		uart0_print(_buffer); \
++		log_to_file(_buffer); \
+ 	} while (0)
+ 
+ void _start() __attribute__ ((weak, alias ("module_start")));
+@@ -111,10 +130,15 @@ static int ksceSysconResetDevice_hook_func(int type, int mode)
+ 	LOG("ksceSysconResetDevice(0x%08X, 0x%08X)\n", type, mode);
+ 
+ 	/*
+-	 * The Vita OS thinks it's about to poweroff, but we will instead
++	 * The Vita OS thinks it's about to poweroff or suspend, but we will instead
+ 	 * setup the payload and trigger a soft reset.
+ 	 */
+-	if (type == SCE_SYSCON_RESET_TYPE_POWEROFF) {
++	if (type == SCE_SYSCON_RESET_TYPE_POWEROFF || type == SCE_SYSCON_RESET_TYPE_SUSPEND) {
++		LOG("Syscon standby/poweroff intercepted, setting up payload...\n");
++		setup_payload();
++		type = SCE_SYSCON_RESET_TYPE_SOFT_RESET;
++	} else {
++		LOG("Syscon reset type 0x%08X intercepted, forcing soft reset...\n", type);
+ 		setup_payload();
+ 		type = SCE_SYSCON_RESET_TYPE_SOFT_RESET;
+ 	}
+@@ -179,9 +203,31 @@ int module_start(SceSize argc, const void *args)
  	/*
  	 * Load the baremetal payload to physically contiguous memory.
  	 */
@@ -54,7 +103,7 @@ index ffa2a2c..bcc98a9 100644
  		return SCE_KERNEL_START_FAILED;
  	}
  
-@@ -236,6 +254,9 @@ int module_start(SceSize argc, const void *args)
+@@ -236,6 +282,9 @@ int module_start(SceSize argc, const void *args)
  	ksceKernelGetPaddr(&resume_ctx, &resume_ctx_paddr);
  	LOG("Resume context pa: 0x%08X\n", resume_ctx_paddr);
  

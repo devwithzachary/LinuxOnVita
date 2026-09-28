@@ -15,10 +15,14 @@
 #include <psp2/io/dirent.h>
 #include <psp2/io/fcntl.h>
 #include <psp2/io/stat.h>
+#include <psp2/kernel/modulemgr.h>
+#include <psp2/kernel/sysmem.h>
 #include <psp2/kernel/threadmgr.h>
 #include <psp2/vshbridge.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <taihen.h>
 
@@ -28,6 +32,9 @@
 #define CONFIG_PATH_UR0 "ur0:data/LinuxOnVita/mount.cfg"
 #define CONFIG_DIR_UX0 "ux0:data/LinuxOnVita"
 #define CONFIG_PATH_UX0 "ux0:data/LinuxOnVita/mount.cfg"
+
+#define LOG_PATH_UX0 "ux0:data/LinuxOnVita/boot_debug.log"
+#define LOG_PATH_UR0 "ur0:data/LinuxOnVita/boot_debug.log"
 
 typedef struct {
   const char *name;
@@ -72,12 +79,97 @@ typedef struct {
   int wifi_present;
 } MountFileStatus;
 
+/* Persistent Boot Debug Logging */
+static SceUID g_debug_log_fd = -1;
+static char g_active_log_path[128] = LOG_PATH_UX0;
+
+static void debug_log_init(void) {
+  sceIoMkdir("ux0:data", 0777);
+  sceIoMkdir("ux0:data/LinuxOnVita", 0777);
+  sceIoMkdir("ur0:data", 0777);
+  sceIoMkdir("ur0:data/LinuxOnVita", 0777);
+
+  if (g_debug_log_fd >= 0) {
+    sceIoClose(g_debug_log_fd);
+    g_debug_log_fd = -1;
+  }
+
+  g_debug_log_fd = sceIoOpen(LOG_PATH_UX0,
+                             SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+  if (g_debug_log_fd >= 0) {
+    snprintf(g_active_log_path, sizeof(g_active_log_path), "%s", LOG_PATH_UX0);
+  } else {
+    g_debug_log_fd = sceIoOpen(LOG_PATH_UR0,
+                               SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+    if (g_debug_log_fd >= 0) {
+      snprintf(g_active_log_path, sizeof(g_active_log_path), "%s",
+               LOG_PATH_UR0);
+    }
+  }
+}
+
+static void debug_log_printf(uint32_t color, const char *fmt, ...) {
+  char buf[512];
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(buf, sizeof(buf), fmt, args);
+  va_end(args);
+
+  if (color != 0) {
+    psvDebugScreenSetFgColor(color);
+  }
+  printf("%s", buf);
+
+  if (g_debug_log_fd >= 0) {
+    sceIoWrite(g_debug_log_fd, buf, strlen(buf));
+    sceIoSyncByFd(g_debug_log_fd, 0);
+  } else {
+    SceUID fd = sceIoOpen(g_active_log_path,
+                          SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0777);
+    if (fd >= 0) {
+      sceIoWrite(fd, buf, strlen(buf));
+      sceIoSyncByFd(fd, 0);
+      sceIoClose(fd);
+    }
+  }
+}
+
+static void debug_log_close(void) {
+  if (g_debug_log_fd >= 0) {
+    sceIoSyncByFd(g_debug_log_fd, 0);
+    sceIoClose(g_debug_log_fd);
+    g_debug_log_fd = -1;
+  }
+}
+
 static int file_exists(const char *path) {
   SceUID fd = sceIoOpen(path, SCE_O_RDONLY, 0);
   if (fd >= 0) {
     sceIoClose(fd);
     return 1;
   }
+  return 0;
+}
+
+static int inspect_file(const char *path, uint64_t *out_size,
+                        int *out_readable) {
+  if (out_size)
+    *out_size = 0;
+  if (out_readable)
+    *out_readable = 0;
+
+  SceUID fd = sceIoOpen(path, SCE_O_RDONLY, 0);
+  if (fd < 0) {
+    return fd;
+  }
+  if (out_readable)
+    *out_readable = 1;
+
+  SceOff sz = sceIoLseek(fd, 0, SCE_SEEK_END);
+  if (sz >= 0 && out_size) {
+    *out_size = (uint64_t)sz;
+  }
+  sceIoClose(fd);
   return 0;
 }
 
@@ -153,7 +245,7 @@ static void save_mount_preference(const char *mount_name) {
   sceIoMkdir("ur0:data", 0777);
   sceIoMkdir(CONFIG_DIR_UR0, 0777);
   SceUID fd = sceIoOpen(CONFIG_PATH_UR0,
-                        SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
+                         SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0777);
   if (fd >= 0) {
     sceIoWrite(fd, mount_name, strlen(mount_name));
     sceIoClose(fd);
@@ -464,16 +556,416 @@ static int copy_boot_files_to_mount(const char *mount) {
   return 0;
 }
 
-static void boot_linux(const char *mount) {
+static void view_boot_log(void) {
   psvDebugScreenClear(COLOR_BLACK);
   psvDebugScreenSetFgColor(COLOR_CYAN);
   printf("========================================================\n");
-  printf(" PlayStation Vita Linux 6.12\n");
-  printf(" Launching Baremetal Loader...\n");
+  printf(" LinuxOnVita - Boot Debug Log Viewer\n");
   printf("========================================================\n\n");
   psvDebugScreenSetFgColor(COLOR_WHITE);
 
-  printf(" Target Memory Card: %s\n\n", mount);
+  const char *log_paths[] = {
+      LOG_PATH_UX0,
+      LOG_PATH_UR0,
+  };
+
+  SceUID fd = -1;
+  const char *found_path = NULL;
+  for (size_t i = 0; i < sizeof(log_paths) / sizeof(log_paths[0]); i++) {
+    fd = sceIoOpen(log_paths[i], SCE_O_RDONLY, 0);
+    if (fd >= 0) {
+      found_path = log_paths[i];
+      break;
+    }
+  }
+
+  if (fd < 0) {
+    psvDebugScreenSetFgColor(COLOR_YELLOW);
+    printf(" No boot debug log file found.\n\n");
+    psvDebugScreenSetFgColor(COLOR_WHITE);
+    printf(" Checked paths:\n");
+    printf("   - %s\n", LOG_PATH_UX0);
+    printf("   - %s\n\n", LOG_PATH_UR0);
+    printf(" To generate a log, launch Linux using [SQUARE] (Debug Mode).\n\n");
+    printf(" Press CROSS or START to return to menu...\n");
+    wait_button_press(SCE_CTRL_CROSS | SCE_CTRL_START | SCE_CTRL_CIRCLE);
+    return;
+  }
+
+  static char log_buffer[32768];
+  memset(log_buffer, 0, sizeof(log_buffer));
+  int rd = sceIoRead(fd, log_buffer, sizeof(log_buffer) - 1);
+  sceIoClose(fd);
+
+  if (rd <= 0) {
+    psvDebugScreenSetFgColor(COLOR_YELLOW);
+    printf(" Log file %s is empty (0 bytes).\n\n", found_path);
+    psvDebugScreenSetFgColor(COLOR_WHITE);
+    printf(" Press CROSS or START to return to menu...\n");
+    wait_button_press(SCE_CTRL_CROSS | SCE_CTRL_START | SCE_CTRL_CIRCLE);
+    return;
+  }
+
+  #define MAX_LOG_LINES 512
+  static char *lines[MAX_LOG_LINES];
+  int line_count = 0;
+
+  lines[line_count++] = log_buffer;
+  for (int i = 0; i < rd && line_count < MAX_LOG_LINES; i++) {
+    if (log_buffer[i] == '\r') {
+      log_buffer[i] = '\0';
+    } else if (log_buffer[i] == '\n') {
+      log_buffer[i] = '\0';
+      if (i + 1 < rd) {
+        lines[line_count++] = &log_buffer[i + 1];
+      }
+    }
+  }
+
+  int scroll_offset = 0;
+  const int page_size = 45;
+
+  while (1) {
+    psvDebugScreenClear(COLOR_BLACK);
+    psvDebugScreenSetFgColor(COLOR_CYAN);
+    printf("=== Log: %s (%d lines) ===\n", found_path, line_count);
+    psvDebugScreenSetFgColor(COLOR_GREY);
+    printf(" [UP/DOWN] Scroll | [L/R] Page | [CIRCLE/START] Back to menu\n");
+    printf("--------------------------------------------------------\n");
+    psvDebugScreenSetFgColor(COLOR_WHITE);
+
+    int end_line = scroll_offset + page_size;
+    if (end_line > line_count) {
+      end_line = line_count;
+    }
+
+    for (int l = scroll_offset; l < end_line; l++) {
+      if (lines[l]) {
+        if (strstr(lines[l], "[FAIL]") || strstr(lines[l], "Error") ||
+            strstr(lines[l], "error")) {
+          psvDebugScreenSetFgColor(COLOR_RED);
+        } else if (strstr(lines[l], "[OK]") || strstr(lines[l], "Success")) {
+          psvDebugScreenSetFgColor(COLOR_GREEN);
+        } else if (strstr(lines[l], "[WARN]") || strstr(lines[l], "Warning")) {
+          psvDebugScreenSetFgColor(COLOR_YELLOW);
+        } else if (strstr(lines[l], "Baremetal loader by xerpi") ||
+                   strstr(lines[l], "Resetting the device")) {
+          psvDebugScreenSetFgColor(COLOR_CYAN);
+        } else {
+          psvDebugScreenSetFgColor(COLOR_WHITE);
+        }
+        printf("%s\n", lines[l]);
+      }
+    }
+
+    uint32_t btn = wait_button_press(SCE_CTRL_UP | SCE_CTRL_DOWN |
+                                     SCE_CTRL_LTRIGGER | SCE_CTRL_RTRIGGER |
+                                     SCE_CTRL_START | SCE_CTRL_CIRCLE |
+                                     SCE_CTRL_CROSS);
+
+    if (btn & (SCE_CTRL_START | SCE_CTRL_CIRCLE | SCE_CTRL_CROSS)) {
+      break;
+    } else if (btn & SCE_CTRL_UP) {
+      if (scroll_offset > 0)
+        scroll_offset -= 5;
+      if (scroll_offset < 0)
+        scroll_offset = 0;
+    } else if (btn & SCE_CTRL_DOWN) {
+      if (scroll_offset + page_size < line_count)
+        scroll_offset += 5;
+    } else if (btn & SCE_CTRL_LTRIGGER) {
+      scroll_offset -= page_size;
+      if (scroll_offset < 0)
+        scroll_offset = 0;
+    } else if (btn & SCE_CTRL_RTRIGGER) {
+      if (scroll_offset + page_size < line_count)
+        scroll_offset += page_size;
+    }
+  }
+}
+
+static void boot_linux(const char *mount, int debug_mode) {
+  debug_log_init();
+
+  psvDebugScreenClear(COLOR_BLACK);
+  psvDebugScreenSetFgColor(COLOR_CYAN);
+  debug_log_printf(COLOR_CYAN,
+                   "========================================================\n");
+  if (debug_mode) {
+    debug_log_printf(COLOR_CYAN,
+                     " PlayStation Vita Linux 6.12 - Debug Boot Mode\n");
+  } else {
+    debug_log_printf(COLOR_CYAN,
+                     " PlayStation Vita Linux 6.12 Bootstrapper\n");
+  }
+  debug_log_printf(COLOR_CYAN,
+                   "========================================================\n\n");
+  debug_log_printf(COLOR_WHITE, " Target Storage Mount: %s\n", mount);
+  debug_log_printf(COLOR_GREY, " Log File: %s\n\n", g_active_log_path);
+
+  /* Step 1: Hardware & Firmware Environment Inspection */
+  debug_log_printf(COLOR_YELLOW, "[1/5] Hardware & Firmware Environment:\n");
+
+  SceKernelFwInfo fw;
+  memset(&fw, 0, sizeof(fw));
+  fw.size = sizeof(fw);
+  int has_fw = (_vshSblGetSystemSwVersion(&fw) >= 0);
+  if (has_fw) {
+    debug_log_printf(COLOR_WHITE, "   - Firmware Version:      %s (0x%08X)\n",
+                     fw.versionString, fw.version);
+  } else {
+    debug_log_printf(COLOR_WHITE,
+                     "   - Firmware Version:      Unknown (query failed)\n");
+  }
+
+  int model_raw = sceKernelGetModel();
+  int is_vita = vshSblAimgrIsVITA();
+  int is_dolce = vshSblAimgrIsDolce();
+  int is_mc_emu = vshSysconIsMCEmuCapable();
+  int has_wwan = vshSysconHasWWAN();
+
+  const char *model_str = "Unknown Model";
+  if (is_dolce) {
+    model_str = "PlayStation TV / Vita TV (Dolce, VTE-1000)";
+  } else if (is_mc_emu) {
+    model_str = "PS Vita Slim (LCD, PCH-2000 series)";
+  } else {
+    model_str = has_wwan ? "PS Vita 1000 3G/Wi-Fi (OLED, PCH-1100 series)"
+                         : "PS Vita 1000 Wi-Fi (OLED, PCH-1000 series)";
+  }
+
+  debug_log_printf(COLOR_WHITE, "   - Detected Hardware:     %s\n", model_str);
+  debug_log_printf(
+      COLOR_GREY,
+      "     (Model ID: 0x%08X | VITA: %d | Dolce: %d | MCEmu: %d)\n",
+      model_raw, is_vita, is_dolce, is_mc_emu);
+
+  int mc_state = vshMemoryCardGetCardInsertState();
+  int rm_state = vshRemovableMemoryGetCardInsertState();
+
+  if (mc_state) {
+    debug_log_printf(COLOR_GREEN,
+                     "   - Sony Memory Card:      INSERTED (MSIF interface active)\n");
+  } else {
+    debug_log_printf(COLOR_RED,
+                     "   - Sony Memory Card:      NOT DETECTED in MSIF slot!\n");
+    debug_log_printf(
+        COLOR_YELLOW,
+        "     [!] Warning: Baremetal loader requires an authentic Sony Memory Card.\n");
+    debug_log_printf(
+        COLOR_YELLOW,
+        "     [!] Linux cannot boot from SD2Vita without Sony MSIF storage.\n");
+  }
+
+  debug_log_printf(COLOR_WHITE, "   - GameCard Slot:         %s\n\n",
+                   rm_state ? "Inserted (SD2Vita / GameCard)" : "Empty");
+
+  /* Step 2: Storage Partitions State */
+  debug_log_printf(COLOR_YELLOW, "[2/5] Storage Partitions Status:\n");
+  for (size_t i = 0; i < NUM_MOUNTS; i++) {
+    char total_str[16];
+    char free_str[16];
+    format_size(g_mounts[i].total_bytes, total_str, sizeof(total_str));
+    format_size(g_mounts[i].free_bytes, free_str, sizeof(free_str));
+    int is_target = (strcmp(g_mounts[i].name, mount) == 0);
+    debug_log_printf(COLOR_WHITE, "   - %-5s: %s", g_mounts[i].name,
+                     g_mounts[i].is_mounted ? "[MOUNTED]" : "[NOT MOUNTED]");
+    if (g_mounts[i].is_mounted && g_mounts[i].total_bytes > 0) {
+      debug_log_printf(COLOR_WHITE, " (%s free of %s)", free_str, total_str);
+    }
+    if (is_target) {
+      debug_log_printf(COLOR_CYAN, " *TARGET*");
+    }
+    debug_log_printf(COLOR_WHITE, "\n");
+  }
+  debug_log_printf(COLOR_WHITE, "\n");
+
+  /* Step 3: Kernel and Device Tree Blobs Verification */
+  debug_log_printf(COLOR_YELLOW, "[3/5] Kernel & DTB Files (%slinux/):\n",
+                   mount);
+
+  int critical_errors = 0;
+  char path[256];
+  uint64_t file_sz = 0;
+  int readable = 0;
+
+  /* Check zImage */
+  snprintf(path, sizeof(path), "%slinux/zImage", mount);
+  if (inspect_file(path, &file_sz, &readable) == 0 && file_sz > 0) {
+    char sz_str[16];
+    format_size(file_sz, sz_str, sizeof(sz_str));
+    debug_log_printf(COLOR_GREEN,
+                     "   - zImage:                PRESENT (%s / %u bytes) [OK]\n",
+                     sz_str, (unsigned int)file_sz);
+  } else {
+    debug_log_printf(COLOR_RED,
+                     "   - zImage:                MISSING or unreadable! [FAIL]\n");
+    critical_errors++;
+  }
+
+  /* Check Model-Specific DTB */
+  const char *expected_dtb_rel = "vita.dtb";
+  if (is_dolce) {
+    expected_dtb_rel = "pstv.dtb";
+  } else if (is_mc_emu) {
+    expected_dtb_rel = "vita2000.dtb";
+  } else {
+    expected_dtb_rel = "vita1000.dtb";
+  }
+
+  snprintf(path, sizeof(path), "%slinux/%s", mount, expected_dtb_rel);
+  if (inspect_file(path, &file_sz, &readable) == 0 && file_sz > 0) {
+    debug_log_printf(COLOR_GREEN,
+                     "   - %-22s PRESENT (%u bytes) [MATCHES HARDWARE]\n",
+                     expected_dtb_rel, (unsigned int)file_sz);
+  } else {
+    debug_log_printf(COLOR_YELLOW,
+                     "   - %-22s NOT FOUND (testing fallback)\n",
+                     expected_dtb_rel);
+    snprintf(path, sizeof(path), "%slinux/vita.dtb", mount);
+    if (inspect_file(path, &file_sz, &readable) == 0 && file_sz > 0) {
+      debug_log_printf(COLOR_GREEN,
+                       "   - vita.dtb (fallback):   PRESENT (%u bytes) [OK]\n",
+                       (unsigned int)file_sz);
+    } else {
+      debug_log_printf(
+          COLOR_RED,
+          "   - vita.dtb (fallback):   MISSING! No valid DTB found! [FAIL]\n");
+      critical_errors++;
+    }
+  }
+
+  /* Step 4: Baremetal Loader Files & Multi-Path Fallbacks */
+  debug_log_printf(COLOR_YELLOW, "\n[4/5] Baremetal Loader Pre-Flight:\n");
+
+  /* payload.bin checks */
+  int payload_found = 0;
+  snprintf(path, sizeof(path), "%slinux/payload.bin", mount);
+  if (inspect_file(path, &file_sz, &readable) == 0 && file_sz > 0) {
+    debug_log_printf(
+        COLOR_GREEN,
+        "   - Target payload.bin:    PRESENT (%slinux/payload.bin, %u bytes) [OK]\n",
+        mount, (unsigned int)file_sz);
+    payload_found = 1;
+  } else {
+    debug_log_printf(COLOR_YELLOW,
+                     "   - Target payload.bin:    Not on target %slinux/\n",
+                     mount);
+  }
+
+  if (inspect_file("ux0:linux/payload.bin", &file_sz, &readable) == 0 &&
+      file_sz > 0) {
+    debug_log_printf(
+        COLOR_GREEN,
+        "   - Mirror payload.bin:    PRESENT (ux0:linux/payload.bin, %u bytes) [OK]\n",
+        (unsigned int)file_sz);
+    payload_found = 1;
+  } else if (strcmp(mount, "ux0:") != 0 && payload_found && dir_exists("ux0:")) {
+    debug_log_printf(COLOR_WHITE, "   - Syncing payload.bin to ux0:linux/... ");
+    sceIoMkdir("ux0:linux", 0777);
+    snprintf(path, sizeof(path), "%slinux/payload.bin", mount);
+    if (copy_file(path, "ux0:linux/payload.bin", 1) == 0) {
+      debug_log_printf(COLOR_GREEN, "[SYNCED]\n");
+    } else {
+      debug_log_printf(COLOR_YELLOW, "[SKIPPED]\n");
+    }
+  }
+
+  if (!payload_found) {
+    debug_log_printf(
+        COLOR_RED,
+        "   - payload.bin:           CRITICAL MISSING from all paths! [FAIL]\n");
+    critical_errors++;
+  }
+
+  /* baremetal-loader.skprx checks */
+  char mod_path[128];
+  snprintf(mod_path, sizeof(mod_path), "%slinux/baremetal-loader.skprx", mount);
+  int loader_found = 0;
+  if (inspect_file(mod_path, &file_sz, &readable) == 0 && file_sz > 0) {
+    debug_log_printf(
+        COLOR_GREEN,
+        "   - Target loader.skprx:   PRESENT (%s, %u bytes) [OK]\n",
+        mod_path, (unsigned int)file_sz);
+    loader_found = 1;
+  } else {
+    debug_log_printf(COLOR_YELLOW,
+                     "   - Target loader.skprx:   Not found on target %s\n",
+                     mod_path);
+  }
+
+  if (inspect_file("ux0:linux/baremetal-loader.skprx", &file_sz, &readable) ==
+          0 &&
+      file_sz > 0) {
+    debug_log_printf(
+        COLOR_GREEN,
+        "   - Mirror loader.skprx:   PRESENT (ux0:linux/baremetal-loader.skprx) [OK]\n");
+    loader_found = 1;
+  } else if (strcmp(mount, "ux0:") != 0 && loader_found && dir_exists("ux0:")) {
+    debug_log_printf(COLOR_WHITE, "   - Syncing loader.skprx to ux0:linux/... ");
+    sceIoMkdir("ux0:linux", 0777);
+    if (copy_file(mod_path, "ux0:linux/baremetal-loader.skprx", 1) == 0) {
+      debug_log_printf(COLOR_GREEN, "[SYNCED]\n");
+    } else {
+      debug_log_printf(COLOR_YELLOW, "[SKIPPED]\n");
+    }
+  }
+
+  if (!loader_found) {
+    debug_log_printf(
+        COLOR_RED,
+        "   - loader.skprx:          CRITICAL MISSING from all paths! [FAIL]\n");
+    critical_errors++;
+  }
+
+  /* Step 5: Pre-Flight Assessment */
+  debug_log_printf(COLOR_YELLOW, "\n[5/5] Pre-Flight Assessment & Handover:\n");
+
+  if (critical_errors > 0) {
+    debug_log_printf(
+        COLOR_RED,
+        "   [FAIL] Pre-flight halted with %d critical error(s)!\n",
+        critical_errors);
+    debug_log_printf(
+        COLOR_WHITE,
+        "   Boot cancelled to prevent console freeze or blackscreen.\n");
+    debug_log_printf(COLOR_CYAN, "   Log file written to: %s\n\n",
+                     g_active_log_path);
+    debug_log_printf(COLOR_WHITE,
+                     " Press CROSS or START to return to menu...\n");
+    debug_log_close();
+    wait_button_press(SCE_CTRL_CROSS | SCE_CTRL_START | SCE_CTRL_CIRCLE);
+    return;
+  }
+
+  debug_log_printf(
+      COLOR_GREEN,
+      "   [OK] All required boot files and pre-flight checks verified!\n");
+  debug_log_printf(COLOR_CYAN, "   Debug log synced to: %s\n\n",
+                   g_active_log_path);
+
+  if (debug_mode) {
+    debug_log_printf(COLOR_YELLOW, " Controls:\n");
+    debug_log_printf(COLOR_WHITE,
+                     "   [X]      Proceed to Launch (Trigger Standby Handover)\n");
+    debug_log_printf(COLOR_WHITE,
+                     "   [CIRCLE] Cancel & Return to Menu\n\n");
+
+    uint32_t choice =
+        wait_button_press(SCE_CTRL_CROSS | SCE_CTRL_CIRCLE | SCE_CTRL_START);
+    if (choice & (SCE_CTRL_CIRCLE | SCE_CTRL_START)) {
+      debug_log_printf(
+          COLOR_YELLOW,
+          " Boot cancelled by user request. Returning to menu...\n");
+      debug_log_close();
+      sceKernelDelayThread(400 * 1000);
+      return;
+    }
+  }
+
+  /* Initiate loader module launch */
+  debug_log_printf(COLOR_CYAN,
+                   " Handover: Loading baremetal kernel module...\n");
 
   tai_module_args_t argg;
   argg.size = sizeof(argg);
@@ -482,50 +974,67 @@ static void boot_linux(const char *mount) {
   argg.argp = NULL;
   argg.flags = 0;
 
-  char mod_path[128];
-  snprintf(mod_path, sizeof(mod_path), "%slinux/baremetal-loader.skprx", mount);
-
   SceUID mod_id = -1;
   if (file_exists(mod_path)) {
-    printf(" Loading %s...\n", mod_path);
+    debug_log_printf(COLOR_WHITE,
+                     "   - Calling taiLoadStartKernelModuleForUser(%s)...\n",
+                     mod_path);
     mod_id = taiLoadStartKernelModuleForUser(mod_path, &argg);
   }
   if (mod_id < 0 && file_exists("ux0:linux/baremetal-loader.skprx")) {
-    printf(" Trying ux0:linux/baremetal-loader.skprx...\n");
-    mod_id = taiLoadStartKernelModuleForUser("ux0:linux/baremetal-loader.skprx",
-                                             &argg);
+    debug_log_printf(
+        COLOR_WHITE,
+        "   - Calling taiLoadStartKernelModuleForUser(ux0:linux/baremetal-loader.skprx)...\n");
+    mod_id = taiLoadStartKernelModuleForUser(
+        "ux0:linux/baremetal-loader.skprx", &argg);
   }
   if (mod_id < 0) {
     char mod_360[128];
     snprintf(mod_360, sizeof(mod_360), "%slinux/baremetal-loader_360.skprx",
              mount);
     if (file_exists(mod_360)) {
-      printf(" Trying 3.60 loader from %s...\n", mod_360);
+      debug_log_printf(COLOR_WHITE,
+                       "   - Calling taiLoadStartKernelModuleForUser(%s)...\n",
+                       mod_360);
       mod_id = taiLoadStartKernelModuleForUser(mod_360, &argg);
     } else if (file_exists("ux0:linux/baremetal-loader_360.skprx")) {
-      printf(" Trying 3.60 loader from ux0:linux/...\n");
+      debug_log_printf(
+          COLOR_WHITE,
+          "   - Calling taiLoadStartKernelModuleForUser(ux0:linux/baremetal-loader_360.skprx)...\n");
       mod_id = taiLoadStartKernelModuleForUser(
           "ux0:linux/baremetal-loader_360.skprx", &argg);
     }
   }
 
   if (mod_id < 0) {
-    psvDebugScreenSetFgColor(COLOR_RED);
-    printf("\n [FAIL] Error loading baremetal loader: 0x%08X\n\n", mod_id);
-    psvDebugScreenSetFgColor(COLOR_WHITE);
-    printf(" Press START to return to menu.\n");
-    wait_button_press(SCE_CTRL_START);
-  } else {
-    psvDebugScreenSetFgColor(COLOR_GREEN);
-    printf(" [OK] Kernel module started (ID: 0x%08X)\n\n", mod_id);
-    psvDebugScreenSetFgColor(COLOR_YELLOW);
-    printf(" Entering standby to launch Linux 6.12...\n");
-    printf(" Screen will go black before Linux boots.\n\n");
-    psvDebugScreenSetFgColor(COLOR_WHITE);
-    printf(" Press START to proceed into Linux...\n");
-    wait_button_press(SCE_CTRL_START);
-    taiStopUnloadKernelModuleForUser(mod_id, &argg, NULL, NULL);
+    debug_log_printf(
+        COLOR_RED,
+        "\n   [FAIL] Kernel module start failed with error: 0x%08X\n\n",
+        mod_id);
+    debug_log_printf(COLOR_CYAN, "   Check %s for diagnostic details.\n\n",
+                     g_active_log_path);
+    debug_log_printf(COLOR_WHITE, " Press START to return to menu...\n");
+    debug_log_close();
+    wait_button_press(SCE_CTRL_START | SCE_CTRL_CROSS | SCE_CTRL_CIRCLE);
+    return;
   }
+
+  debug_log_printf(COLOR_GREEN,
+                   "   [OK] Baremetal loader module running (ID: 0x%08X)\n",
+                   mod_id);
+  debug_log_printf(
+      COLOR_YELLOW,
+      "   Syscon hooks active. Requesting VitaOS standby handover...\n");
+  debug_log_printf(
+      COLOR_WHITE,
+      "   Screen will go black as soft-reset transitions into Linux.\n\n");
+  debug_log_printf(
+      COLOR_GREY,
+      "   [VPK logs complete. Subsequent logs appended by kernel module.]\n");
+
+  /* Ensure all log buffers are flushed to persistent storage before standby */
+  debug_log_close();
+  sceKernelDelayThread(400 * 1000);
 }
 
 int main(int argc, char *argv[]) {
@@ -664,42 +1173,38 @@ int main(int argc, char *argv[]) {
     printf(" Controls:\n");
     if (is_target_mounted) {
       if (installed) {
-        printf("   [X]        Boot Linux (from %slinux/)\n", target_mount);
+        printf("   [X]        Boot Linux (Normal)\n");
+        printf("   [SQUARE]   Boot Linux (Debug Mode)\n");
         if (has_bundled) {
-          printf("   [SQUARE]   Reinstall / update %slinux/\n", target_mount);
+          printf("   [TRIANGLE] Reinstall / update %slinux/\n", target_mount);
         }
-        printf("   [TRIANGLE] Copy boot files (zImage/DTB) to %s\n",
-               target_mount);
       } else {
         if (has_bundled) {
           printf("   [X]        Install Linux to %slinux/\n", target_mount);
         }
+        printf("   [SQUARE]   Boot Linux (Debug Mode - Diagnostics)\n");
         printf("   [TRIANGLE] Copy boot files (zImage/DTB) to %s\n",
                target_mount);
       }
     } else {
       printf("   [X]        Mount %s partition\n", target_mount);
+      printf("   [SQUARE]   Debug Diagnostics\n");
     }
+    printf("   [SELECT]   View Boot Debug Log\n");
     printf("   [UP/DOWN]  Change target mount (L/R to cycle)\n");
     printf("   [START]    Exit to LiveArea\n\n");
 
     uint32_t mask = SCE_CTRL_START | SCE_CTRL_UP | SCE_CTRL_DOWN |
                     SCE_CTRL_LEFT | SCE_CTRL_RIGHT | SCE_CTRL_LTRIGGER |
-                    SCE_CTRL_RTRIGGER;
+                    SCE_CTRL_RTRIGGER | SCE_CTRL_SELECT;
 
     if (is_target_mounted) {
-      if (installed) {
-        mask |= SCE_CTRL_CROSS;
-        if (has_bundled)
-          mask |= SCE_CTRL_SQUARE;
-        mask |= SCE_CTRL_TRIANGLE;
-      } else {
-        if (has_bundled)
-          mask |= SCE_CTRL_CROSS;
-        mask |= SCE_CTRL_TRIANGLE;
-      }
+      mask |= SCE_CTRL_CROSS;
+      mask |= SCE_CTRL_SQUARE;
+      mask |= SCE_CTRL_TRIANGLE;
     } else {
       mask |= SCE_CTRL_CROSS;
+      mask |= SCE_CTRL_SQUARE;
     }
 
     uint32_t btn = wait_button_press(mask);
@@ -715,26 +1220,30 @@ int main(int argc, char *argv[]) {
       continue;
     } else if (btn & SCE_CTRL_START) {
       break;
+    } else if (btn & SCE_CTRL_SELECT) {
+      view_boot_log();
     } else if (btn & SCE_CTRL_CROSS) {
       if (!is_target_mounted) {
         mount_partition_interactive(target_mount);
       } else if (installed) {
-        boot_linux(target_mount);
+        boot_linux(target_mount, 0);
       } else if (has_bundled) {
         install_linux_files_to_mount(target_mount);
         printf("\nPress CROSS or START to continue...\n");
         wait_button_press(SCE_CTRL_CROSS | SCE_CTRL_START);
       }
     } else if (btn & SCE_CTRL_SQUARE) {
-      if (has_bundled) {
+      boot_linux(target_mount, 1);
+    } else if (btn & SCE_CTRL_TRIANGLE) {
+      if (installed && has_bundled) {
         install_linux_files_to_mount(target_mount);
         printf("\nPress CROSS or START to continue...\n");
         wait_button_press(SCE_CTRL_CROSS | SCE_CTRL_START);
+      } else {
+        copy_boot_files_to_mount(target_mount);
+        printf("\nPress CROSS or START to continue...\n");
+        wait_button_press(SCE_CTRL_CROSS | SCE_CTRL_START);
       }
-    } else if (btn & SCE_CTRL_TRIANGLE) {
-      copy_boot_files_to_mount(target_mount);
-      printf("\nPress CROSS or START to continue...\n");
-      wait_button_press(SCE_CTRL_CROSS | SCE_CTRL_START);
     }
   }
 

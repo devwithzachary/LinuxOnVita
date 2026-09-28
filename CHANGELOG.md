@@ -8,6 +8,12 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
 ## [v1.3.0] - 2026-09-25
 
 ### Added
+- **Bootstrapper Debug Mode & Diagnostic Logger (`LinuxOnVita.vpk`):**
+  - Added a dedicated "Debug Mode" boot option (`[SQUARE]`) in the bootstrapper VPK based on GitHub Issue #12 to trace, display, and record every step of the Linux bootloader handover.
+  - **Granular Step-by-Step Reporting:** Inspects system firmware version, hardware model identification (`PCH-1000`, `PCH-2000` Slim, or `Dolce` PSTV), physical Sony memory card MSIF presence, storage mount statuses (`ux0:`, `uma0:`, `xmc0:`, `imc0:`), file integrity and exact byte sizes for `zImage`, `vita.dtb`, `vita2000.dtb`, `vita1000.dtb`, `pstv.dtb`, `payload.bin`, and `baremetal-loader.skprx`.
+  - **Dual Persistent Log File Output (`boot_debug.log`):** Writes all boot events with synchronous disk flushing (`sceIoSyncByFd`) to `ux0:data/LinuxOnVita/boot_debug.log` (with fallback to `ur0:data/LinuxOnVita/boot_debug.log`). Ensures logs survive crashes, freezes, and hard hangs so users can inspect them via VitaShell or copy them for bug reports.
+  - **Pre-Flight Safety Assessment:** Prevents console blackscreens and freezes by evaluating prerequisites prior to kernel handover, aborting safely if critical boot files or physical memory card requirements are not met.
+  - **Integrated On-Screen Log Viewer (`[SELECT]`):** Built-in scrollable log viewer in the VPK main menu allowing users to inspect previous boot logs directly on the console screen without needing a PC or external file manager.
 - **Hardware & System Diagnostic Tool (`vita-diagnostics` / `vita-diag`):**
   - Created an on-device diagnostic program (`vita-diagnostics`, with `vita-diag` alias) to help users troubleshoot and collect system logs when experiencing Wi-Fi connection issues or SD card mounting failures.
   - **Storage & SD Card Diagnosis:** Inspects MMC controllers (`/dev/mmcblk*`), partition tables, and mount statuses. If `/mnt/ux0` fails to mount, automatically executes safe read-only test-probes against candidate devices across `exfat`, `vfat`, and `ext4`, reporting the exact failure cause and recommended mount commands.
@@ -47,6 +53,10 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
     - Seamlessly transitions between Desktop Mouse Mode and Terminal Keystroke Mode upon starting and exiting `alpine-desktop`.
 
 ### Fixed
+- **Baremetal Loader Standby Handover & Suspend Interception (`baremetal-loader.skprx`):**
+  - Resolved an issue reported in GitHub Issue #12 where launching Linux on PS Vita Slim (PCH-2000) or certain firmware versions caused an immediate black screen with the power LED remaining green.
+  - Expanded `ksceSysconResetDevice_hook_func` to intercept both `SCE_SYSCON_RESET_TYPE_POWEROFF` (0x00) and `SCE_SYSCON_RESET_TYPE_SUSPEND` (0x01), ensuring standby transitions always configure the payload and trigger `SCE_SYSCON_RESET_TYPE_SOFT_RESET` rather than placing the console into a sleep state.
+  - Added kernel-space persistent logging so `baremetal-loader.skprx` appends payload allocation details, memory addresses, and Syscon reset hook events directly to `boot_debug.log`.
 - **Analog Stick Mouse Micro-Movement & Sub-Pixel Accumulator (`vita-input-mapper`):**
   - Resolved an issue where analog stick mouse acceleration was excessively fast, preventing fine cursor movements and making small UI targets difficult to click.
   - Implemented a sub-pixel fractional accumulator so low stick deflections smoothly emit sub-pixel movements (0.4 to 10 pixels per second) rather than forcing an immediate minimum 1-pixel jump at every 60 Hz tick.

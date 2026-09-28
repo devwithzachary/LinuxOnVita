@@ -80,8 +80,23 @@ The screen will blank briefly, take over the hardware framebuffer, and boot dire
 When upgrading your console from a previous release of LinuxOnVita:
 1. Transfer and install the new `LinuxOnVita.vpk` in VitaShell.
 2. Launch the **LinuxOnVita** bubble from the LiveArea.
-3. **Reinstall / Update Memory Card Files:** Press **SQUARE (□)** to update the Linux setup (`<mount>/linux/`). Because boot files (`zImage`, Device Tree blobs, and baremetal loaders) already exist on your memory card from the previous version, pressing Cross (✕) would continue booting the older kernel and files. Pressing **Square (□)** refreshes and overwrites your memory card with the new release files bundled inside the VPK.
+3. **Reinstall / Update Memory Card Files:** Press **TRIANGLE (△)** to update the Linux setup (`<mount>/linux/`). Because boot files (`zImage`, Device Tree blobs, and baremetal loaders) already exist on your memory card from the previous version, pressing Cross (✕) would continue booting the older kernel and files. Pressing **Triangle (△)** refreshes and overwrites your memory card with the new release files bundled inside the VPK.
 4. Press **CROSS (✕)** to boot into your updated Linux system!
+
+### Booting in Debug Mode (Troubleshooting Boot Issues)
+If Linux fails to boot, freezes, or the screen goes dark without reaching the shell prompt:
+1. Open the **LinuxOnVita** application bubble.
+2. Select your target storage partition (`ux0:`, `xmc0:`, or `uma0:`).
+3. Press **SQUARE (□)** to launch **Debug Mode**.
+4. Debug Mode runs an automated 5-step diagnostic pre-flight sequence directly on-screen:
+   - **Hardware & Firmware Check:** Queries system software version (`3.65`, `3.60`, etc.) and detects your exact hardware model (PS Vita OLED 1000, PS Vita Slim 2000, or PlayStation TV Dolce).
+   - **Memory Card Interface:** Confirms physical insertion of the Sony Memory Card in the hardware MSIF slot.
+   - **Storage Partition Status:** Scans partition mount points, total capacity, and available free space.
+   - **Kernel & DTB Integrity:** Checks file existence and exact byte sizes for `zImage` and model-specific Device Tree blobs (`vita2000.dtb`, `vita1000.dtb`, `pstv.dtb`, or `vita.dtb`).
+   - **Loader Pre-Flight:** Verifies `payload.bin` and `baremetal-loader.skprx`, auto-syncing mirrors to `ux0:linux/` to ensure all loader fallback paths succeed.
+5. If errors are detected, the boot sequence halts safely with an explanation so you can fix missing files without crashing.
+6. If all checks pass, press **CROSS (✕)** to trigger the standby handover into Linux, or press **CIRCLE (○)** to cancel.
+7. **Viewing Saved Logs:** All diagnostic steps, return codes, and kernel-space handover events are flushed synchronously to `ux0:data/LinuxOnVita/boot_debug.log` (with fallback to `ur0:data/LinuxOnVita/boot_debug.log`). You can view the log directly on your Vita by pressing **SELECT** in the LinuxOnVita main menu, or open it in VitaShell to attach to GitHub issues.
 
 ---
 
