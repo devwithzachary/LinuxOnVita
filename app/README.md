@@ -15,9 +15,10 @@ LinuxOnVita is an all-in-one bootstrapper and payload installer application for 
 
 ## Controls
 
-- **CROSS (X):** Boot Linux (when files are verified) / Install Linux files to target mount (on first run)
-- **SQUARE ([ ]):** Reinstall or update Linux files to the selected memory card mount
-- **TRIANGLE (/\\):** Copy boot files from `ux0:` to target memory card mount
+- **CROSS (X):** Boot Linux (Normal) / Install Linux files to target mount (on first run)
+- **SQUARE ([ ]):** Boot Linux in Debug Mode (runs diagnostic logging)
+- **TRIANGLE (/\\):** Reinstall or update Linux files to the selected memory card mount
+- **SELECT:** View persistent boot debug log on screen
 - **D-PAD UP / DOWN:** Navigate and select target memory card mount (`xmc0:`, `ux0:`, `uma0:`, `imc0:`)
 - **L / R Shoulders:** Previous / Next target memory card mount
 - **START:** Exit to LiveArea

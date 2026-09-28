@@ -85,7 +85,7 @@ While original proof-of-concept projects proved that modern Linux can boot on th
 
 > [!IMPORTANT]
 > **Updating from an Earlier Version:**
-> If you already have an older version of LinuxOnVita installed, transfer and install the latest `LinuxOnVita.vpk` in VitaShell, launch the app, and press **SQUARE (□)** to reinstall and update the Linux setup (`<mount>/linux/`). Pressing CROSS (✕) immediately would otherwise boot the older kernel and loaders already on your memory card.
+> If you already have an older version of LinuxOnVita installed, transfer and install the latest `LinuxOnVita.vpk` in VitaShell, launch the app, and press **TRIANGLE (△)** to reinstall and update the Linux setup (`<mount>/linux/`). Pressing CROSS (✕) immediately would otherwise boot the older kernel and loaders already on your memory card. To launch Linux with step-by-step diagnostic logging, press **SQUARE (□)** instead.
 
 For full usage instructions, gamepad shortcuts, and Wi-Fi setup, see the **[Complete User Guide](USER_GUIDE.md)**.
 

@@ -5,7 +5,7 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
 
 ---
 
-## [v1.3.0] - 2026-09-25
+## [v1.3.0] - 2026-09-28
 
 ### Added
 - **Bootstrapper Debug Mode & Diagnostic Logger (`LinuxOnVita.vpk`):**
@@ -38,40 +38,24 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
     - **Welcome & Control Guide (`vita-desktop-welcome`):** Graphical handheld guide featuring tabbed documentation for system specs, controller inputs, bundled applications, native APK package management, and startup launch preferences.
     - **Web Browser (`badwolf`):** Privacy-oriented, WebKitGTK-based graphical web browser supporting modern HTML5, CSS3, and JavaScript within a handheld memory footprint.
     - **Activity & Resource Monitor (`xfce4-taskmanager` / `taskmanager`):** Full-featured GTK task manager displaying live CPU and memory utilization graphs, running process trees, and task controls powered by `dbus-x11`.
-    - **On-Screen Keyboard (`matchbox-keyboard`):** Touch virtual keyboard with a dedicated show/hide toggle script (`toggle-keyboard`), accessible via desktop shortcut and application menu.
+    - **On-Screen Keyboard (`matchbox-keyboard`):** Touch virtual keyboard with a dedicated show/hide toggle script (`toggle-keyboard`), accessible via desktop shortcut and application menu. Configured in floating mode (`layer: OnTop`) so it hovers cleanly above application windows without carving or shrinking the 960x544 desktop workspace.
     - **File Manager (`pcmanfm`):** Fast tabbed file manager managing files, removable storage, and desktop icons.
     - **Text Editor (`mousepad` / `leafpad`):** Modern text editor with syntax highlighting, search/replace, and line numbering.
-    - **Terminal Emulator (`sakura`):** Multi-tabbed GTK terminal with customizable fonts and direct native CLI access for `apk` package management.
+    - **Terminal Emulator (`sakura`):** Multi-tabbed GTK terminal with customizable fonts, pre-configured shell environment, clean Monospace 9 typography, and direct native CLI access for `apk` package management.
     - **Image Viewer (`feh`):** Lightweight image viewer for photos and screenshots.
     - **Reboot to VitaOS (`vita-reboot`):** Dedicated desktop shortcut and application menu entry to safely sync all storage filesystems and reboot the console directly back to Sony VitaOS (LiveArea), featuring a clean confirmation dialog to prevent accidental triggers.
   - **Analog Stick Mouse Emulation (`vita-input-mapper --desktop`):**
-    - Engineered continuous analog stick mouse cursor emulation: Left stick controls 360-degree pointer movement with dynamic non-linear acceleration.
-    - Tuned pointer speed and acceleration curve for precise single-pixel control and comfortable desktop navigation.
-    - Right analog stick controls vertical and horizontal scroll wheel navigation (`REL_WHEEL` and `REL_HWHEEL`).
+    - Continuous analog stick mouse cursor emulation: Left stick controls 360-degree pointer movement with dynamic non-linear acceleration and a sub-pixel fractional accumulator for pixel-perfect precision on checkboxes, icons, and menus while retaining brisk screen traversal.
+    - Proportional right analog stick controls vertical and horizontal scroll wheel navigation (`REL_WHEEL` and `REL_HWHEEL`), scaling naturally with stick deflection.
     - Physical button triggers mapped ergonomically: Cross (✕) and R-Trigger for Left Click, Circle (○) and L-Trigger for Right Click, Square (□) for Middle Click, Start for IceWM Application Menu, and Select for Escape.
-    - **Streamlined Handheld Architecture & Instant Startup:** Removed defensive legacy development fallbacks and repetitive runtime package-by-package connectivity pings. Desktop helper utilities (`vita-desktop-welcome`, `toggle-keyboard`, `taskmanager`) are deployed directly from the bundled rootfs, allowing `alpine-desktop` to initialize and launch X11 instantly.
     - Seamlessly transitions between Desktop Mouse Mode and Terminal Keystroke Mode upon starting and exiting `alpine-desktop`.
+  - **Streamlined Handheld Architecture & Instant Startup:** Desktop helper utilities (`vita-desktop-welcome`, `toggle-keyboard`, `taskmanager`) are deployed directly from the bundled rootfs, allowing `alpine-desktop` to initialize and launch X11 instantly without repetitive runtime connectivity checks.
 
 ### Fixed
 - **Baremetal Loader Standby Handover & Suspend Interception (`baremetal-loader.skprx`):**
   - Resolved an issue reported in GitHub Issue #12 where launching Linux on PS Vita Slim (PCH-2000) or certain firmware versions caused an immediate black screen with the power LED remaining green.
   - Expanded `ksceSysconResetDevice_hook_func` to intercept both `SCE_SYSCON_RESET_TYPE_POWEROFF` (0x00) and `SCE_SYSCON_RESET_TYPE_SUSPEND` (0x01), ensuring standby transitions always configure the payload and trigger `SCE_SYSCON_RESET_TYPE_SOFT_RESET` rather than placing the console into a sleep state.
   - Added kernel-space persistent logging so `baremetal-loader.skprx` appends payload allocation details, memory addresses, and Syscon reset hook events directly to `boot_debug.log`.
-- **Analog Stick Mouse Micro-Movement & Sub-Pixel Accumulator (`vita-input-mapper`):**
-  - Resolved an issue where analog stick mouse acceleration was excessively fast, preventing fine cursor movements and making small UI targets difficult to click.
-  - Implemented a sub-pixel fractional accumulator so low stick deflections smoothly emit sub-pixel movements (0.4 to 10 pixels per second) rather than forcing an immediate minimum 1-pixel jump at every 60 Hz tick.
-  - Replaced the aggressive quadratic acceleration curve with a dual linear and quadratic response curve capped at ~340 pixels per second for maximum stick tilt, providing pixel-perfect precision on checkboxes, icons, and menus while retaining brisk screen traversal.
-  - Added proportional right stick scrolling so vertical and horizontal scroll rates scale naturally with tilt displacement.
-- **Sakura Terminal Shell Initialization & Prompt Fix (`assertion 'argv[0] != nullptr' failed`):**
-  - Resolved an issue where opening the Sakura terminal emulator displayed an empty black window with a blinking cursor and no interactive shell prompt.
-  - Root-caused the VTE critical error (`vte_pty_spawn_with_fds_async: assertion 'argv[0] != nullptr' failed`) to an unset `SHELL` environment variable in the desktop session (`env -i`). Sakura relies on `g_getenv("SHELL")` when launched without `-e`; if unset, `sakura.argv[0]` becomes null.
-  - Explicitly exported `SHELL=/bin/sh` across `.xinitrc`, desktop startup `env -i`, `profile.d`, `/etc/environment`, and installed an automated wrapper for `/usr/bin/sakura` to guarantee an active shell session.
-  - Pre-seeded `~/.config/sakura/sakura.conf` with clean Monospace 9 typography and hidden scrollbar optimized for 960x544 screen space.
-- **On-Screen Keyboard Floating Mode & Workarea Fix (`matchbox-keyboard` / `toggle-keyboard`):**
-  - Resolved an issue where launching the virtual on-screen keyboard caused maximized application windows to shrink down to roughly one-third of the screen.
-  - Neutralized `_NET_WM_STRUT_PARTIAL` and `_NET_WM_STRUT` window properties so IceWM maintains the full 960x518 desktop workspace.
-  - Configured IceWM `winoptions` (`layer: OnTop`, `allWorkspaces: 1`, `doNotCover: 0`, `fMove: 1`) and position helpers (`xdotool`, `xprop`) to keep the keyboard floating on top above full-screen windows and easily draggable via touch or analog mouse.
-  - Installed a wrapper script for `/usr/bin/matchbox-keyboard` and updated `/usr/bin/toggle-keyboard` so any launch method automatically floats without carving screen area.
 - **Syscon Analog Stick Sampling Initialization (`vita-buttons` & baremetal loader):**
   - Resolved an issue where thumb sticks did not report movement in Linux.
   - Fixed a command payload length calculation bug in `vita-buttons.c`: Syscon command `0x180` (enable analog sampling) was called with `cmd_len = 1` instead of `cmd_len = 2`. Because `1` represents zero data payload bytes, the checksum byte overwrote the sampling mode parameter, causing Syscon to ignore the enable request.

@@ -106,9 +106,10 @@ LinuxOnVita ${VERSION} - Installation Instructions
 UPDATING FROM AN EARLIER VERSION:
 If you are upgrading an existing LinuxOnVita installation:
 After installing the new 'LinuxOnVita.vpk' and launching the app, you MUST
-press SQUARE (□) inside the app to reinstall/update the Linux files
+press TRIANGLE (△) inside the app to reinstall/update the Linux files
 (kernel zImage, Device Tree blobs, and baremetal loaders) on your memory card.
 Simply pressing CROSS (X) would continue booting the older files already on the card.
+To boot with step-by-step diagnostic logging and hardware checks, press SQUARE (□).
 
 NOTE FOR SD2VITA USERS:
 An official physical Sony memory card is strictly required on all consoles
