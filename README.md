@@ -98,10 +98,15 @@ While original proof-of-concept projects proved that modern Linux can boot on th
 ### Installation Steps
 1. Download **`LinuxOnVita.vpk`** from the [GitHub Releases page](https://github.com/devwithzachary/LinuxOnVita/releases).
 2. Transfer `LinuxOnVita.vpk` to your PS Vita using VitaShell (USB or FTP).
-3. In VitaShell, highlight `LinuxOnVita.vpk` and press **CROSS (✕)** to install.
+3. In VitaShell, highlight `LinuxOnVita.vpk` and press **CROSS (✕)** to install. You can install it to any partition (`ux0:`, `uma0:`, etc.) - it does not matter where the app itself lives.
 4. Launch **LinuxOnVita** from the LiveArea.
-5. Select your Sony Memory Card partition (e.g. `xmc0:` for SD2Vita users, or `ux0:` for standard consoles) and press **CROSS (✕)** to install the bundled Linux files.
+5. **Select your Sony Memory Card partition** (e.g. `xmc0:` or `uma0:` for SD2Vita users, `ux0:` for standard consoles) and press **CROSS (✕)** to install the bundled Linux boot files to it.
 6. Press **CROSS (✕)** to boot straight into Linux!
+
+> [!NOTE]
+> **The VPK app location and the in-app partition selector are two independent things.**
+> The partition you select inside the app is only where the **Linux boot files** (kernel, loaders, device tree) are written on your Sony Memory Card. The app bubble itself can live anywhere on your LiveArea.
+
 
 > [!IMPORTANT]
 > **Updating from an Earlier Version:**

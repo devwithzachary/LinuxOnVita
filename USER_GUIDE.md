@@ -84,11 +84,15 @@ Download **`LinuxOnVita.vpk`** from the [GitHub Releases page](https://github.co
 
 ### Step 4: Configure Storage & Launch Linux
 1. Tap the new **LinuxOnVita** bubble and select **Start**.
-2. The application scans all storage partitions and displays them on screen:
+2. The application scans all storage partitions and displays them on screen. **Select your Sony Memory Card partition** - this is where the Linux boot files (`zImage`, loaders, DTB) will be written:
    - **Standard Consoles (No SD2Vita):** Your Sony Memory Card is already `ux0:`.
    - **SD2Vita Users:** Your SD2Vita adapter is `ux0:`, while your official Sony Memory Card is typically mapped to `xmc0:` or `uma0:`. Use **D-Pad Up / Down** or **L / R** triggers to select your Sony Memory Card partition. Your selection is automatically remembered for future boots.
 3. Press **CROSS (✕)** to install the bundled Linux files to your selected memory card.
 4. Press **CROSS (✕)** to boot!
+
+> [!NOTE]
+> **The VPK app install location and the in-app partition selector are independent choices.**
+> You can install the `LinuxOnVita.vpk` app to any partition VitaOS allows (e.g. `ux0:app/`, `uma0:app/`). The partition selector *inside* the app is only asking where to write the **Linux boot files** (kernel, loaders, device tree) onto your **Sony Memory Card**. Wherever the app bubble lives on your LiveArea does not affect which memory card Linux boots from.
 
 The screen will blank briefly, take over the hardware framebuffer, and boot directly to the Linux terminal prompt (`root@vita:~#`).
 
