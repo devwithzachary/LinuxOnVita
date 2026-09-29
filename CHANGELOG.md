@@ -15,6 +15,12 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Added a new "Boot Loop Recovery After Returning to VitaOS" section to `USER_GUIDE.md` FAQ with numbered recovery steps, Safe Mode fallback notes, and long-term workaround guidance.
   - Added the boot loop as a new bullet in the README "Common Troubleshooting" section.
   - Embedded the reference device disclaimer (PS Vita 1000 OLED, 3.65 Enso, no plugins) in both README and USER_GUIDE.
+- **Two-Storage Architecture Explanation (issue #16):**
+  - Documented the "Sony Memory Card is boot-only, not accessible in Linux" architecture throughout the USER_GUIDE to address repeated user confusion about storage capacity and the 1GB alpine.img default size.
+  - Added an `[!IMPORTANT]` callout table at the start of the `alpine-chroot` section in `USER_GUIDE.md` explaining that alpine.img lives on the SD2Vita (not the Sony Memory Card), why the Sony card is not accessible at runtime (no MSIF driver in Linux), and the fallback to internal eMMC.
+  - Added a "Customising the alpine.img Size" subsection showing `alpine-chroot --size 4G` and `--recreate` commands for users with large SD2Vita cards.
+  - Expanded `USER_GUIDE.md` Section 7 "Managing Files & Storage" with a full "Two-Storage Architecture" reference table and prose explanation.
+  - Added a dedicated FAQ entry "Why does Linux only show 1GB of storage when I have an 8GB memory card?" with a complete explanation and resize commands.
 
 ### Added
 - **Bootstrapper Debug Mode & Diagnostic Logger (`LinuxOnVita.vpk`):**

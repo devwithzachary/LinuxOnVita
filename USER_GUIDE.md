@@ -354,6 +354,21 @@ Logging in via SSH gives you a full-sized desktop terminal, making it comfortabl
 
 The base LinuxOnVita operating system runs from a lightweight, memory-resident root filesystem (initramfs). To allow installing any modern Linux program, LinuxOnVita integrates **Alpine Linux v3.24** with its full-featured `apk` package repository.
 
+> [!IMPORTANT]
+> **Where Does alpine.img Live? - Two-Storage Architecture Explained**
+>
+> The PS Vita uses two physically separate storage devices when running LinuxOnVita, and understanding this is key to knowing where your files and packages live:
+>
+> | Device | VitaOS Name | Linux Path | Role |
+> | :--- | :--- | :--- | :--- |
+> | **Sony Memory Card** | `xmc0:` / `uma0:` | *(not accessible at runtime)* | Boot only - holds `zImage`, DTB, and loader files. Cannot be read or written to by Linux once booted. |
+> | **SD2Vita / Game Card Adapter** | `ux0:` | `/mnt/ux0/` | Runtime storage - where `alpine.img`, swapfiles, DOOM WADs, and your files live. |
+> | **Internal eMMC** | `ur0:` | `/mnt/ur0/` | Internal fallback storage. |
+>
+> **In short:** The Sony Memory Card is only used during the boot handover. Once Linux is running, it is not accessible. The `alpine.img` package container (and all your data) is stored on your **SD2Vita card** at `/mnt/ux0/alpine.img`.
+>
+> If you only have a Sony Memory Card and no SD2Vita adapter, alpine.img falls back to `/mnt/ur0/alpine.img` on internal eMMC storage.
+
 ### Understanding the Isolated Environment
 The Alpine Linux environment runs in an **isolated chroot container** (`/mnt/alpine`):
 * **Packages reside inside the container:** Programs installed with `apk add` (such as Python, Git, GCC, or text editors) only exist and execute inside the Alpine environment.
@@ -376,6 +391,17 @@ fastfetch
 exit
 ```
 Your prompt returns to green `root@vita:~#`.
+
+### Customising the alpine.img Size
+By default, `alpine-chroot` creates a **1 GB** (`1024 MB`) persistent ext4 image. If you have a large SD2Vita card and need more space for packages, create a bigger image:
+```bash
+# Create a 4GB alpine image on your SD card
+alpine-chroot --size 4G
+
+# Or recreate an existing image at a new size (WARNING: this deletes all installed packages)
+alpine-chroot --recreate --size 4G
+```
+The image is stored at `/mnt/ux0/alpine.img`. Use `df -h /mnt/alpine` inside the chroot to see available space.
 
 ### Running Commands from the Base Host
 If you want to execute an Alpine-installed program directly from the base prompt without opening an interactive shell:
@@ -552,13 +578,36 @@ To exit the graphical desktop session:
 
 ## 7. Managing Files & Storage
 
-LinuxOnVita automatically detects and mounts your physical storage partitions:
+### The Two-Storage Architecture
+
+LinuxOnVita uses two physically separate storage devices with distinct roles:
+
+**Sony Memory Card (Boot Device - `xmc0:` / `uma0:` in VitaOS)**
+- Holds the Linux boot files: `zImage` (kernel), device tree blobs (`vita.dtb`), and the baremetal loaders.
+- These files are written by the LinuxOnVita app during installation.
+- **Once Linux has booted, the Sony Memory Card is NOT accessible.** The baremetal loader uses Sony's proprietary MSIF hardware controller to read the kernel, then hands off to Linux - which has no runtime MSIF driver.
+- You cannot read from or write to your Sony Memory Card while Linux is running.
+
+**SD2Vita / Game Card Adapter or Internal eMMC (Runtime Storage)**
+- This is where all your files, packages, and data live while Linux is running.
+- Mounted at `/mnt/ux0/` (SD2Vita) or `/mnt/ur0/` (internal eMMC).
+- The `alpine.img` package container, DOOM WADs, swapfiles, and any files you create all go here.
+
+```
+Storage Device      VitaOS Name      Linux Path         Role
+------------------  ---------------  -----------------  ---------------------------
+Sony Memory Card    xmc0: / uma0:    (not accessible)   Boot files only
+SD2Vita Adapter     ux0:             /mnt/ux0/          Runtime storage + alpine.img
+Internal eMMC       ur0:             /mnt/ur0/          Fallback storage
+```
+
+LinuxOnVita automatically detects and mounts your runtime storage partitions:
 
 | Path in Linux | Partition Type | Description |
 | :--- | :--- | :--- |
-| `/mnt/ux0/` | SD2Vita or Memory Card | Main storage for games, DOOM WADs, swapfiles, and Alpine images |
-| `/mnt/ur0/` | Internal eMMC | Internal memory storage partition |
-| `/mnt/alpine/` | Ext4 loopback | Alpine Linux persistent container filesystem |
+| `/mnt/ux0/` | SD2Vita adapter or memory card | Main storage - alpine.img, games, DOOM WADs, swapfiles |
+| `/mnt/ur0/` | Internal eMMC | Internal storage fallback |
+| `/mnt/alpine/` | Ext4 loopback (inside alpine.img) | Alpine Linux persistent container filesystem |
 
 ### Sharing Files Between VitaOS and Linux
 Files placed in `ux0:` inside VitaOS or VitaShell are accessible directly under `/mnt/ux0/` in Linux.
@@ -583,6 +632,33 @@ Run `vita-swap create 512M` to create an extra 512 MB swapfile on your SD card. 
 
 ### How do I return to VitaOS?
 Simply type `reboot` and press Enter. Your console will perform a cold restart straight into official VitaOS.
+
+### Why does Linux only show 1GB of storage when I have an 8GB memory card?
+
+This is a very common point of confusion because LinuxOnVita uses **two separate storage devices** with different roles.
+
+Your **Sony Memory Card** (8GB in your case) is used **only for booting** - it holds the Linux kernel, device tree, and loader files. Once Linux has finished booting, the Sony Memory Card is **not accessible at runtime**. Linux has no driver for Sony's proprietary MSIF memory card controller.
+
+The **1GB** you see inside Linux is `alpine.img` - a fixed-size ext4 container stored on your **SD2Vita game card adapter** at `/mnt/ux0/alpine.img`. It defaults to 1GB when first created. It is completely separate from your Sony Memory Card and its size is not related to it.
+
+If you have a large SD2Vita card and want more space for packages, you can grow the alpine container:
+
+```bash
+# Check free space on your SD card first
+df -h /mnt/ux0
+
+# Recreate alpine.img at 4GB (WARNING: deletes all installed packages)
+alpine-chroot --recreate --size 4G
+```
+
+To summarise:
+
+| What you see | Where it lives | Size |
+| :--- | :--- | :--- |
+| Sony Memory Card | `xmc0:` / `uma0:` | Your card size (e.g. 8GB) - boot files only, not accessible in Linux |
+| SD2Vita / Game Card | `/mnt/ux0/` | Your microSD card size - this is your runtime storage |
+| `alpine.img` container | `/mnt/ux0/alpine.img` on SD2Vita | 1GB by default, resizable with `--size` |
+
 
 ---
 
