@@ -7,6 +7,15 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
 
 ## [v1.3.0] - 2026-09-28
 
+### Documentation
+- **Kernel Plugin Boot Loop Warning (issues #8, #14):**
+  - Investigated and documented a known compatibility issue where USB streaming and storage remapping kernel plugins (VitaUSBStream, YAMT, StorageMgr) can cause a boot loop on return to VitaOS after running Linux. Root cause: the baremetal loader reconfigures the MSIF memory card controller and USB subsystem at a hardware level; on the cold reboot back, these kernel plugins encounter unexpected hardware state and crash.
+  - Added a prominent `[!WARNING]` callout block to `README.md` Prerequisites listing known problematic plugin categories and a step-by-step boot loop recovery procedure (hold L trigger to bypass plugins, edit `tai/config.txt` via VitaShell).
+  - Added a matching `[!IMPORTANT]` disclaimer to `USER_GUIDE.md` Prerequisites with full root cause explanation, known plugin list, and a link to the dedicated recovery section.
+  - Added a new "Boot Loop Recovery After Returning to VitaOS" section to `USER_GUIDE.md` FAQ with numbered recovery steps, Safe Mode fallback notes, and long-term workaround guidance.
+  - Added the boot loop as a new bullet in the README "Common Troubleshooting" section.
+  - Embedded the reference device disclaimer (PS Vita 1000 OLED, 3.65 Enso, no plugins) in both README and USER_GUIDE.
+
 ### Added
 - **Bootstrapper Debug Mode & Diagnostic Logger (`LinuxOnVita.vpk`):**
   - Added a dedicated "Debug Mode" boot option (`[SQUARE]`) in the bootstrapper VPK based on GitHub Issue #12 to trace, display, and record every step of the Linux bootloader handover.

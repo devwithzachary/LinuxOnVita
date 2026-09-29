@@ -48,6 +48,22 @@ Before getting started, make sure your PlayStation Vita meets these requirements
   - The low-level baremetal loader communicates directly with Sony's proprietary memory card interface (MSIF) and cannot read boot files from internal eMMC storage (`imc0:`) or SD2Vita game-card adapters.
 * **VitaShell:** Needed to transfer and install the `LinuxOnVita.vpk` package.
 
+> [!IMPORTANT]
+> **Reference Device & Plugin Compatibility Disclaimer**
+>
+> LinuxOnVita is developed and tested on a **PS Vita 1000 (OLED) running firmware 3.65 Ensō with no additional plugins or mods installed**. It is not tested on heavily modded consoles, and behaviour on other configurations is not guaranteed.
+>
+> If your Vita has **USB streaming, storage remapping, or other kernel-level taiHEN plugins installed**, you may experience a **boot loop when returning to VitaOS** after running Linux. This is a known compatibility issue (see [issue #8](https://github.com/devwithzachary/LinuxOnVita/issues/8) and [issue #14](https://github.com/devwithzachary/LinuxOnVita/issues/14)).
+>
+> **Known problematic plugin categories:**
+> - USB streaming plugins (e.g. **VitaUSBStream** and related plugins)
+> - Storage remapping plugins (e.g. **YAMT / Yet Another Mount Tool**, **StorageMgr**)
+> - Any plugin listed under the `*KERNEL*` section of `config.txt` that hooks USB or partition management
+>
+> **Why does this happen?** The baremetal loader reconfigures the MSIF memory card controller and USB subsystem at a hardware level during Linux boot. On the cold reboot back to VitaOS, these kernel plugins can encounter unexpected hardware state and crash, causing a boot loop.
+>
+> **If you experience a boot loop after using LinuxOnVita**, see the [recovery procedure](#boot-loop-recovery-after-returning-to-vitaos) in the Troubleshooting section below.
+
 ---
 
 ## 2. Quick Installation & First Boot
@@ -567,3 +583,24 @@ Run `vita-swap create 512M` to create an extra 512 MB swapfile on your SD card. 
 
 ### How do I return to VitaOS?
 Simply type `reboot` and press Enter. Your console will perform a cold restart straight into official VitaOS.
+
+---
+
+### Boot Loop Recovery After Returning to VitaOS
+
+If your Vita enters a boot loop or crashes at the loading circle after rebooting from Linux, a kernel plugin is likely conflicting with hardware state left by the baremetal loader (see [issue #8](https://github.com/devwithzachary/LinuxOnVita/issues/8) and [issue #14](https://github.com/devwithzachary/LinuxOnVita/issues/14)).
+
+This has been confirmed with **VitaUSBStream** and is suspected with **YAMT / StorageMgr** and similar storage or USB kernel plugins.
+
+**Recovery steps:**
+1. **Bypass plugins on boot:** Hold the **L trigger** while powering on your Vita. This tells Ensō to skip loading taiHEN plugins, booting you into a clean LiveArea.
+2. **Open VitaShell** from the LiveArea.
+3. **Edit your taiHEN config:** Navigate to `ur0:tai/config.txt` (or `ux0:tai/config.txt` if you have a `tai` folder there). Open the file.
+4. **Comment out or remove the offending plugin:** Find the line under `*KERNEL*` referencing the problematic plugin (e.g. `ur0:tai/VitaUSBStream.skprx`) and either delete it or prefix it with `#` to disable it.
+5. **Save the file** and reboot normally. Your Vita should boot cleanly.
+6. **Test LinuxOnVita again.** With the conflicting plugin removed, reboot back to Linux and verify the return reboot to VitaOS also works without a loop.
+
+> [!NOTE]
+> If holding **L** does not bypass the loop, try booting into Safe Mode (hold **Power + R** or **Power + PS Button** depending on your model) and use the **Rebuild Database** option. As a last resort, **Restore PS Vita System** in Safe Mode will recover the console but will remove your jailbreak and data.
+
+**Long-term:** If you rely on VitaUSBStream or a storage plugin, note this as a current incompatibility. You may need to re-enable it after each LinuxOnVita session. Future releases may investigate a clean hardware teardown on exit to mitigate this.

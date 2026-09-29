@@ -75,6 +75,26 @@ While original proof-of-concept projects proved that modern Linux can boot on th
    - The baremetal loader interfaces directly with Sony's proprietary memory card hardware (MSIF). It cannot boot from SD2Vita game-card adapters or internal eMMC (`imc0:`).
    - *SD2Vita Users:* Your SD2Vita adapter mounts as `ux0:`, and your official Sony card is typically `xmc0:` or `uma0:`. The LinuxOnVita app automatically detects your Sony card and installs boot files directly to it.
 
+> [!WARNING]
+> **Kernel Plugin Compatibility - Read Before Installing**
+>
+> LinuxOnVita is developed and tested on a **PS Vita 1000 (OLED) running 3.65 Ensō with no additional plugins or mods installed**. Behaviour on other configurations is not guaranteed.
+>
+> Several users have reported **boot loops on return to VitaOS** after running Linux when USB streaming, storage remapping, or other kernel-level plugins are active. Known problematic plugins include:
+> - **VitaUSBStream** (and related streaming plugins)
+> - **YAMT** (Yet Another Mount Tool) and **StorageMgr**
+> - Any other `*KERNEL*` section plugin that hooks USB, storage, or partition remapping
+>
+> These plugins re-initialise hardware at startup. Because the baremetal loader reconfigures the MSIF memory card controller and USB subsystem directly during Linux boot, some plugins can encounter unexpected hardware state on the return reboot and crash.
+>
+> **If you experience a boot loop after using LinuxOnVita:**
+> 1. Hold the **L trigger** while powering on to temporarily bypass all taiHEN plugins and boot to the LiveArea.
+> 2. Open **VitaShell** and navigate to `ur0:tai/config.txt` (or `ux0:tai/config.txt`).
+> 3. Comment out or remove the offending kernel plugin lines (prefix with `#`).
+> 4. Save and reboot normally.
+>
+> If you are running a heavily modded Vita with multiple kernel plugins, consider testing LinuxOnVita on a cleaner setup first.
+
 ### Installation Steps
 1. Download **`LinuxOnVita.vpk`** from the [GitHub Releases page](https://github.com/devwithzachary/LinuxOnVita/releases).
 2. Transfer `LinuxOnVita.vpk` to your PS Vita using VitaShell (USB or FTP).
@@ -150,6 +170,8 @@ All compiled outputs are saved to `output/`:
   An official Sony memory card is strictly required on all consoles (both 1000 and 2000 models). The baremetal bootloader only speaks to Sony MSIF hardware and cannot read from internal eMMC or SD2Vita adapters.
 * **Frozen on `Uncompressing Linux... done, booting the kernel`:**
   The Device Tree blob does not match your hardware. In LinuxOnVita, reinstall boot files or ensure `vita1000.dtb` (OLED) or `vita2000.dtb` (LCD) is copied to your memory card's `linux/vita.dtb`.
+* **Boot loop when returning to VitaOS after running Linux:**
+  This is caused by a USB streaming or storage remapping kernel plugin (e.g. VitaUSBStream, YAMT, StorageMgr) conflicting with hardware state left by the baremetal loader. To recover: hold **L trigger** on power-on to bypass plugins, then open VitaShell, edit `ur0:tai/config.txt` (or `ux0:tai/config.txt`), and comment out or remove the offending `*KERNEL*` plugin entry. See the [compatibility warning above](#prerequisites) for the full explanation.
 
 For additional help and step-by-step guidance, see the **[Complete User Guide](USER_GUIDE.md)**.
 
