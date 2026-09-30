@@ -234,6 +234,24 @@ cmd_create() {
         fi
     fi
 
+    # Check if target storage is mounted read-only and elevate to read-write
+    if command -v vita-storage >/dev/null 2>&1; then
+        case "$PATH_INPUT" in
+            /mnt/ux0*)
+                if vita-storage is-ro ux0 2>/dev/null; then
+                    echo "Elevating /mnt/ux0 to read-write for swapfile creation..."
+                    vita-storage rw ux0 || exit 1
+                fi
+                ;;
+            /mnt/ur0*)
+                if vita-storage is-ro ur0 2>/dev/null; then
+                    echo "Elevating /mnt/ur0 to read-write for swapfile creation..."
+                    vita-storage rw ur0 || exit 1
+                fi
+                ;;
+        esac
+    fi
+
     # If active swap, deactivate first
     if grep -q "$PATH_INPUT" /proc/swaps 2>/dev/null; then
         echo "Deactivating existing swap at $PATH_INPUT..."
@@ -288,6 +306,20 @@ cmd_remove() {
     swapoff "$TARGET_PATH" 2>/dev/null || true
 
     if [ -f "$TARGET_PATH" ]; then
+        if command -v vita-storage >/dev/null 2>&1; then
+            case "$TARGET_PATH" in
+                /mnt/ux0*)
+                    if vita-storage is-ro ux0 2>/dev/null; then
+                        vita-storage rw ux0 -q 2>/dev/null || true
+                    fi
+                    ;;
+                /mnt/ur0*)
+                    if vita-storage is-ro ur0 2>/dev/null; then
+                        vita-storage rw ur0 -q 2>/dev/null || true
+                    fi
+                    ;;
+            esac
+        fi
         echo "Deleting file ${TARGET_PATH}..."
         rm -f "$TARGET_PATH"
     fi

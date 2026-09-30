@@ -10,45 +10,22 @@ start)
         # Allow asynchronous kernel probes (SD card, Wi-Fi) to initialize
         sleep 4
 
-        # Mount ur0 (Vita internal eMMC partition 12) if not already mounted
+        # Ensure storage partitions are mounted
         mkdir -p /mnt/ur0 /mnt/ux0
-        if ! grep -qs ' /mnt/ur0 ' /proc/mounts; then
-            for ur_dev in /dev/vita/ur0 /dev/mmcblk0p12; do
-                if [ -b "$ur_dev" ]; then
-                    mount -t exfat -o rw "$ur_dev" /mnt/ur0 2>/dev/null || \
-                    mount -t vfat -o rw "$ur_dev" /mnt/ur0 2>/dev/null || \
-                    mount "$ur_dev" /mnt/ur0 2>/dev/null || true
-                    break
-                fi
-            done
-        fi
-
-        # SD card device detection (SD2Vita / memory card appears as mmcblk1 or mmcblk2)
-        if ! grep -qs ' /mnt/ux0 ' /proc/mounts; then
-            SD_DEV=""
-            for dev in /dev/mmcblk1p1 /dev/mmcblk1 /dev/mmcblk2p1 /dev/mmcblk2; do
-                if [ -b "$dev" ]; then
-                    SD_DEV="$dev"
-                    break
-                fi
-            done
-
-            if [ -n "$SD_DEV" ]; then
-                mount -t exfat -o rw "$SD_DEV" /mnt/ux0 2>/dev/null || \
-                mount -t vfat -o rw "$SD_DEV" /mnt/ux0 2>/dev/null || \
-                mount "$SD_DEV" /mnt/ux0 2>/dev/null || true
-            fi
+        if command -v vita-storage >/dev/null 2>&1; then
+            vita-storage mount all >/dev/null 2>&1 || true
         fi
 
         # Loop for 35 seconds (7 iterations x 5s) to record late-boot events (Wi-Fi DHCP, SSH)
         for iter in 1 2 3 4 5 6 7; do
             LOG_TARGETS="/tmp/boot.log"
 
-            if grep -qs ' /mnt/ux0 ' /proc/mounts; then
-                mkdir -p /mnt/ux0/linux
-                LOG_TARGETS="${LOG_TARGETS} /mnt/ux0/linux/boot.log"
+            # Only append persistent logs to storage if explicitly mounted read-write
+            if [ -w /mnt/ux0 ]; then
+                mkdir -p /mnt/ux0/linux 2>/dev/null || true
+                [ -d /mnt/ux0/linux ] && LOG_TARGETS="${LOG_TARGETS} /mnt/ux0/linux/boot.log"
             fi
-            if grep -qs ' /mnt/ur0 ' /proc/mounts; then
+            if [ -w /mnt/ur0 ]; then
                 LOG_TARGETS="${LOG_TARGETS} /mnt/ur0/boot.log"
             fi
 

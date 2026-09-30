@@ -1,7 +1,20 @@
 #!/bin/sh
-# vita-reboot: Reboot LinuxOnVita and return to Sony VitaOS LiveArea
+# vita-reboot: Reboot LinuxOnVita safely and return to Sony VitaOS LiveArea
 
+export _VITA_REBOOTING=1
 export DISPLAY="${DISPLAY:-:0}"
+
+# Protect reboot script from termination if parent SSH session or terminal closes
+trap '' HUP INT QUIT TERM
+
+# Help flag
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    echo "Usage: vita-reboot [-f|--now]"
+    echo ""
+    echo "Safely flushes storage caches, unmounts user volumes, closes open SSH"
+    echo "sessions, and reboots the PlayStation Vita back to VitaOS LiveArea."
+    exit 0
+fi
 
 # If running in graphical desktop and not forced, ask for confirmation
 if [ -n "$DISPLAY" ] && [ "$1" != "-f" ] && [ "$1" != "--now" ] && command -v yad >/dev/null 2>&1; then
@@ -14,6 +27,74 @@ if [ -n "$DISPLAY" ] && [ "$1" != "-f" ] && [ "$1" != "--now" ] && command -v ya
         --center --width=380 2>/dev/null || exit 0
 fi
 
-echo "Rebooting to PlayStation Vita LiveArea..."
+echo "Flushing disk caches and syncing filesystems..."
 sync
-reboot 2>/dev/null || reboot -f 2>/dev/null || busybox reboot -f
+swapoff -a 2>/dev/null || true
+sync
+
+# Handle execution inside container (chroot) vs host system
+if [ -d "/proc/1/root" ] && [ "$(stat -c %d:%i / 2>/dev/null)" != "$(stat -c %d:%i /proc/1/root/ 2>/dev/null)" ]; then
+    echo "Synchronizing container filesystem..."
+    mount -o remount,ro / 2>/dev/null || true
+    sync
+
+    # Remount host physical partitions read-only via /proc/1/root
+    mount -o remount,ro /proc/1/root/mnt/ux0 2>/dev/null || true
+    mount -o remount,ro /proc/1/root/mnt/ur0 2>/dev/null || true
+    sync
+
+    umount -r /proc/1/root/mnt/ux0 2>/dev/null || true
+    umount -r /proc/1/root/mnt/ur0 2>/dev/null || true
+    sync
+else
+    # Running on base host system
+    # Unmount active Alpine container bind mounts if present
+    if grep -qs ' /mnt/alpine' /proc/mounts; then
+        umount /mnt/alpine/run     2>/dev/null || true
+        umount /mnt/alpine/dev/shm 2>/dev/null || true
+        umount /mnt/alpine/dev/pts 2>/dev/null || true
+        umount /mnt/alpine/dev     2>/dev/null || true
+        umount /mnt/alpine/sys     2>/dev/null || true
+        umount /mnt/alpine/proc    2>/dev/null || true
+        umount /mnt/alpine         2>/dev/null || umount -l /mnt/alpine 2>/dev/null || true
+        sync
+    fi
+
+    # Remount underlying physical partitions read-only to ensure clean superblocks
+    if command -v vita-storage >/dev/null 2>&1; then
+        vita-storage ro all -q 2>/dev/null || true
+    else
+        mount -o remount,ro /mnt/ux0 2>/dev/null || true
+        mount -o remount,ro /mnt/ur0 2>/dev/null || true
+    fi
+    sync
+
+    # Unmount physical storage
+    umount -r /mnt/ux0 2>/dev/null || true
+    umount -r /mnt/ur0 2>/dev/null || true
+    sync
+fi
+
+echo "Closing active SSH sessions and rebooting to PlayStation Vita LiveArea..."
+sleep 0.2
+
+# Redirect stdout/stderr so closing the terminal does not cause EIO or SIGPIPE
+exec >/dev/null 2>&1
+
+# Gracefully terminate SSH daemon and active client sessions so clients receive TCP FIN
+killall -15 sshd 2>/dev/null || true
+sleep 0.5
+killall -9 sshd 2>/dev/null || true
+sleep 0.5
+
+# Execute hardware reboot via busybox internal applet or kernel sysrq
+if [ -x /bin/busybox ]; then
+    exec /bin/busybox reboot -f
+elif [ -x /sbin/busybox ]; then
+    exec /sbin/busybox reboot -f
+elif command -v busybox >/dev/null 2>&1; then
+    exec busybox reboot -f
+else
+    echo s > /proc/sysrq-trigger 2>/dev/null || true
+    echo b > /proc/sysrq-trigger 2>/dev/null || true
+fi

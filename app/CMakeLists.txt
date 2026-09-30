@@ -18,7 +18,7 @@ set(VITA_APP_NAME "LinuxOnVita")
 # Title ID for the application (9 uppercase alphanumeric characters)
 set(VITA_TITLEID  "LNXONVITA")
 
-set(VITA_VERSION  "01.30")
+set(VITA_VERSION  "01.31")
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Os -ffunction-sections -fdata-sections")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--gc-sections")

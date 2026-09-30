@@ -616,7 +616,19 @@ LinuxOnVita automatically detects and mounts your runtime storage partitions:
 ### Sharing Files Between VitaOS and Linux
 Files placed in `ux0:` inside VitaOS or VitaShell are accessible directly under `/mnt/ux0/` in Linux.
 * Example: A file saved to `ux0:data/test.txt` in VitaShell is at `/mnt/ux0/data/test.txt` in Linux.
-* Files written to `/mnt/ux0/` in Linux are immediately visible in VitaShell when you reboot into VitaOS.
+* Files can be read directly without modifying VitaOS filesystem state.
+
+### Storage Protection & Safe Remounting
+To safeguard VitaOS database integrity and protect SD card flash controllers against sudden power interruptions, LinuxOnVita mounts `/mnt/ux0/` (SD2Vita) and `/mnt/ur0/` (internal memory) in **read-only (`ro`) mode by default**:
+1. **Zero Dirty Flags:** Mounting read-only prevents the exFAT/FAT `VolumeDirty` bit from ever being set, preventing forced database rebuilds upon returning to VitaOS.
+2. **Flash Controller Safety:** High-capacity SD cards (including 512GB and 1TB models) maintain complex Flash Translation Layer (FTL) tables in RAM. Read-only mounting guarantees no write transactions are in-flight during a reboot or crash.
+3. **Safe Write Access:** If you need to copy or edit files on `/mnt/ux0/`, temporarily enable write access:
+   ```bash
+   vita-storage rw ux0       # Temporarily enable read-write access
+   # ... copy your files ...
+   vita-storage ro ux0       # Safely sync and lock back to read-only
+   ```
+4. **Clean Rebooting:** Always use the `vita-reboot` command to return to VitaOS. It automatically flushes block device buffers, unmounts storage volumes, and enforces a settling delay before resetting the console hardware.
 
 ---
 

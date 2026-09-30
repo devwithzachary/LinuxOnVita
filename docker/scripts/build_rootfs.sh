@@ -130,6 +130,9 @@ rm -rf "${PORT_DIR}/buildroot-vita/board/vita/overlay/usr/sbin"
 rm -f "${PORT_DIR}/buildroot-vita/board/vita/overlay/usr/bin/wpa_cli"
 rm -f "${PORT_DIR}/buildroot-vita/board/vita/overlay/usr/bin/wpa_passphrase"
 rm -f "${PORT_DIR}/buildroot-vita/board/vita/overlay/usr/bin/vita-battery"
+rm -f "${PORT_DIR}/buildroot-vita/board/vita/overlay/usr/bin/poweroff"
+rm -f "${PORT_DIR}/buildroot-vita/board/vita/overlay/usr/bin/halt"
+rm -rf "${PORT_DIR}/buildroot-vita/board/vita/overlay/sbin"
 cp -r "${ROOTFS_OVERLAY}/." "${PORT_DIR}/buildroot-vita/board/vita/overlay/"
 
 # 5. Build rootfs via Buildroot

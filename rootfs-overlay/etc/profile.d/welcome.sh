@@ -2,6 +2,12 @@
 # Vita Linux Welcome Banner
 
 if [ -t 0 ]; then
+    # Prevent duplicate execution within the same shell session (e.g. redundant sourcing or subshells)
+    if [ -n "$_VITA_WELCOME_SHOWN" ]; then
+        return 0 2>/dev/null || exit 0
+    fi
+    export _VITA_WELCOME_SHOWN=1
+
     if [ "$(tty 2>/dev/null)" = "/dev/tty1" ]; then
         clear 2>/dev/null || printf '\033[2J\033[H'
     fi
@@ -32,6 +38,7 @@ if [ -t 0 ]; then
     echo ""
     echo "   Useful Commands:"
     echo "     - vita-wifi        : Scan, connect, and manage Wi-Fi networks"
+    echo "     - vita-storage     : Manage storage write protection (ro / rw)"
     echo "     - vita-diagnostics : Gather logs & troubleshoot Wi-Fi / SD cards"
     echo "     - alpine-desktop   : Launch IceWM graphical desktop with mouse emulation"
     echo "     - alpine-chroot    : Enter Alpine Linux with 'apk' (isolated container)"

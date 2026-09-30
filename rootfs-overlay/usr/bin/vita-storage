@@ -1,0 +1,294 @@
+#!/bin/sh
+# vita-storage: PlayStation Vita Storage Safety & Mount Management Tool
+# Centralized utility for mount discovery, read-only protection, and remounts.
+
+is_mounted() {
+    target="$1"
+    case "$target" in
+        ux0) target="/mnt/ux0" ;;
+        ur0) target="/mnt/ur0" ;;
+    esac
+    grep -qs " ${target} " /proc/mounts
+}
+
+is_ro() {
+    target="$1"
+    case "$target" in
+        ux0) target="/mnt/ux0" ;;
+        ur0) target="/mnt/ur0" ;;
+    esac
+
+    if ! is_mounted "$target"; then
+        return 1
+    fi
+
+    if grep -E -q " ${target} [^ ]+ (ro|.*,ro)( |$|,)" /proc/mounts 2>/dev/null || \
+       awk -v m="$target" '$2 == m { if ($4 ~ /(^|,)ro(,|$)/) f=1 } END { exit (f ? 0 : 1) }' /proc/mounts 2>/dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+get_fs_type() {
+    target="$1"
+    case "$target" in
+        ux0) target="/mnt/ux0" ;;
+        ur0) target="/mnt/ur0" ;;
+    esac
+    awk -v m="$target" '$2 == m { print $3 }' /proc/mounts
+}
+
+get_device() {
+    target="$1"
+    case "$target" in
+        ux0) target="/mnt/ux0" ;;
+        ur0) target="/mnt/ur0" ;;
+    esac
+    awk -v m="$target" '$2 == m { print $1 }' /proc/mounts
+}
+
+mount_partition() {
+    target="$1"
+    case "$target" in
+        all)
+            mount_partition ur0
+            mount_partition ux0
+            return 0
+            ;;
+        /mnt/ux0|ux0)
+            mkdir -p /mnt/ux0
+            if is_mounted /mnt/ux0; then
+                return 0
+            fi
+            for dev in /dev/vita/ux0 /dev/mmcblk1p1 /dev/mmcblk1 /dev/mmcblk2p1 /dev/mmcblk2; do
+                if [ -b "$dev" ]; then
+                    [ -L /dev/vita/ux0 ] || ln -sf "$dev" /dev/vita/ux0 2>/dev/null || true
+                    mount -t exfat -o ro "$dev" /mnt/ux0 2>/dev/null || \
+                    mount -t vfat -o ro "$dev" /mnt/ux0 2>/dev/null || \
+                    mount -t ext4 -o ro "$dev" /mnt/ux0 2>/dev/null || \
+                    mount -o ro "$dev" /mnt/ux0 2>/dev/null || true
+                    break
+                fi
+            done
+            is_mounted /mnt/ux0
+            return $?
+            ;;
+        /mnt/ur0|ur0)
+            mkdir -p /mnt/ur0
+            if is_mounted /mnt/ur0; then
+                return 0
+            fi
+            for dev in /dev/vita/ur0 /dev/mmcblk0p12; do
+                if [ -b "$dev" ]; then
+                    [ -L /dev/vita/ur0 ] || ln -sf "$dev" /dev/vita/ur0 2>/dev/null || true
+                    mount -t exfat -o ro "$dev" /mnt/ur0 2>/dev/null || \
+                    mount -t vfat -o ro "$dev" /mnt/ur0 2>/dev/null || \
+                    mount -t ext4 -o ro "$dev" /mnt/ur0 2>/dev/null || \
+                    mount -o ro "$dev" /mnt/ur0 2>/dev/null || true
+                    break
+                fi
+            done
+            is_mounted /mnt/ur0
+            return $?
+            ;;
+        *)
+            echo "Error: Unknown mount target '$target' (use ux0, ur0, or all)" >&2
+            return 1
+            ;;
+    esac
+}
+
+show_status() {
+    echo "================================================================"
+    echo "         PlayStation Vita Storage Protection Status             "
+    echo "================================================================"
+    echo ""
+    for label in ux0 ur0; do
+        target="/mnt/${label}"
+        if is_mounted "$target"; then
+            fstype=$(get_fs_type "$target")
+            dev=$(get_device "$target")
+            usage=$(df -h "$target" 2>/dev/null | awk 'NR==2 { print $4 " free of " $2 }')
+
+            if is_ro "$target"; then
+                echo "  ${label} ($target): [PROTECTED - READ-ONLY]"
+            else
+                echo "  ${label} ($target): [UNPROTECTED - READ-WRITE]"
+            fi
+            echo "    Device:     $dev ($fstype)"
+            echo "    Space:      $usage"
+        else
+            echo "  ${label} ($target): [NOT MOUNTED]"
+        fi
+        echo ""
+    done
+    echo "Safety Note: Storage volumes are mounted read-only by default"
+    echo "to protect VitaOS database and filesystem integrity from power loss."
+    echo "================================================================"
+}
+
+remount_rw() {
+    target="$1"
+    case "$target" in
+        all)
+            remount_rw ur0
+            remount_rw ux0
+            return 0
+            ;;
+        ux0) target="/mnt/ux0" ;;
+        ur0) target="/mnt/ur0" ;;
+    esac
+    label="${target##/mnt/}"
+
+    if ! is_mounted "$target"; then
+        mount_partition "$label" >/dev/null 2>&1
+        if ! is_mounted "$target"; then
+            [ "$QUIET" != "1" ] && echo "Error: $target is not mounted and device was not found." >&2
+            return 1
+        fi
+    fi
+
+    if ! is_ro "$target"; then
+        # Already read-write
+        return 0
+    fi
+
+    [ "$QUIET" != "1" ] && echo "Remounting $target read-write..."
+    if mount -o remount,rw "$target" 2>/dev/null; then
+        if [ "$QUIET" != "1" ]; then
+            echo "Success: $target is now read-write."
+            echo ""
+            echo "WARNING: Writing to VitaOS partitions carries filesystem corruption"
+            echo "risk if interrupted. Run 'vita-storage ro ${label}' when done,"
+            echo "or use 'vita-reboot' to return safely to VitaOS."
+        fi
+        return 0
+    else
+        [ "$QUIET" != "1" ] && echo "Error: Failed to remount $target read-write." >&2
+        return 1
+    fi
+}
+
+remount_ro() {
+    target="$1"
+    case "$target" in
+        all)
+            remount_ro ux0
+            remount_ro ur0
+            return 0
+            ;;
+        ux0) target="/mnt/ux0" ;;
+        ur0) target="/mnt/ur0" ;;
+    esac
+    label="${target##/mnt/}"
+
+    if ! is_mounted "$target"; then
+        return 0
+    fi
+
+    if is_ro "$target"; then
+        # Already read-only
+        return 0
+    fi
+
+    [ "$QUIET" != "1" ] && echo "Syncing filesystem caches for $target..."
+    sync
+    if mount -o remount,ro "$target" 2>/dev/null; then
+        [ "$QUIET" != "1" ] && echo "Success: $target is now locked in safe read-only mode."
+        return 0
+    else
+        [ "$QUIET" != "1" ] && echo "Error: Could not remount $target read-only (files may be open in use)." >&2
+        return 1
+    fi
+}
+
+show_help() {
+    cat << 'EOF'
+Usage: vita-storage [COMMAND] [TARGET] [OPTIONS]
+
+PlayStation Vita Storage Protection & Mount Utility.
+
+Commands:
+  status               Display mount and protection status (default)
+  mount [ux0|ur0|all]  Mount partition(s) in safe read-only mode if unmounted
+  ro [ux0|ur0|all]     Sync and remount partition in safe read-only mode
+  rw [ux0|ur0|all]     Remount partition in read-write mode
+  is-ro [ux0|ur0]      Check if partition is mounted read-only (exit 0=yes, 1=no)
+  is-rw [ux0|ur0]      Check if partition is mounted read-write (exit 0=yes, 1=no)
+  is-mounted [ux0|ur0] Check if partition is mounted (exit 0=yes, 1=no)
+  sync                 Flush all disk caches to physical storage
+  help                 Display this help screen
+
+Options:
+  -q, --quiet          Suppress status messages (useful for scripts)
+
+Examples:
+  vita-storage status
+  vita-storage mount all
+  vita-storage rw ux0     # Temporarily allow writes to SD2Vita
+  vita-storage ro ux0     # Lock SD2Vita back down to read-only
+EOF
+}
+
+# Parse options
+QUIET=0
+ARGS=""
+for arg in "$@"; do
+    case "$arg" in
+        -q|--quiet)
+            QUIET=1
+            ;;
+        *)
+            ARGS="${ARGS} ${arg}"
+            ;;
+    esac
+done
+
+set -- $ARGS
+ACTION="${1:-status}"
+TARGET_ARG="${2:-ux0}"
+
+case "$ACTION" in
+    status)
+        show_status
+        ;;
+    sync)
+        [ "$QUIET" != "1" ] && echo "Flushing disk caches..."
+        sync
+        [ "$QUIET" != "1" ] && echo "Sync complete."
+        ;;
+    mount)
+        mount_partition "$TARGET_ARG"
+        ;;
+    ro)
+        remount_ro "$TARGET_ARG"
+        ;;
+    rw)
+        remount_rw "$TARGET_ARG"
+        ;;
+    is-ro)
+        is_ro "$TARGET_ARG"
+        ;;
+    is-rw)
+        if is_mounted "$TARGET_ARG" && ! is_ro "$TARGET_ARG"; then
+            exit 0
+        else
+            exit 1
+        fi
+        ;;
+    is-mounted)
+        if is_mounted "$TARGET_ARG"; then
+            exit 0
+        else
+            exit 1
+        fi
+        ;;
+    help|-h|--help)
+        show_help
+        ;;
+    *)
+        show_help
+        exit 1
+        ;;
+esac
