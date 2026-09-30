@@ -23,4 +23,5 @@ ttyS0::respawn:/sbin/getty -n -l /bin/sh 115200 ttyS0
 ::shutdown:/bin/sync
 ::shutdown:/bin/umount -a -r
 ::shutdown:/bin/sync
+::shutdown:/bin/sleep 1
 

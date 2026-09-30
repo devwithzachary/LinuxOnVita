@@ -44,6 +44,8 @@ stop() {
     start-stop-daemon --stop --oknodo --pidfile "$PIDFILE" \
         --exec "/usr/sbin/$DAEMON"
     status=$?
+    # Terminate active client session forks so remote connections close cleanly
+    killall -15 sshd 2>/dev/null || true
     if [ "$status" -eq 0 ]; then
         echo "OK"
     else

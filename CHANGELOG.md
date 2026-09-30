@@ -5,6 +5,40 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
 
 ---
 
+## [v1.3.1] - 2026-09-30
+
+### Security & Storage Protection
+- **Read-Only Default Storage Mounting (`/mnt/ux0`, `/mnt/ur0`):**
+  - Configured `S00mount`, `S05vita`, and diagnostic scripts to mount runtime storage partitions (`ux0:` SD2Vita and `ur0:` internal eMMC) in **read-only (`ro`) mode by default**.
+  - Prevents the exFAT/FAT `VolumeDirty` bit from being set on disk during Linux execution, eliminating forced VitaOS database rebuilds and filesystem corruption caused by unexpected crashes or reboots.
+- **Graceful SDHCI Quiescing & Power-Down Sequencing:**
+  - Implemented `sdhci_vita_quiesce_all()` and `.shutdown = sdhci_vita_shutdown` in `sdhci-vita.c` to disable interrupts, stop card clocks, and quiesce SDIF controllers prior to reboot or poweroff.
+  - Added hardware settling delays in `vita-syscon.c` before cutting Game Card peripheral power (`cmd 0x888`). Protects high-capacity microSD cards (including 512GB and 1TB cards) from Flash Translation Layer (FTL) controller lockups caused by sudden power cuts during in-flight MMC bus operations.
+  - Set `syscon->reboot_nb.priority = 0`, ensuring block layers and subsystem notifiers flush data cleanly before hardware reset is executed.
+- **Storage Management Utility (`vita-storage`):**
+  - Created `/usr/bin/vita-storage` CLI tool to inspect mount protection states (`vita-storage status`), temporarily grant read-write access (`vita-storage rw ux0`), and safely sync and lock storage back to read-only (`vita-storage ro ux0`).
+- **Safe Reboot & Shutdown Hardening (`vita-reboot`, `reboot`, `inittab`):**
+  - Updated `vita-reboot` to flush block caches, deactivate swap, cleanly unmount container and host filesystems, and settle before calling the reboot syscall. Supports execution from both the host environment and within the Alpine chroot container.
+  - Mapped standard `reboot`, `poweroff`, and `halt` commands directly to `vita-reboot` via system binaries (`/usr/bin/reboot`, `/sbin/reboot`), shell profile aliases (`/etc/profile.d/reboot.sh`), and container-level wrappers, ensuring legacy commands safely trigger clean shutdown sequencing.
+  - Ensured the graphical desktop GUI reboot icon (`reboot.desktop`) and IceWM application menu entries execute `vita-reboot` with an interactive touch confirmation dialog and graceful container unmounting.
+  - Automated container loopback teardown in `alpine-chroot` and `alpine-desktop` upon session exit, releasing backing storage files and locking `/mnt/ux0` and `/mnt/ur0` back to read-only (`ro`) without `EBUSY` conflicts.
+  - Added a post-unmount settling delay in `/etc/inittab` `::shutdown` actions to allow flash controller write buffers to commit before hardware restart.
+
+### Usability & CLI Improvements
+- **Resolved Duplicate Welcome Banner on SSH Login:**
+  - Removed redundant `/etc/profile` sourcing from `/root/.profile` and added a session-level guard (`_VITA_WELCOME_SHOWN`) in `/etc/profile.d/welcome.sh`, preventing duplicate banners when opening remote SSH terminal sessions.
+- **Added `vita-storage` to Welcome Banner Commands:**
+  - Added `- vita-storage : Manage storage write protection (ro / rw)` to the console welcome banner list of useful handheld commands.
+- **Clean SSH Disconnection on Reboot:**
+  - Updated `vita-reboot` and `/etc/init.d/S50sshd` to gracefully terminate all active OpenSSH client sessions (`killall -15 sshd`) and close TCP sockets before console reboot, preventing remote SSH terminals from hanging indefinitely.
+- **Centralized Storage Operations & Script Deduplication:**
+  - Consolidated duplicate storage mount discovery and remount routines across `alpine-chroot`, `alpine-desktop`, `vita-diagnostics`, `S05vita`, and `S99bootlog` to use centralized `vita-storage` commands (`mount all`, `ro`, `rw`, `is-ro`).
+  - Deduplicated `poweroff`, `halt`, and `reboot` across `/usr/bin` and `/sbin` into a single canonical wrapper (`/usr/bin/reboot`) with relative symlinks (`poweroff -> reboot`, `halt -> reboot`, `/sbin/* -> ../usr/bin/reboot`), eliminating 6 identical redundant files.
+  - Hardened `S99bootlog` to respect read-only storage protection, logging persistently only if storage partitions are explicitly mounted read-write.
+  - Added storage write elevation to `vita-swap` to prevent write errors on read-only mounts when allocating or removing swapfiles.
+
+---
+
 ## [v1.3.0] - 2026-09-28
 
 ### Documentation

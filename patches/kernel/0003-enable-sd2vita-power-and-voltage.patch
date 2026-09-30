@@ -12,10 +12,44 @@ index 5f7b54647..8b3d3f68e 100644
  		};
  
 diff --git a/drivers/mfd/vita-syscon.c b/drivers/mfd/vita-syscon.c
-index d616ccdd5..48c79ea65 100644
+index d616ccdd5..c434234ef 100644
 --- a/drivers/mfd/vita-syscon.c
 +++ b/drivers/mfd/vita-syscon.c
-@@ -694,6 +694,19 @@ static int vita_syscon_probe(struct spi_device *spi)
+@@ -26,6 +26,12 @@ void __weak sdhci_vita_trigger_rescan(int bus_index)
+ 	pr_warn_once("vita-syscon: sdhci_vita_trigger_rescan not available\n");
+ }
+ 
++/* From sdhci-vita.c - safely quiesce all SDIF controllers before reboot */
++void __weak sdhci_vita_quiesce_all(void)
++{
++	pr_warn_once("vita-syscon: sdhci_vita_quiesce_all not available\n");
++}
++
+ /*
+  * WiFi (SD8787 "Robin") power control via Ernie syscon commands.
+  *
+@@ -541,6 +547,14 @@ static int vita_syscon_reboot_notify(struct notifier_block *nb,
+ 	    action != SYS_HALT)
+ 		return NOTIFY_DONE;
+ 
++	/*
++	 * Gracefully quiesce all SDIF controllers before cutting peripheral
++	 * power. This ensures in-flight MMC commands and clocks are halted
++	 * so cards are not subjected to sudden power loss mid-transaction.
++	 */
++	sdhci_vita_quiesce_all();
++	mdelay(15);
++
+ 	/*
+ 	 * Power off peripherals so VitaOS (on reboot) or Ernie (on poweroff)
+ 	 * finds controllers in a clean state.  Without this, the Sony memory
+@@ -689,11 +703,24 @@ static int vita_syscon_probe(struct spi_device *spi)
+ 	}
+ 
+ 	syscon->reboot_nb.notifier_call = vita_syscon_reboot_notify;
+-	syscon->reboot_nb.priority = 255;
++	syscon->reboot_nb.priority = 0;
+ 	ret = register_reboot_notifier(&syscon->reboot_nb);
  	if (ret)
  		dev_warn(&spi->dev, "failed to register reboot notifier: %d\n", ret);
  
@@ -36,10 +70,22 @@ index d616ccdd5..48c79ea65 100644
  				    vita_syscon_devs, ARRAY_SIZE(vita_syscon_devs),
  				    NULL, 0, NULL);
 diff --git a/drivers/mmc/host/sdhci-vita.c b/drivers/mmc/host/sdhci-vita.c
-index 467779c09..e60d88cc7 100644
+index 467779c09..dcad53713 100644
 --- a/drivers/mmc/host/sdhci-vita.c
 +++ b/drivers/mmc/host/sdhci-vita.c
-@@ -87,6 +87,27 @@ static void sdhci_vita_pervasive_init(struct device *dev, u32 bus_index)
+@@ -30,9 +30,10 @@
+  */
+ static struct sdhci_host *vita_sdif_hosts[4];
+ 
+-/* Exported to vita-syscon for WiFi power sequencing */
++/* Exported to vita-syscon for WiFi power sequencing and safe reboot */
+ void sdhci_vita_reinit_host(int bus_index);
+ void sdhci_vita_trigger_rescan(int bus_index);
++void sdhci_vita_quiesce_all(void);
+ 
+ #define PERVASIVE_GATE_BASE	0xE3102000
+ #define PERVASIVE_RESET_BASE	0xE3101000
+@@ -87,6 +88,27 @@ static void sdhci_vita_pervasive_init(struct device *dev, u32 bus_index)
  	val = readl(gate_reg);
  	val |= 1;
  	writel(val, gate_reg);	/* enable clock */
@@ -67,3 +113,57 @@ index 467779c09..e60d88cc7 100644
  }
  
  /**
+@@ -376,6 +398,31 @@ void sdhci_vita_trigger_rescan(int bus_index)
+ }
+ EXPORT_SYMBOL_GPL(sdhci_vita_trigger_rescan);
+ 
++/**
++ * sdhci_vita_quiesce_all - gracefully quiesce all SDIF hosts before reboot or poweroff
++ *
++ * Disables interrupts, clears pending status, and disables card clocks for all
++ * registered SDIF controllers so connected cards (eMMC, SD2Vita, WLAN) are not
++ * subjected to sudden power cuts or bus transitions mid-transaction.
++ */
++void sdhci_vita_quiesce_all(void)
++{
++	int i;
++
++	for (i = 0; i < 4; i++) {
++		struct sdhci_host *host = vita_sdif_hosts[i];
++
++		if (!host || !host->ioaddr)
++			continue;
++
++		sdhci_writel(host, 0, SDHCI_INT_ENABLE);
++		sdhci_writel(host, 0, SDHCI_SIGNAL_ENABLE);
++		sdhci_writel(host, 0xFFFFFFFF, SDHCI_INT_STATUS);
++		sdhci_writew(host, 0, SDHCI_CLOCK_CONTROL);
++	}
++}
++EXPORT_SYMBOL_GPL(sdhci_vita_quiesce_all);
++
+ static unsigned int sdhci_vita_get_max_clock(struct sdhci_host *host)
+ {
+ 	return 48000000;
+@@ -570,6 +617,14 @@ static void sdhci_vita_remove(struct platform_device *pdev)
+ 	}
+ }
+ 
++static void sdhci_vita_shutdown(struct platform_device *pdev)
++{
++	struct sdhci_host *host = platform_get_drvdata(pdev);
++
++	if (host)
++		sdhci_suspend_host(host);
++}
++
+ static const struct of_device_id sdhci_vita_of_match[] = {
+ 	{ .compatible = "vita,sdhci" },
+ 	{}
+@@ -584,6 +639,7 @@ static struct platform_driver sdhci_vita_driver = {
+ 	},
+ 	.probe = sdhci_vita_probe,
+ 	.remove_new = sdhci_vita_remove,
++	.shutdown = sdhci_vita_shutdown,
+ };
+ module_platform_driver(sdhci_vita_driver);

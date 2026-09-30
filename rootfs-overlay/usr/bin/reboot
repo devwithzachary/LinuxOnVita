@@ -1,0 +1,37 @@
+#!/bin/sh
+# Safe reboot/poweroff/halt wrapper for LinuxOnVita
+# Redirects standard reboot, poweroff, and halt to vita-reboot
+
+# Avoid recursion if called from within vita-reboot
+if [ "${_VITA_REBOOTING:-0}" -eq 1 ]; then
+    ACTION=$(basename "$0")
+    case "$ACTION" in
+        poweroff|halt)
+            if [ -x /bin/busybox ]; then
+                exec /bin/busybox "$ACTION" -f "$@"
+            elif [ -x /sbin/busybox ]; then
+                exec /sbin/busybox "$ACTION" -f "$@"
+            elif command -v busybox >/dev/null 2>&1; then
+                exec busybox "$ACTION" -f "$@"
+            fi
+            echo s > /proc/sysrq-trigger 2>/dev/null || true
+            echo o > /proc/sysrq-trigger 2>/dev/null || true
+            exit 0
+            ;;
+        *)
+            if [ -x /bin/busybox ]; then
+                exec /bin/busybox reboot -f "$@"
+            elif [ -x /sbin/busybox ]; then
+                exec /sbin/busybox reboot -f "$@"
+            elif command -v busybox >/dev/null 2>&1; then
+                exec busybox reboot -f "$@"
+            fi
+            echo s > /proc/sysrq-trigger 2>/dev/null || true
+            echo b > /proc/sysrq-trigger 2>/dev/null || true
+            exit 0
+            ;;
+    esac
+fi
+
+export _VITA_REBOOTING=1
+exec /usr/bin/vita-reboot "$@"

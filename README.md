@@ -95,6 +95,10 @@ While original proof-of-concept projects proved that modern Linux can boot on th
 >
 > If you are running a heavily modded Vita with multiple kernel plugins, consider testing LinuxOnVita on a cleaner setup first.
 
+> [!TIP]
+> **Storage & SD Card Safety Protection**
+> LinuxOnVita automatically mounts your SD2Vita (`ux0:`) and internal eMMC (`ur0:`) partitions in **read-only mode by default**. This ensures VitaOS database files and exFAT/FAT volumes are never marked dirty or exposed to write interruptions during reboots or crashes. To temporarily enable write access, run `vita-storage rw ux0`, and always reboot cleanly using `vita-reboot`.
+
 ### Installation Steps
 1. Download **`LinuxOnVita.vpk`** from the [GitHub Releases page](https://github.com/devwithzachary/LinuxOnVita/releases).
 2. Transfer `LinuxOnVita.vpk` to your PS Vita using VitaShell (USB or FTP).

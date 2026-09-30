@@ -85,31 +85,8 @@ EOF
 # Ensure storage partitions are mounted
 ensure_storage_mounted() {
     mkdir -p /mnt/ur0 /mnt/ux0 "${MOUNT_POINT}" /tmp/alpine
-
-    # Mount ux0 (Game card slot / SD2Vita or Sony memory card)
-    if ! grep -qs ' /mnt/ux0 ' /proc/mounts; then
-        for dev in /dev/mmcblk1p1 /dev/mmcblk1 /dev/mmcblk2p1 /dev/mmcblk2; do
-            if [ -b "$dev" ]; then
-                mount -t exfat -o rw "$dev" /mnt/ux0 2>/dev/null || \
-                mount -t vfat -o rw "$dev" /mnt/ux0 2>/dev/null || \
-                mount -t ext4 -o rw "$dev" /mnt/ux0 2>/dev/null || \
-                mount "$dev" /mnt/ux0 2>/dev/null || true
-                break
-            fi
-        done
-    fi
-
-    # Mount ur0 (Vita internal eMMC)
-    if ! grep -qs ' /mnt/ur0 ' /proc/mounts; then
-        for dev in /dev/vita/ur0 /dev/mmcblk0p12; do
-            if [ -b "$dev" ]; then
-                mount -t exfat -o rw "$dev" /mnt/ur0 2>/dev/null || \
-                mount -t vfat -o rw "$dev" /mnt/ur0 2>/dev/null || \
-                mount -t ext4 -o rw "$dev" /mnt/ur0 2>/dev/null || \
-                mount "$dev" /mnt/ur0 2>/dev/null || true
-                break
-            fi
-        done
+    if command -v vita-storage >/dev/null 2>&1; then
+        vita-storage mount all >/dev/null 2>&1 || true
     fi
 }
 
@@ -198,6 +175,23 @@ if [ $CHECK_STATUS -eq 1 ]; then
     exit 0
 fi
 
+# Temporarily grant write access if image lives on a read-only filesystem
+UX0_WAS_RO=0
+case "${IMG_FILE}" in
+    /mnt/ux0*)
+        if vita-storage is-ro ux0 2>/dev/null; then
+            echo "Elevating /mnt/ux0 to read-write for container access..."
+            vita-storage rw ux0 -q 2>/dev/null && UX0_WAS_RO=1 || true
+        fi
+        ;;
+    /mnt/ur0*)
+        if vita-storage is-ro ur0 2>/dev/null; then
+            echo "Elevating /mnt/ur0 to read-write for container access..."
+            vita-storage rw ur0 -q 2>/dev/null && UX0_WAS_RO=2 || true
+        fi
+        ;;
+esac
+
 # Ensure loopback image exists
 if [ $DO_RECREATE -eq 1 ] && [ -f "${IMG_FILE}" ]; then
     echo "Removing existing ${IMG_FILE} as requested..."
@@ -240,12 +234,21 @@ fi
 
 # Mount container loopback
 mkdir -p "${TARGET}"
-if ! grep -qs " ${TARGET} " /proc/mounts; then
-    mount -o loop "${IMG_FILE}" "${TARGET}" 2>/dev/null || {
+if grep -qs " ${TARGET} " /proc/mounts || mountpoint -q "${TARGET}" 2>/dev/null; then
+    mount -o remount,rw "${TARGET}" 2>/dev/null || true
+else
+    echo "Mounting ${IMG_FILE} to ${TARGET}..."
+    mount -o loop,rw "${IMG_FILE}" "${TARGET}" 2>/dev/null || {
         echo "Error: Failed to mount ${IMG_FILE} via loopback!"
         exit 1
     }
 fi
+
+# Verify container filesystem is writable
+if ! touch "${TARGET}/.write_test" 2>/dev/null; then
+    mount -o remount,rw "${TARGET}" 2>/dev/null || true
+fi
+rm -f "${TARGET}/.write_test" 2>/dev/null || true
 
 # Extract base rootfs if fresh container
 if [ ! -f "${TARGET}/bin/sh" ]; then
@@ -313,23 +316,39 @@ cleanup_chroot() {
     umount "${TARGET}/dev"     2>/dev/null || true
     umount "${TARGET}/sys"     2>/dev/null || true
     umount "${TARGET}/proc"    2>/dev/null || true
+    umount "${TARGET}"         2>/dev/null || true
     sync 2>/dev/null || true
+    if [ "${UX0_WAS_RO:-0}" -eq 1 ]; then
+        vita-storage ro ux0 -q 2>/dev/null || true
+    elif [ "${UX0_WAS_RO:-0}" -eq 2 ]; then
+        vita-storage ro ur0 -q 2>/dev/null || true
+    fi
 }
 trap cleanup_chroot EXIT INT TERM
 
 # Deploy helper utilities inside target container
 deploy_desktop_helpers() {
-    mkdir -p "${TARGET}/usr/bin" "${TARGET}/usr/share/applications"
+    mkdir -p "${TARGET}/usr/bin" "${TARGET}/sbin" "${TARGET}/usr/share/applications"
 
     # Install desktop helper scripts from base rootfs
     cp /usr/bin/vita-desktop-welcome "${TARGET}/usr/bin/vita-desktop-welcome"
     cp /usr/bin/toggle-keyboard      "${TARGET}/usr/bin/toggle-keyboard"
     cp /usr/bin/taskmanager          "${TARGET}/usr/bin/taskmanager"
     cp /usr/bin/vita-reboot          "${TARGET}/usr/bin/vita-reboot"
+    cp /usr/bin/reboot               "${TARGET}/usr/bin/reboot" 2>/dev/null || true
+    cp /usr/bin/reboot               "${TARGET}/sbin/reboot" 2>/dev/null || true
+    ln -sf reboot                    "${TARGET}/usr/bin/poweroff" 2>/dev/null || true
+    ln -sf reboot                    "${TARGET}/usr/bin/halt" 2>/dev/null || true
+    ln -sf reboot                    "${TARGET}/sbin/poweroff" 2>/dev/null || true
+    ln -sf reboot                    "${TARGET}/sbin/halt" 2>/dev/null || true
+    cp /usr/bin/vita-storage         "${TARGET}/usr/bin/vita-storage" 2>/dev/null || true
     chmod +x "${TARGET}/usr/bin/vita-desktop-welcome" \
              "${TARGET}/usr/bin/toggle-keyboard" \
              "${TARGET}/usr/bin/taskmanager" \
-             "${TARGET}/usr/bin/vita-reboot"
+             "${TARGET}/usr/bin/vita-reboot" \
+             "${TARGET}/usr/bin/reboot" \
+             "${TARGET}/sbin/reboot" \
+             "${TARGET}/usr/bin/vita-storage" 2>/dev/null || true
 
     # Install Xfbdev Xorg launcher wrapper inside container
     cat << 'EOF' > "${TARGET}/usr/bin/Xfbdev"
@@ -944,6 +963,12 @@ EOF
 
     # Ensure profile and environment set SHELL and disable glycin sandbox system-wide inside chroot
     mkdir -p "${TARGET}/etc/profile.d"
+    cat << 'EOF' > "${TARGET}/etc/profile.d/00-reboot.sh"
+alias reboot='/usr/bin/vita-reboot'
+alias poweroff='/usr/bin/vita-reboot'
+alias halt='/usr/bin/vita-reboot'
+EOF
+    chmod 644 "${TARGET}/etc/profile.d/00-reboot.sh"
     cat << 'EOF' > "${TARGET}/etc/profile.d/01-glycin.sh"
 export SHELL="${SHELL:-/bin/sh}"
 export GLYCIN_DISABLE_SANDBOX=i-know-the-risks
