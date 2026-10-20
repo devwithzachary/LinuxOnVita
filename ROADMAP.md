@@ -9,7 +9,56 @@ This roadmap outlines upcoming milestones, target releases, and planned features
 
 ## Release Milestones
 
-### [v1.4.0] - Connectivity, Bluetooth & Performance Controls
+### [v1.4.0] - Core Bootloader Architecture, Storage Independence & SMP Performance
+
+**Focus Areas:** Full Quad-Core SMP enablement, Sony memory card independence, and baremetal loader optimizations.
+
+* **Full Quad-Core SMP Enablement:**
+  * Bring all 4 ARM Cortex-A9 cores online in full Symmetric Multi-Processing (SMP) mode.
+  * Correct scratchpad stack pointer initialization (`0x1F007E00`) and secondary core mailbox zeroing.
+  * Eliminate the 2-second kernel boot timeout penalty previously caused by secondary core initialization stalls.
+  * Deliver a 100% compute power boost (from 576 to 1152 BogoMIPS) across the entire system.
+
+* **Sony Memory Card Independence:**
+  * Boot Linux directly without requiring a proprietary Sony PlayStation Vita memory card.
+  * Enable pure SD2Vita (Game Card slot) boot configurations for consoles with unpopulated or missing official memory cards.
+  * Enable boot paths leveraging internal storage (`ur0:`) for slim (PCH-2000) and PlayStation TV (VTE-1000) models.
+  * Implement in-memory kernel (`zImage`) and Device Tree (`*.dtb`) pre-staging within `baremetal-loader.skprx` during the VitaOS stage.
+
+* **Baremetal Loader Optimization:**
+  * Bypass MSIF memory card hardware authentication and disk read loops when kernel assets are pre-staged in RAM.
+  * Streamline payload handover sequence to reduce baremetal boot times by 2 to 3 seconds.
+  * Support early boot status displays on framebuffer before kernel serial handoff.
+
+---
+
+### [v1.5.0] - First-Boot Onboarding Wizard & Handheld Control Center
+
+**Focus Areas:** Interactive first-run setup wizard, storage configuration, and handheld system dashboard.
+
+* **Interactive First-Boot Setup Wizard (`vita-setup`):**
+  * Guided onboarding wizard launched automatically on first boot (or manually via CLI).
+  * **Wi-Fi Setup:** Interactive network scan and credential configuration to get online immediately.
+  * **Storage Auto-Mount Configuration:** Choose which storage devices (`ux0:`, `ur0:`, `uma0:`) auto-mount at boot and select default protection modes (read-only vs read-write).
+  * **Permanent Alpine Storage Setup:** Prompt user to create `alpine.img`, choose destination storage (`ux0:` or `ur0:`), specify custom image size, and automatically verify available free disk space before allocation.
+  * **Desktop Environment Installation:** Prompt to install the IceWM graphical desktop environment.
+  * **Desktop Autostart Preference:** Configure whether the system boots directly into the graphical desktop or stays in the console shell.
+  * **Memory Optimization:** Configure ZRAM RAM compression and physical swapfile size based on user storage selection.
+  * **Diagnostic Baseline:** Run an automated hardware check at the conclusion of setup to confirm screen, network, and storage health.
+
+* **Handheld CLI Control Center (`vita-control`):**
+  * Unified, interactive console menu for quick handheld adjustments without typing long commands.
+  * Quick-access toggles for Wi-Fi, Bluetooth, display brightness, audio volume, CPU governors, and swap settings.
+  * Integrated launcher for built-in diagnostic tools, desktop sessions, and games.
+
+* **Web-Based Management Portal:**
+  * Lightweight on-device web management service accessible from any phone, tablet, or PC on the local network (`http://vita.local:8080`).
+  * **Wireless File Transfer:** Drag-and-drop web file manager to easily upload and download files, ROMs, scripts, and documents between your PC and `/mnt/ux0/`.
+  * **Remote System Dashboard:** Live monitoring of CPU, RAM, storage, network statistics, and running processes directly from a browser.
+
+---
+
+### [v1.6.0] - Connectivity, Bluetooth & Performance Controls
 
 **Focus Areas:** Wi-Fi enhancements, Bluetooth peripheral support, and CPU frequency management.
 
@@ -30,27 +79,7 @@ This roadmap outlines upcoming milestones, target releases, and planned features
 
 ---
 
-### [v1.5.0] - Handheld Control Center & Web Portal
-
-**Focus Areas:** Handheld system dashboard and browser-based remote device management.
-
-* **Web-Based Management Portal:**
-  * Lightweight on-device web management service accessible from any phone, tablet, or PC on the local network (`http://vita.local:8080`).
-  * **Wireless File Transfer:** Drag-and-drop web file manager to easily upload and download files, ROMs, scripts, and documents between your PC and `/mnt/ux0/`.
-  * **Remote System Dashboard:** Live monitoring of CPU, RAM, storage, network statistics, and running processes directly from a browser.
-
-* **Handheld CLI Control Center (`vita-control`):**
-  * Unified, interactive console menu for quick handheld adjustments without typing long commands.
-  * Quick-access toggles for Wi-Fi, Bluetooth, display brightness, audio volume, CPU governors, and swap settings.
-  * Integrated launcher for built-in diagnostic tools, desktop sessions, and games.
-
-* **Curated Handheld Software Repository:**
-  * Tested list of recommended Alpine Linux packages optimized for the Vita 960x544 screen and memory profile.
-  * Quick-installer helper scripts for productivity tools, text editors, lightweight games, and developer utilities.
-
----
-
-### [v1.6.0] - UX Polish, Community Feedback & Helper Tooling
+### [v1.7.0] - UX Polish, Community Feedback & Helper Tooling
 
 **Focus Areas:** User feedback integration, ergonomic refinements, and system optimization.
 
@@ -66,22 +95,7 @@ This roadmap outlines upcoming milestones, target releases, and planned features
 * **Extra Helper Scripts & System Utilities:**
   * Expanded diagnostic and maintenance scripts for storage filesystem integrity checks (`fsck`), log rotation, and container backup/restore.
   * Automated container snapshot and export tools to back up Alpine configurations.
-
----
-
-### [v1.7.0] - Core Bootloader Architecture & Storage Independence
-
-**Focus Areas:** Low-level baremetal loader improvements and expanding storage boot options.
-
-* **Sony Memory Card Independence:**
-  * Explore booting Linux directly without requiring a proprietary Sony PlayStation Vita memory card.
-  * Enable pure SD2Vita (Game Card slot) boot configurations for consoles with unpopulated or missing official memory cards.
-  * Explore boot paths leveraging internal storage (`ur0:`) for slim (PCH-2000) and PlayStation TV (VTE-1000) models.
-
-* **Baremetal Loader Optimization:**
-  * Streamline the payload loader handover sequence to further reduce boot times.
-  * Support early boot status displays on framebuffer before kernel serial handoff.
-  * Investigate direct kexec and custom kernel parameter passing from the initial loader VPK.
+  * Curated handheld software repository of lightweight games, utilities, and developer packages.
 
 ---
 
