@@ -3,6 +3,15 @@
 All notable changes to LinuxOnVita are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) conventions.
 
+## [v1.4.0] - In Development
+
+### Hardware & Kernel Architecture
+- **Full Quad-Core SMP Enablement (4 Cores Active):**
+  - Resolved secondary CPU boot failure where CPU 1 and CPU 3 failed to come online during Linux SMP initialization (leaving only CPU 0 and CPU 2 active).
+  - Fixed stack pointer collision in `vita-baremetal-linux-loader` `start.s`: stack pointer was initialized to low physical memory (`0x00008000`) instead of the ARM scratchpad (`0x1F007E00`), corrupting CPU registers and colliding with the secondary core mailbox table.
+  - Initialized secondary CPU mailbox jump addresses (`0x1F007F00`) to zero in `cpu123_wait()` and `main()` with memory barriers (`dsb` / `isb`), preventing secondary cores from executing stale SRAM pointers on spurious `wfe` wakeups.
+  - Eliminated the 2-second kernel boot timeout penalty previously caused by CPU 1 and CPU 3 failing to respond to `smp_boot_secondary()`. All 4 Cortex-A9 cores now boot cleanly into SMP mode with 1152 BogoMIPS total compute power.
+
 ---
 
 ## [v1.3.1] - 2026-09-30

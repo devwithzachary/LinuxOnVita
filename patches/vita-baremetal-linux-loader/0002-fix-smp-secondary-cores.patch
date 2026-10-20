@@ -1,0 +1,69 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: DevWithZachary <devwithzachary@pm.me>
+Date: Tue, 20 Oct 2026 17:15:00 +0100
+Subject: [PATCH] Fix secondary CPU mailbox initialization and scratchpad stack setup
+
+---
+ src/main.c | 16 ++++++++++++++--
+ src/start.s |  6 ++++--
+ 2 files changed, 18 insertions(+), 4 deletions(-)
+
+diff --git a/src/main.c b/src/main.c
+index 0cf3692..4bd16f2 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -54,12 +54,16 @@ static void LOG(const char *str, ...)
+ 
+ static void cpu123_wait(unsigned int cpu_id)
+ {
+-	volatile unsigned int val, *base = (unsigned int *)CPU123_WAIT_BASE;
++	volatile unsigned int *base = (unsigned int *)CPU123_WAIT_BASE;
++	base[cpu_id] = 0;
++	asm volatile("dsb" ::: "memory");
+ 	while (1) {
+ 		wfe();
+-		val = base[cpu_id];
+-		if (val)
++		unsigned int val = base[cpu_id];
++		if (val) {
++			asm volatile("isb" ::: "memory");
+ 			((void (*)())val)();
++		}
+ 	}
+ }
+ 
+@@ -113,6 +117,14 @@ int main(struct sysroot_buffer *sysroot)
+ 	if (cpu_id != 0)
+ 		cpu123_wait(cpu_id);
+ 
++	/* CPU 0: Clear all secondary boot mailbox entries */
++	volatile unsigned int *base = (unsigned int *)CPU123_WAIT_BASE;
++	base[0] = 0;
++	base[1] = 0;
++	base[2] = 0;
++	base[3] = 0;
++	asm volatile("dsb" ::: "memory");
++
+ 	/* Clear BSS */
+ 	for (bss = &_bss_start; bss < &_bss_end; bss++)
+ 		*bss = 0;
+diff --git a/src/start.s b/src/start.s
+index 8706ff8..d849dbf 100644
+--- a/src/start.s
++++ b/src/start.s
+@@ -15,9 +15,11 @@ _start:
+ 	mrc p15, 0, r1, c0, c0, 5
+ 	ands r1, r1, #0xF
+ 
+-	# Setup the SP at the end of the scratchpad
+-	mov sp, #0x00008000
+-	sub sp, r1, lsl #13
++	# Setup SP in scratchpad (0x1F000000 - 0x1F008000).
++	# CPU0 gets 0x1F007E00 growing downward (safely below 0x1F007F00 mailbox).
++	# Secondary CPUs 1-3 get 4KB stack slices below CPU0.
++	ldr sp, =0x1F007E00
++	sub sp, r1, lsl #12
+ 
+ 	# Jump to the C code
+ 	b main
+-- 
