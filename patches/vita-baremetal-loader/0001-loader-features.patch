@@ -1,13 +1,3 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: DevWithZachary <devwithzachary@pm.me>
-Date: Tue, 22 Sep 2026 16:36:00 +0100
-Subject: [PATCH] Multi-path payload loading, debug logging, and standby support
-
----
- config.h |  2 +-
- main.c   | 49 +++++++++++++++++++++++++++++++++++++++++++++++++-
- 2 files changed, 49 insertions(+), 2 deletions(-)
-
 diff --git a/config.h b/config.h
 index e823b0a..c768aa0 100644
 --- a/config.h
@@ -17,7 +7,7 @@ index e823b0a..c768aa0 100644
 +#define PAYLOAD_PATH	"ux0:linux/payload.bin"
  #define PAYLOAD_PADDR	0x40300000
 diff --git a/main.c b/main.c
-index ffa2a2c..9c1d28f 100644
+index ffa2a2c..e035d3a 100644
 --- a/main.c
 +++ b/main.c
 @@ -14,11 +14,30 @@
@@ -51,7 +41,18 @@ index ffa2a2c..9c1d28f 100644
  	} while (0)
  
  void _start() __attribute__ ((weak, alias ("module_start")));
-@@ -111,10 +130,15 @@ static int ksceSysconResetDevice_hook_func(int type, int mode)
+@@ -76,6 +95,10 @@ uintptr_t payload_load_paddr;
+ unsigned int payload_size;
+ uintptr_t kbl_param_paddr;
+ void *lvl1_pt_va;
++uintptr_t zimage_load_paddr;
++unsigned int zimage_size;
++uintptr_t dtb_load_paddr;
++unsigned int dtb_size;
+ 
+ static void setup_payload(void)
+ {
+@@ -111,10 +134,15 @@ static int ksceSysconResetDevice_hook_func(int type, int mode)
  	LOG("ksceSysconResetDevice(0x%08X, 0x%08X)\n", type, mode);
  
  	/*
@@ -69,7 +70,7 @@ index ffa2a2c..9c1d28f 100644
  		setup_payload();
  		type = SCE_SYSCON_RESET_TYPE_SOFT_RESET;
  	}
-@@ -179,9 +203,31 @@ int module_start(SceSize argc, const void *args)
+@@ -179,9 +207,31 @@ int module_start(SceSize argc, const void *args)
  	/*
  	 * Load the baremetal payload to physically contiguous memory.
  	 */
@@ -103,7 +104,152 @@ index ffa2a2c..9c1d28f 100644
  		return SCE_KERNEL_START_FAILED;
  	}
  
-@@ -236,6 +282,9 @@ int module_start(SceSize argc, const void *args)
+@@ -215,6 +265,144 @@ int module_start(SceSize argc, const void *args)
+ 	LOG("KBL param size: 0x%08X\n", kbl_param->size);
+ 	LOG("\n");
+ 
++	/*
++	 * Attempt to pre-stage zImage and DTB into DRAM for Sony memory card independence.
++	 */
++	zimage_load_paddr = 0;
++	zimage_size = 0;
++	dtb_load_paddr = 0;
++	dtb_size = 0;
++
++	char target_mount[32] = {0};
++	if (argc > 0 && args != NULL) {
++		const char *arg_str = (const char *)args;
++		size_t len = strnlen(arg_str, sizeof(target_mount) - 1);
++		if (len > 0) {
++			memcpy(target_mount, arg_str, len);
++			target_mount[len] = '\0';
++			LOG("Target storage mount specified: %s\n", target_mount);
++		}
++	}
++
++	static const char * const standard_mounts[] = {
++		"ux0:",
++		"ur0:",
++		"uma0:",
++		"imc0:",
++		"xmc0:",
++	};
++
++	SceUID zimage_uid = -1;
++	void *zimage_vaddr = NULL;
++	int z_ret = -1;
++
++	/* If target mount specified, try it first */
++	if (target_mount[0] != '\0') {
++		char zpath[64];
++		snprintf(zpath, sizeof(zpath), "%slinux/zImage", target_mount);
++		z_ret = load_file_phycont(zpath, &zimage_uid, &zimage_vaddr, &zimage_size);
++		if (z_ret >= 0) {
++			LOG("Loaded zImage from %s\n", zpath);
++		}
++	}
++
++	/* Fallback through standard mounts */
++	if (z_ret < 0) {
++		for (size_t i = 0; i < sizeof(standard_mounts) / sizeof(standard_mounts[0]); i++) {
++			if (target_mount[0] != '\0' && strncmp(target_mount, standard_mounts[i], strlen(standard_mounts[i])) == 0)
++				continue;
++			char zpath[64];
++			snprintf(zpath, sizeof(zpath), "%slinux/zImage", standard_mounts[i]);
++			z_ret = load_file_phycont(zpath, &zimage_uid, &zimage_vaddr, &zimage_size);
++			if (z_ret >= 0) {
++				LOG("Loaded zImage from %s\n", zpath);
++				break;
++			}
++		}
++	}
++
++	if (z_ret >= 0 && zimage_vaddr != NULL) {
++		ksceKernelGetPaddr(zimage_vaddr, &zimage_load_paddr);
++		LOG("Pre-staged zImage: paddr 0x%08X, size %u bytes\n",
++		    (unsigned int)zimage_load_paddr, zimage_size);
++	} else {
++		LOG("Notice: zImage pre-staging not available (code 0x%08X)\n", z_ret);
++		zimage_load_paddr = 0;
++		zimage_size = 0;
++	}
++
++	/* Determine model DTB filename from kbl_param */
++	const char *dtb_filename = "vita.dtb";
++	const uint16_t dev_cfg = __builtin_bswap16(kbl_param->pscode.product_sub_code);
++	const uint16_t dev_type = __builtin_bswap16(kbl_param->pscode.product_code);
++	const uint32_t hw_mask = kbl_param->hardware_info & 0xFF0000;
++
++	if ((dev_type == 0x101 && dev_cfg == 0x408) ||
++	    (dev_cfg & 0x200) ||
++	    (hw_mask == 0x700000) || (hw_mask == 0x720000) || (hw_mask == 0x510000)) {
++		dtb_filename = "pstv.dtb";
++	} else if (hw_mask == 0x800000) {
++		dtb_filename = "vita2000.dtb";
++	} else {
++		dtb_filename = "vita1000.dtb";
++	}
++
++	LOG("Hardware model DTB target: %s\n", dtb_filename);
++
++	SceUID dtb_uid = -1;
++	void *dtb_vaddr = NULL;
++	int dtb_ret = -1;
++
++	/* Try target mount first for model DTB */
++	if (target_mount[0] != '\0') {
++		char dpath[64];
++		snprintf(dpath, sizeof(dpath), "%slinux/%s", target_mount, dtb_filename);
++		dtb_ret = load_file_phycont(dpath, &dtb_uid, &dtb_vaddr, &dtb_size);
++		if (dtb_ret >= 0) {
++			LOG("Loaded DTB from %s\n", dpath);
++		} else {
++			snprintf(dpath, sizeof(dpath), "%slinux/vita.dtb", target_mount);
++			dtb_ret = load_file_phycont(dpath, &dtb_uid, &dtb_vaddr, &dtb_size);
++			if (dtb_ret >= 0) {
++				LOG("Loaded fallback DTB from %s\n", dpath);
++			}
++		}
++	}
++
++	/* Fallback through standard mounts if not found on target */
++	if (dtb_ret < 0) {
++		for (size_t i = 0; i < sizeof(standard_mounts) / sizeof(standard_mounts[0]); i++) {
++			char dpath[64];
++			snprintf(dpath, sizeof(dpath), "%slinux/%s", standard_mounts[i], dtb_filename);
++			dtb_ret = load_file_phycont(dpath, &dtb_uid, &dtb_vaddr, &dtb_size);
++			if (dtb_ret >= 0) {
++				LOG("Loaded DTB from %s\n", dpath);
++				break;
++			}
++			snprintf(dpath, sizeof(dpath), "%slinux/vita.dtb", standard_mounts[i]);
++			dtb_ret = load_file_phycont(dpath, &dtb_uid, &dtb_vaddr, &dtb_size);
++			if (dtb_ret >= 0) {
++				LOG("Loaded fallback DTB from %s\n", dpath);
++				break;
++			}
++		}
++	}
++
++	if (dtb_ret >= 0 && dtb_vaddr != NULL) {
++		ksceKernelGetPaddr(dtb_vaddr, &dtb_load_paddr);
++		LOG("Pre-staged DTB: paddr 0x%08X, size %u bytes\n",
++		    (unsigned int)dtb_load_paddr, dtb_size);
++	} else {
++		LOG("Notice: DTB pre-staging not available (code 0x%08X)\n", dtb_ret);
++		dtb_load_paddr = 0;
++		dtb_size = 0;
++	}
++
++	if (zimage_load_paddr != 0 && dtb_load_paddr != 0) {
++		LOG("Sony memory card independence: Pre-staging ready!\n");
++	}
++	LOG("\n");
++
+ 	SceSyscon_ksceSysconResetDevice_hook_uid = taiHookFunctionExportForKernel(KERNEL_PID,
+ 		&SceSyscon_ksceSysconResetDevice_ref, "SceSyscon", 0x60A35F64,
+ 		0x8A95D35C, ksceSysconResetDevice_hook_func);
+@@ -236,6 +424,9 @@ int module_start(SceSize argc, const void *args)
  	ksceKernelGetPaddr(&resume_ctx, &resume_ctx_paddr);
  	LOG("Resume context pa: 0x%08X\n", resume_ctx_paddr);
  
@@ -113,4 +259,129 @@ index ffa2a2c..9c1d28f 100644
  	LOG("Requesting standby...\n");
  
  	kscePowerRequestStandby();
--- 
+@@ -298,31 +489,38 @@ int find_paddr(uint32_t paddr, const void *vaddr_start, unsigned int range, void
+ 
+ int alloc_phycont(unsigned int size, unsigned int alignment, SceUID *uid, void **addr)
+ {
+-	int ret;
+-	SceUID mem_uid;
+-	void *mem_addr;
++	static const SceUInt32 mem_types[] = {
++		0x0C80D060, /* SCE_KERNEL_MEMBLOCK_TYPE_USER_MAIN_PHYCONT_RW (~256MB pool) */
++		0x0D808060, /* SCE_KERNEL_MEMBLOCK_TYPE_USER_MAIN_PHYCONT_NC_RW */
++		0x40408006, /* SCE_KERNEL_MEMBLOCK_TYPE_KERNEL_CDRAM_RW (128MB CDRAM pool) */
++		0x09408060, /* SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW */
++		0x1080D006, /* SCE_KERNEL_MEMBLOCK_TYPE_KERNEL_ROOT_PHYCONT_RW */
++		0x30808006, /* SCE_KERNEL_MEMBLOCK_TYPE_KERNEL_ROOT_PHYCONT_NC_RW */
++	};
+ 
+ 	SceKernelAllocMemBlockKernelOpt opt;
+ 	memset(&opt, 0, sizeof(opt));
+ 	opt.size = sizeof(opt);
+ 	opt.attr = SCE_KERNEL_ALLOC_MEMBLOCK_ATTR_PHYCONT | SCE_KERNEL_ALLOC_MEMBLOCK_ATTR_HAS_ALIGNMENT;
+ 	opt.alignment = ALIGN(alignment, 0x1000);
+-	mem_uid = ksceKernelAllocMemBlock("phycont", 0x30808006, ALIGN(size, 0x1000), &opt);
+-	if (mem_uid < 0)
+-		return mem_uid;
+ 
+-	ret = ksceKernelGetMemBlockBase(mem_uid, &mem_addr);
+-	if (ret < 0) {
+-		ksceKernelFreeMemBlock(mem_uid);
+-		return ret;
++	for (size_t i = 0; i < sizeof(mem_types) / sizeof(mem_types[0]); i++) {
++		SceUID mem_uid = ksceKernelAllocMemBlock("phycont", mem_types[i], ALIGN(size, 0x1000), &opt);
++		if (mem_uid >= 0) {
++			void *mem_addr = NULL;
++			int ret = ksceKernelGetMemBlockBase(mem_uid, &mem_addr);
++			if (ret >= 0 && mem_addr != NULL) {
++				if (uid)
++					*uid = mem_uid;
++				if (addr)
++					*addr = mem_addr;
++				return 0;
++			}
++			ksceKernelFreeMemBlock(mem_uid);
++		}
+ 	}
+ 
+-	if (uid)
+-		*uid = mem_uid;
+-	if (addr)
+-		*addr = mem_addr;
+-
+-	return 0;
++	return -1;
+ }
+ 
+ int load_file_phycont(const char *path, SceUID *uid, void **addr, unsigned int *size)
+@@ -348,13 +546,27 @@ int load_file_phycont(const char *path, SceUID *uid, void **addr, unsigned int *
+ 	}
+ 
+ 	ksceIoLseek(fd, 0, SCE_SEEK_SET);
+-	ksceIoRead(fd, mem_addr, file_size);
++	unsigned int total_read = 0;
++	while (total_read < file_size) {
++		unsigned int to_read = file_size - total_read;
++		if (to_read > 1024 * 1024)
++			to_read = 1024 * 1024;
++		int bytes_read = ksceIoRead(fd, (char *)mem_addr + total_read, to_read);
++		if (bytes_read <= 0)
++			break;
++		total_read += bytes_read;
++	}
+ 
+ 	ksceKernelDcacheCleanRange(mem_addr, aligned_size);
+ 	ksceKernelIcacheInvalidateRange(mem_addr, aligned_size);
+ 
+ 	ksceIoClose(fd);
+ 
++	if (total_read < file_size) {
++		ksceKernelFreeMemBlock(mem_uid);
++		return -1;
++	}
++
+ 	if (uid)
+ 		*uid = mem_uid;
+ 	if (addr)
+diff --git a/resume.S b/resume.S
+index 44ebb18..7305418 100644
+--- a/resume.S
++++ b/resume.S
+@@ -47,6 +47,37 @@ resume_function:
+ 	ldr r1, =_binary_payload_bootstrap_bin_size
+ 	bl dcache_clean_range
+ 
++	@ CPU0: Write prestaged boot info block in scratchpad at 0x1F007E80
++	ldr r0, =0x1F007E80
++	ldr r1, =zimage_load_paddr
++	ldr r1, [r1]
++	cmp r1, #0
++	beq 1f
++
++	ldr r2, =0x564C4E58       @ PRESTAGED_BOOT_MAGIC ("VNLX")
++	str r2, [r0, #0]
++	mov r2, #1
++	str r2, [r0, #4]          @ version 1
++	str r1, [r0, #8]          @ zimage_load_paddr
++	ldr r1, =zimage_size
++	ldr r1, [r1]
++	str r1, [r0, #12]         @ zimage_size
++	ldr r1, =dtb_load_paddr
++	ldr r1, [r1]
++	str r1, [r0, #16]         @ dtb_load_paddr
++	ldr r1, =dtb_size
++	ldr r1, [r1]
++	str r1, [r0, #20]         @ dtb_size
++	b 2f
++1:
++	mov r2, #0
++	str r2, [r0, #0]
++2:
++	dsb
++	ldr r0, =0x1F007E80
++	mov r1, #32
++	bl dcache_clean_range
++
+ cpu1_3_cont:
+ 	ldr r0, =sync_point_2
+ 	bl cpus_sync

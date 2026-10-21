@@ -4,30 +4,41 @@ LinuxOnVita is an all-in-one bootstrapper and payload installer application for 
 
 ## Features
 
+- **Touchscreen Graphical Interface:** Modern handheld GUI rendered on `/dev/fb0` (CDRAM) with double-buffered page flipping and display VSync synchronization for tear-free 60 FPS presentation.
+- **Full Touchscreen & Gamepad Dual Controls:** Tap partition cards and action buttons directly with your fingers, or navigate using D-Pad and physical gamepad shortcuts.
+- **Streamlined Storage Partition Browser:** Displays active, mounted storage partitions (`ux0:`, `ur0:`) by default in spacious, easy-to-read cards, with an expandable `[+] SHOW ALL STORAGE DRIVES` toggle card for system partitions (`uma0:`, `imc0:`, `xmc0:`).
+- **Smart Recommendation Badges:** Clear visual indicators highlighting `ux0:` with `[RECOMMENDED (SD2VITA)]` (primary choice) and `ur0:` with `[RECOMMENDED (INTERNAL)]` (secondary choice).
+- **In-Memory Kernel Pre-Staging:** Pre-stages the Linux kernel (`zImage`) and Device Tree into physical DRAM before jumping to the loader, allowing Linux to boot directly from SD2Vita (`ux0:`) or internal storage (`ur0:`) without an official Sony memory card!
+- **Modal Progress Dialogs:** Real-time visual percentage progress bars for file installation and partition mounting with tap-to-dismiss feedback.
+- **Graphical Boot Debug Log Viewer:** Full-screen presentation with touch scrolling controls, color-coded status syntax highlighting, and persistent saving to `ux0:data/LinuxOnVita/boot_debug.log`.
 - **All-in-One Packaging:** Bundles the complete Linux kernel (`zImage`), Device Tree blobs (`*.dtb`), and baremetal loaders directly inside the VPK.
-- **Dynamic Storage Mount Selection:** Detects all active storage partitions (`xmc0:`, `ux0:`, `uma0:`, `imc0:`) and displays their total capacity and free space in real-time.
-- **Sony Memory Card Targeting:** Allows users with SD2Vita adapters (where SD is `ux0:` and the Sony card is `xmc0:` or `uma0:`) to select their exact memory card mount point.
-- **Persistent Preferences:** Automatically saves and restores your chosen memory card mount across reboots in `ur0:data/LinuxOnVita/mount.cfg`.
-- **On-Device Installation:** Checks file presence on your chosen memory card partition (`<mount>/linux/`) and installs all bundled files with a single button press.
-- **Boot File Copy Helper:** Enables copying kernel and Device Tree boot files from `ux0:` to your target memory card directly from the UI.
+- **Persistent Preferences:** Automatically saves and restores your chosen storage mount across reboots in `ur0:data/LinuxOnVita/mount.cfg`.
 - **Dual Firmware Support:** Automatically tries the standard baremetal loader and falls back to firmware 3.60 offsets if needed.
 - **Safe Wi-Fi Preservation:** Does not overwrite existing `wpa_supplicant.conf` files if wireless credentials are already configured.
 
 ## Controls
 
-- **CROSS (X):** Boot Linux (Normal) / Install Linux files to target mount (on first run)
-- **SQUARE ([ ]):** Boot Linux in Debug Mode (runs diagnostic logging)
-- **TRIANGLE (/\\):** Reinstall or update Linux files to the selected memory card mount
+### Touchscreen Controls
+- **Tap Partition Card:** Select target storage drive (`ux0:`, `ur0:`, etc.)
+- **Tap [BOOT LINUX]:** Boot Linux (or install files on first run)
+- **Tap [DEBUG BOOT]:** Launch Linux in Debug Mode with diagnostic pre-flight checks
+- **Tap [REINSTALL]:** Reinstall or update Linux boot files to the selected storage drive
+- **Tap [BOOT LOG]:** Open the full-screen graphical boot debug log viewer
+- **Tap [EXIT]:** Exit cleanly back to VitaOS LiveArea
+- **Tap [UP] / [DN] in Log Viewer:** Scroll log contents up and down
+
+### Physical Gamepad Shortcuts
+- **CROSS (✕):** Boot Linux (Normal) / Install Linux files to target mount (on first run)
+- **SQUARE (□):** Boot Linux in Debug Mode (runs diagnostic logging)
+- **TRIANGLE (△):** Reinstall or update Linux files to the selected storage mount
 - **SELECT:** View persistent boot debug log on screen
-- **D-PAD UP / DOWN:** Navigate and select target memory card mount (`xmc0:`, `ux0:`, `uma0:`, `imc0:`)
-- **L / R Shoulders:** Previous / Next target memory card mount
+- **D-PAD UP / DOWN / LEFT / RIGHT:** Navigate and select target storage mount
 - **START:** Exit to LiveArea
 
 ## Hardware Storage Note
 
-The baremetal loader (MSIF) communicates directly with the proprietary Sony Memory Card controller. It cannot boot Linux from SD2Vita adapters (game card slot) or internal eMMC storage (`imc0:`).
-- For standard setups: the Sony Memory Card is mounted as `ux0:`.
-- For SD2Vita setups: the Sony Memory Card is typically mounted as `xmc0:` (VitaShell/YAMT default) or `uma0:` (StorageMgr).
+- **No Sony Memory Card Required:** With in-memory kernel pre-staging, Linux boots directly from SD2Vita (`ux0:`) or internal storage (`ur0:`).
+- **Sony Memory Card Runtime Note:** If an official Sony memory card is inserted, Linux cannot detect or access it at runtime because Linux does not have a proprietary MSIF driver. All runtime files and packages reside on SD2Vita (`/mnt/ux0/`) or internal storage (`/mnt/ur0/`).
 
 ## Credits & Copyright
 
@@ -36,5 +47,5 @@ LinuxOnVita is licensed under the GNU General Public License v3.0 (GPL-3.0).
 - **xerpi:** Original PlayStation Vita kernel plugin loader and Linux port.
 - **CreepNT:** Linux theming, file checks, and user interface improvements.
 - **DvaMishkiLapa:** Standalone bootstrapper maintenance and packaging.
-- **Zachary Powell (DevWithZachary):** All-in-one VPK packaging, storage partition selector, on-device installer, and branding.
+- **Zachary Powell (DevWithZachary):** All-in-one VPK packaging, storage partition selector, on-device installer, touchscreen GUI, and branding.
 - **Team Molecule, TheFloW, motoharu, and HENkaku community:** Vita homebrew toolchain, kernel exploits, and reverse engineering.

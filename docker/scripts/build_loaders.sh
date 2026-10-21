@@ -29,9 +29,11 @@ if [ ! -d "vita-baremetal-loader" ]; then
 fi
 cd vita-baremetal-loader
 git checkout . 2>/dev/null || true
-if [ -f "${BUILD_DIR}/patches/vita-baremetal-loader/0001-loader-features.patch" ]; then
-    git apply "${BUILD_DIR}/patches/vita-baremetal-loader/0001-loader-features.patch" || true
-fi
+for patch in "${BUILD_DIR}/patches/vita-baremetal-loader/"*.patch; do
+    if [ -f "$patch" ]; then
+        git apply "$patch" || true
+    fi
+done
 make clean || true
 make CFLAGS="-std=gnu17 -Wl,-q -Wall -O0 -nostartfiles -mcpu=cortex-a9 -mthumb-interwork"
 if [ -f "baremetal-loader_363.skprx" ]; then
@@ -64,9 +66,11 @@ if [ ! -d "vita-baremetal-linux-loader" ]; then
 fi
 cd vita-baremetal-linux-loader
 git checkout . 2>/dev/null || true
-if [ -f "${BUILD_DIR}/patches/vita-baremetal-linux-loader/0001-fix-model-dtb-order.patch" ]; then
-    git apply "${BUILD_DIR}/patches/vita-baremetal-linux-loader/0001-fix-model-dtb-order.patch" || true
-fi
+for patch in "${BUILD_DIR}/patches/vita-baremetal-linux-loader/"*.patch; do
+    if [ -f "$patch" ]; then
+        git apply "$patch" || true
+    fi
+done
 make clean || true
 make CFLAGS="-std=gnu17 -Iinclude -IFatFs -mcpu=cortex-a9 -mthumb-interwork -O0 -g3 -Wall -Wno-unused-const-variable -ffreestanding"
 cp vita-baremetal-linux-loader.bin "${LINUX_OUT}/payload.bin"

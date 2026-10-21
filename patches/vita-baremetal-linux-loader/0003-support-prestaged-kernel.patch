@@ -1,0 +1,115 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: DevWithZachary <devwithzachary@pm.me>
+Date: Tue, 20 Oct 2026 18:00:00 +0100
+Subject: [PATCH] Support pre-staged kernel and DTB bypass of MSIF memory card
+
+---
+ src/main.c | 88 ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 88 insertions(+)
+
+diff --git a/src/main.c b/src/main.c
+index 4bd16f2..a912f45 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -28,6 +28,69 @@
+ 
+ #define CPU123_WAIT_BASE 0x1F007F00
+ 
++#define PRESTAGED_BOOT_INFO_ADDR 0x1F007E80
++#define PRESTAGED_BOOT_MAGIC     0x564C4E58
++
++struct prestaged_boot_info {
++	uint32_t magic;
++	uint32_t version;
++	uint32_t zimage_paddr;
++	uint32_t zimage_size;
++	uint32_t dtb_paddr;
++	uint32_t dtb_size;
++};
++
++static void safe_memmove(void *dst, const void *src, uint32_t n)
++{
++	if (dst == src || n == 0)
++		return;
++
++	uint8_t *d = (uint8_t *)dst;
++	const uint8_t *s = (const uint8_t *)src;
++
++	if (d < s) {
++		if (((uintptr_t)d & 3) == ((uintptr_t)s & 3)) {
++			while (((uintptr_t)d & 3) && n > 0) {
++				*d++ = *s++;
++				n--;
++			}
++			uint32_t *d32 = (uint32_t *)d;
++			const uint32_t *s32 = (const uint32_t *)s;
++			while (n >= 4) {
++				*d32++ = *s32++;
++				n -= 4;
++			}
++			d = (uint8_t *)d32;
++			s = (const uint8_t *)s32;
++		}
++		while (n > 0) {
++			*d++ = *s++;
++			n--;
++		}
++	} else {
++		d += n;
++		s += n;
++		if (((uintptr_t)d & 3) == ((uintptr_t)s & 3)) {
++			while (((uintptr_t)d & 3) && n > 0) {
++				*--d = *--s;
++				n--;
++			}
++			uint32_t *d32 = (uint32_t *)d;
++			const uint32_t *s32 = (const uint32_t *)s;
++			while (n >= 4) {
++				*--d32 = *--s32;
++				n -= 4;
++			}
++			d = (uint8_t *)d32;
++			s = (const uint8_t *)s32;
++		}
++		while (n > 0) {
++			*--d = *--s;
++			n--;
++		}
++	}
++}
++
+ extern unsigned int _bss_start;
+ extern unsigned int _bss_end;
+ 
+@@ -149,6 +212,31 @@ int main(struct sysroot_buffer *sysroot)
+ 
+ 	LOG("Vita baremetal Linux loader started!\n");
+ 
++	struct prestaged_boot_info *pre = (struct prestaged_boot_info *)PRESTAGED_BOOT_INFO_ADDR;
++	if (pre->magic == PRESTAGED_BOOT_MAGIC && pre->zimage_paddr != 0 && pre->zimage_size > 0) {
++		LOG("Pre-staged Linux kernel detected!\n");
++		LOG("Kernel at 0x%08X (%u KiB)\n", pre->zimage_paddr, pre->zimage_size / 1024);
++
++		if (pre->zimage_paddr != LINUX_LOAD_ADDR) {
++			LOG("Relocating kernel to 0x%08X...\n", LINUX_LOAD_ADDR);
++			safe_memmove((void *)LINUX_LOAD_ADDR, (const void *)pre->zimage_paddr, pre->zimage_size);
++		}
++
++		if (pre->dtb_paddr != 0 && pre->dtb_size > 0) {
++			LOG("DTB at 0x%08X (%u B)\n", pre->dtb_paddr, pre->dtb_size);
++			if (pre->dtb_paddr != DTB_LOAD_ADDR) {
++				LOG("Relocating DTB to 0x%08X...\n", DTB_LOAD_ADDR);
++				safe_memmove((void *)DTB_LOAD_ADDR, (const void *)pre->dtb_paddr, pre->dtb_size);
++			}
++		}
++
++		LOG("Jumping to Linux!\n");
++		asm volatile("dsb\n\tisb" ::: "memory");
++		((void (*)(int, int, uintptr_t))LINUX_LOAD_ADDR)(0, 0, DTB_LOAD_ADDR);
++
++		goto fatal_error;
++	}
++
+ 	if (!pervasive_msif_get_card_insert_state()) {
+ 		LOG("Memory card not inserted.\n");
+ 		goto fatal_error;

@@ -18,7 +18,7 @@ set(VITA_APP_NAME "LinuxOnVita")
 # Title ID for the application (9 uppercase alphanumeric characters)
 set(VITA_TITLEID  "LNXONVITA")
 
-set(VITA_VERSION  "01.31")
+set(VITA_VERSION  "01.40")
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Os -ffunction-sections -fdata-sections")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--gc-sections")
@@ -29,14 +29,17 @@ set(VITA_MKSFOEX_FLAGS "${VITA_MKSFOEX_FLAGS} -d PARENTAL_LEVEL=1")
 add_executable(${PROJECT_NAME}
   main.c
   debugScreenFont.c
+  gui.c
 )
 
 target_link_libraries(${PROJECT_NAME}
   SceCtrl_stub
+  SceTouch_stub
   taihen_stub
   SceDisplay_stub
   SceVshBridge_stub
   SceSysmem_stub
+  SceSysmodule_stub
 )
 
 # Create Vita SELF

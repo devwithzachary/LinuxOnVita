@@ -28,9 +28,11 @@ start)
             WPA_CONF=""
             for candidate in \
                 /mnt/ux0/linux/wpa_supplicant.conf \
+                /mnt/ur0/linux/wpa_supplicant.conf \
                 /mnt/xmc0/linux/wpa_supplicant.conf \
                 /mnt/uma0/linux/wpa_supplicant.conf \
                 /mnt/ux0/wpa_supplicant.conf \
+                /mnt/ur0/wpa_supplicant.conf \
                 /etc/wpa_supplicant.conf; do
                 if [ -f "$candidate" ]; then
                     # Check if candidate has a network block with real credentials (not unedited template)

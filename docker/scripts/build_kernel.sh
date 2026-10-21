@@ -66,6 +66,20 @@ if [ -d "${PORT_DIR}" ]; then
     "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_ZSMALLOC
     "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_LZ4_COMPRESS
     "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_LZ4_DECOMPRESS
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_TUN
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_WIREGUARD
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_IKCONFIG
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_IKCONFIG_PROC
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_IP_ADVANCED_ROUTER
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_IP_MULTIPLE_TABLES
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_NETFILTER
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_NETFILTER_ADVANCED
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_NF_CONNTRACK
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_NETFILTER_XTABLES
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_IP_NF_IPTABLES
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_IP_NF_FILTER
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_IP_NF_NAT
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_IP_NF_TARGET_MASQUERADE
     
     echo "Compiling zImage and DTBs..."
     make build CROSS_COMPILE="${CROSS_COMPILE}"
@@ -119,6 +133,20 @@ else
     ./scripts/config --file .config --enable CONFIG_ZSMALLOC
     ./scripts/config --file .config --enable CONFIG_LZ4_COMPRESS
     ./scripts/config --file .config --enable CONFIG_LZ4_DECOMPRESS
+    ./scripts/config --file .config --enable CONFIG_TUN
+    ./scripts/config --file .config --enable CONFIG_WIREGUARD
+    ./scripts/config --file .config --enable CONFIG_IKCONFIG
+    ./scripts/config --file .config --enable CONFIG_IKCONFIG_PROC
+    ./scripts/config --file .config --enable CONFIG_IP_ADVANCED_ROUTER
+    ./scripts/config --file .config --enable CONFIG_IP_MULTIPLE_TABLES
+    ./scripts/config --file .config --enable CONFIG_NETFILTER
+    ./scripts/config --file .config --enable CONFIG_NETFILTER_ADVANCED
+    ./scripts/config --file .config --enable CONFIG_NF_CONNTRACK
+    ./scripts/config --file .config --enable CONFIG_NETFILTER_XTABLES
+    ./scripts/config --file .config --enable CONFIG_IP_NF_IPTABLES
+    ./scripts/config --file .config --enable CONFIG_IP_NF_FILTER
+    ./scripts/config --file .config --enable CONFIG_IP_NF_NAT
+    ./scripts/config --file .config --enable CONFIG_IP_NF_TARGET_MASQUERADE
     make ARCH=arm CROSS_COMPILE="${CROSS_COMPILE}" -j"$(nproc)" zImage
     make ARCH=arm CROSS_COMPILE="${CROSS_COMPILE}" sony/vita1000.dtb sony/vita2000.dtb sony/pstv.dtb
     

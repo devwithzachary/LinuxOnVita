@@ -19,6 +19,7 @@ Welcome to the comprehensive user guide for **LinuxOnVita**. This guide is desig
    - [Hardware & System Diagnostics (`vita-diagnostics`)](#5-hardware--system-diagnostics-vita-diagnostics--vita-diag)
    - [Remote SSH & Wireless Terminal](#6-remote-ssh--wireless-terminal)
    - [Rebooting & Powering Down](#7-rebooting--powering-down)
+   - [Virtual Network Tunnels & Mesh VPNs (`CONFIG_TUN` & `vita-tun`)](#8-virtual-network-tunnels--mesh-vpns-config_tun-wireguard--vita-tun)
 5. [Alpine Linux Package Ecosystem (`alpine-chroot`)](#5-alpine-linux-package-ecosystem-alpine-chroot)
    - [Understanding the Isolated Environment](#understanding-the-isolated-environment)
    - [Entering & Exiting Alpine](#entering--exiting-alpine)
@@ -43,9 +44,9 @@ Before getting started, make sure your PlayStation Vita meets these requirements
 * **Enable Unsafe Homebrew (Critical):**
   - On your Vita, open **Settings** -> **HENkaku Settings**.
   - Check the box for **Enable Unsafe Homebrew [✓]**. If unchecked, the loader will exit with error `0x8002D003`.
-* **Official Sony Memory Card:**
-  - An official physical Sony memory card is **strictly required** on all hardware models.
-  - The low-level baremetal loader communicates directly with Sony's proprietary memory card interface (MSIF) and cannot read boot files from internal eMMC storage (`imc0:`) or SD2Vita game-card adapters.
+* **Supported Storage (SD2Vita or Internal eMMC):**
+  - **No Sony memory card required!** Linux can be installed directly to your **SD2Vita** (`ux0:`) or to **internal system storage (`ur0:`)**.
+  - An official Sony memory card is completely optional. If one is present, note that Linux cannot detect or access Sony memory cards at runtime because Linux has no proprietary MSIF driver.
 * **VitaShell:** Needed to transfer and install the `LinuxOnVita.vpk` package.
 
 > [!IMPORTANT]
@@ -84,15 +85,17 @@ Download **`LinuxOnVita.vpk`** from the [GitHub Releases page](https://github.co
 
 ### Step 4: Configure Storage & Launch Linux
 1. Tap the new **LinuxOnVita** bubble and select **Start**.
-2. The application scans all storage partitions and displays them on screen. **Select your Sony Memory Card partition** - this is where the Linux boot files (`zImage`, loaders, DTB) will be written:
-   - **Standard Consoles (No SD2Vita):** Your Sony Memory Card is already `ux0:`.
-   - **SD2Vita Users:** Your SD2Vita adapter is `ux0:`, while your official Sony Memory Card is typically mapped to `xmc0:` or `uma0:`. Use **D-Pad Up / Down** or **L / R** triggers to select your Sony Memory Card partition. Your selection is automatically remembered for future boots.
-3. Press **CROSS (✕)** to install the bundled Linux files to your selected memory card.
-4. Press **CROSS (✕)** to boot!
+2. The modern touchscreen interface loads smoothly on screen with real-time partition cards and storage badges:
+   - **SD2Vita Users (`ux0:`):** Tap `ux0:` (highlighted with the green `[RECOMMENDED (SD2VITA)]` badge).
+   - **Internal Storage Users (`ur0:`):** Tap `ur0:` (highlighted with the cyan `[RECOMMENDED (INTERNAL)]` badge, ideal for Slim 2000 or PSTV consoles without an SD2Vita).
+   - *Targeting Secondary Drives:* By default, only active mounted drives are shown. Tap `[+] SHOW ALL STORAGE DRIVES` to expand unmounted partitions (`uma0:`, `imc0:`, `xmc0:`).
+   - *Physical Gamepad Navigation:* You can also use **D-Pad Up / Down / Left / Right** to cycle through cards. Your target selection is automatically remembered for future boots.
+3. Tap **[ BOOT LINUX ]** (or press **CROSS ✕**) to install the bundled Linux files to your selected partition with a graphical progress modal.
+4. Tap **[ BOOT LINUX ]** (or press **CROSS ✕**) to boot!
 
 > [!NOTE]
 > **The VPK app install location and the in-app partition selector are independent choices.**
-> You can install the `LinuxOnVita.vpk` app to any partition VitaOS allows (e.g. `ux0:app/`, `uma0:app/`). The partition selector *inside* the app is only asking where to write the **Linux boot files** (kernel, loaders, device tree) onto your **Sony Memory Card**. Wherever the app bubble lives on your LiveArea does not affect which memory card Linux boots from.
+> You can install the `LinuxOnVita.vpk` app to any partition VitaOS allows (e.g. `ux0:app/`, `ur0:app/`). The partition selector inside the app specifies where the **Linux boot files** (kernel, loaders, device tree) are written (`ux0:linux/` or `ur0:linux/`).
 
 The screen will blank briefly, take over the hardware framebuffer, and boot directly to the Linux terminal prompt (`root@vita:~#`).
 
@@ -100,17 +103,17 @@ The screen will blank briefly, take over the hardware framebuffer, and boot dire
 When upgrading your console from a previous release of LinuxOnVita:
 1. Transfer and install the new `LinuxOnVita.vpk` in VitaShell.
 2. Launch the **LinuxOnVita** bubble from the LiveArea.
-3. **Reinstall / Update Memory Card Files:** Press **TRIANGLE (△)** to update the Linux setup (`<mount>/linux/`). Because boot files (`zImage`, Device Tree blobs, and baremetal loaders) already exist on your memory card from the previous version, pressing Cross (✕) would continue booting the older kernel and files. Pressing **Triangle (△)** refreshes and overwrites your memory card with the new release files bundled inside the VPK.
+3. **Reinstall / Update Boot Files:** Press **TRIANGLE (△)** to update the Linux setup (`<mount>/linux/`). Because boot files (`zImage`, Device Tree blobs, and baremetal loaders) already exist on your storage partition from the previous version, pressing Cross (✕) would continue booting the older kernel and files. Pressing **Triangle (△)** refreshes and overwrites your storage partition with the new release files bundled inside the VPK.
 4. Press **CROSS (✕)** to boot into your updated Linux system!
 
 ### Booting in Debug Mode (Troubleshooting Boot Issues)
 If Linux fails to boot, freezes, or the screen goes dark without reaching the shell prompt:
 1. Open the **LinuxOnVita** application bubble.
-2. Select your target storage partition (`ux0:`, `xmc0:`, or `uma0:`).
+2. Select your target storage partition (`ux0:` or `ur0:`).
 3. Press **SQUARE (□)** to launch **Debug Mode**.
 4. Debug Mode runs an automated 5-step diagnostic pre-flight sequence directly on-screen:
    - **Hardware & Firmware Check:** Queries system software version (`3.65`, `3.60`, etc.) and detects your exact hardware model (PS Vita OLED 1000, PS Vita Slim 2000, or PlayStation TV Dolce).
-   - **Memory Card Interface:** Confirms physical insertion of the Sony Memory Card in the hardware MSIF slot.
+   - **Hardware & Storage Interface:** Confirms system model and verifies storage availability for in-memory kernel pre-staging.
    - **Storage Partition Status:** Scans partition mount points, total capacity, and available free space.
    - **Kernel & DTB Integrity:** Checks file existence and exact byte sizes for `zImage` and model-specific Device Tree blobs (`vita2000.dtb`, `vita1000.dtb`, `pstv.dtb`, or `vita.dtb`).
    - **Loader Pre-Flight:** Verifies `payload.bin` and `baremetal-loader.skprx`, auto-syncing mirrors to `ux0:linux/` to ensure all loader fallback paths succeed.
@@ -125,7 +128,7 @@ If Linux fails to boot, freezes, or the screen goes dark without reaching the sh
 LinuxOnVita transforms your handheld console into a self-contained computer without requiring any external cables or keyboards.
 
 ### On-Screen Touch Keyboard (`fbkeyboard`)
-* **Show / Hide:** Tap the lower third of the touchscreen to bring up the on-screen keyboard. Tap **[Hide]** in the bottom right corner to dismiss it for an unobstructed view of your terminal.
+* **Show / Hide:** Tap **[Hide]** in the bottom-right corner to dismiss the keyboard for an unobstructed view of your terminal. When hidden, a prominent, high-contrast **[KEYBOARD]** button remains pinned at the bottom-right corner; tap it at any time to instantly restore the on-screen keyboard. Terminal text is constrained to 32 rows (`120x32`), ensuring scrolling output never overwrites or erases the reshow button.
 * **Letter / Number Switching:** Tap **[?123]** to access numbers and symbols, or **[ABC]** to return to letters.
 * **Special Keys:** Includes dedicated buttons for **Tab**, **Esc**, **Ctrl**, and **Enter**.
 
@@ -354,24 +357,67 @@ Logging in via SSH gives you a full-sized desktop terminal, making it comfortabl
 
 ---
 
+### 8. Virtual Network Tunnels & Mesh VPNs (`CONFIG_TUN`, WireGuard & `vita-tun`)
+
+LinuxOnVita includes built-in kernel support for virtual network tunnels and VPN protocols without requiring external out-of-tree kernel modules.
+
+#### Included Kernel Drivers:
+* **Universal TUN/TAP Driver (`CONFIG_TUN=y`):** Provides virtual point-to-point network devices required by VPN clients and mesh networking daemons.
+* **Native WireGuard Protocol (`CONFIG_WIREGUARD=y`):** High-speed, modern kernel-space cryptography and tunneling.
+* **Packet Routing & Filtering:** Full policy routing (`CONFIG_IP_ADVANCED_ROUTER=y`, `CONFIG_IP_MULTIPLE_TABLES=y`) and Netfilter NAT masquerading (`CONFIG_IP_NF_IPTABLES=y`, `CONFIG_IP_NF_NAT=y`, `CONFIG_IP_NF_TARGET_MASQUERADE=y`).
+* **Runtime Config Inspection:** Query compiled kernel symbols at any time via `/proc/config.gz`:
+  ```bash
+  zcat /proc/config.gz | grep -E "CONFIG_TUN|CONFIG_WIREGUARD"
+  ```
+
+#### Automatic Device Provisioning:
+On boot, the system automatically creates the character device node at `/dev/net/tun` (`major 10, minor 200`) with accessible `0666` permissions, allowing non-root network daemons to establish tunnels seamlessly.
+
+#### Using `vita-tun` (Interface Management):
+To quickly test or manage persistent TUN devices directly from the base shell:
+```bash
+# Create a persistent TUN interface:
+vita-tun add tun0
+
+# Inspect interface state:
+ip link show tun0
+
+# Remove the interface:
+vita-tun del tun0
+
+# Verify driver and /dev/net/tun availability:
+vita-tun status
+```
+
+#### Mesh Networking inside Alpine Linux:
+Inside the Alpine container (`alpine-chroot`), you can install and run modern mesh networking packages:
+* **Tailscale:** Connect your PS Vita directly into your secure personal tailnet:
+  ```bash
+  alpine-chroot apk add tailscale
+  alpine-chroot tailscaled &
+  alpine-chroot tailscale up
+  ```
+* **WireGuard Tools:** Manage encrypted tunnels using standard `wg` and `wg-quick`:
+  ```bash
+  alpine-chroot apk add wireguard-tools
+  ```
+
+---
+
 ## 5. Alpine Linux Package Ecosystem (`alpine-chroot`)
 
 The base LinuxOnVita operating system runs from a lightweight, memory-resident root filesystem (initramfs). To allow installing any modern Linux program, LinuxOnVita integrates **Alpine Linux v3.24** with its full-featured `apk` package repository.
 
 > [!IMPORTANT]
-> **Where Does alpine.img Live? - Two-Storage Architecture Explained**
->
-> The PS Vita uses two physically separate storage devices when running LinuxOnVita, and understanding this is key to knowing where your files and packages live:
+> **Where Does alpine.img Live? Storage Architecture Explained**
 >
 > | Device | VitaOS Name | Linux Path | Role |
 > | :--- | :--- | :--- | :--- |
-> | **Sony Memory Card** | `xmc0:` / `uma0:` | *(not accessible at runtime)* | Boot only - holds `zImage`, DTB, and loader files. Cannot be read or written to by Linux once booted. |
-> | **SD2Vita / Game Card Adapter** | `ux0:` | `/mnt/ux0/` | Runtime storage - where `alpine.img`, swapfiles, DOOM WADs, and your files live. |
-> | **Internal eMMC** | `ur0:` | `/mnt/ur0/` | Internal fallback storage. |
+> | **SD2Vita / Game Card Adapter** | `ux0:` | `/mnt/ux0/` | Primary runtime storage: where `alpine.img`, swapfiles, DOOM WADs, and your files live. |
+> | **Internal eMMC / NAND** | `ur0:` | `/mnt/ur0/` | Internal system storage (available on all consoles, fallback for `alpine.img`). |
+> | **Sony Memory Card** | `xmc0:` / `uma0:` | *(not accessible)* | Proprietary MSIF hardware not accessible in Linux; not used or needed. |
 >
-> **In short:** The Sony Memory Card is only used during the boot handover. Once Linux is running, it is not accessible. The `alpine.img` package container (and all your data) is stored on your **SD2Vita card** at `/mnt/ux0/alpine.img`.
->
-> If you only have a Sony Memory Card and no SD2Vita adapter, alpine.img falls back to `/mnt/ur0/alpine.img` on internal eMMC storage.
+> **In short:** Linux boot files and your `alpine.img` package container live directly on your **SD2Vita card** (`/mnt/ux0/`) or **internal storage** (`/mnt/ur0/`). An official Sony Memory Card is not required at all.
 
 ### Understanding the Isolated Environment
 The Alpine Linux environment runs in an **isolated chroot container** (`/mnt/alpine`):
@@ -405,7 +451,7 @@ alpine-chroot --size 4G
 # Or recreate an existing image at a new size (WARNING: this deletes all installed packages)
 alpine-chroot --recreate --size 4G
 ```
-The image is stored at `/mnt/ux0/alpine.img`. Use `df -h /mnt/alpine` inside the chroot to see available space.
+The image is stored at `/mnt/ux0/alpine.img` (or `/mnt/ur0/alpine.img` if using internal storage). Before allocating space, `alpine-chroot` automatically verifies that your storage device has sufficient free space to accommodate the requested image size plus a 32 MB safety buffer, preventing disk exhaustion or corrupted partial images. Use `df -h /mnt/alpine` inside the chroot to see available space.
 
 ### Running Commands from the Base Host
 If you want to execute an Alpine-installed program directly from the base prompt without opening an interactive shell:
@@ -578,39 +624,79 @@ To exit the graphical desktop session:
 
 `alpine-desktop` will cleanly shut down X11, restore `vita-input-mapper` to standard console terminal mode, unmount bind mounts, and return you to the command prompt.
 
+### Booting Directly into Desktop on Startup
+If you use LinuxOnVita primarily as a portable handheld computer, you can configure the system to boot straight into the IceWM graphical desktop environment on power-on:
+
+* **Enable Autostart:**
+  ```bash
+  vita-autostart enable
+  # or
+  alpine-desktop --autostart on
+  ```
+* **Disable Autostart (return to console boot):**
+  ```bash
+  vita-autostart disable
+  # or
+  alpine-desktop --autostart off
+  ```
+* **Check Status:**
+  ```bash
+  vita-autostart status
+  # or
+  alpine-desktop --status
+  ```
+* **From the Graphical Desktop:**
+  Open the IceWM Start Menu and select **Settings** -> **Toggle Boot to Desktop** (or launch from the Applications menu).
+
+**Built-in Failsafe & Exit Protection:**
+When desktop autostart is active, the system displays a 3-second countdown before launching X11:
+```text
+========================================================
+ LinuxOnVita: Booting directly into Alpine Desktop...   
+========================================================
+ Starting desktop in 3 seconds...                       
+ (Press any key to cancel and stay in console shell)    
+========================================================
+```
+* **Bypass Autostart:** Press any key or button during the 3-second countdown to cancel autostart and enter the `root@vita:~#` shell.
+* **Clean Log Out:** Selecting **Log Out** from the IceWM Start Menu cleanly shuts down the desktop and drops you into the console shell. A session-level guard prevents desktop loop respawns, allowing you to work in the terminal for the remainder of your session.
+
 ---
 
 ## 7. Managing Files & Storage
 
-### The Two-Storage Architecture
+### Storage Architecture & Devices
 
-LinuxOnVita uses two physically separate storage devices with distinct roles:
+LinuxOnVita installs and runs directly from standard storage devices:
 
-**Sony Memory Card (Boot Device - `xmc0:` / `uma0:` in VitaOS)**
-- Holds the Linux boot files: `zImage` (kernel), device tree blobs (`vita.dtb`), and the baremetal loaders.
-- These files are written by the LinuxOnVita app during installation.
-- **Once Linux has booted, the Sony Memory Card is NOT accessible.** The baremetal loader uses Sony's proprietary MSIF hardware controller to read the kernel, then hands off to Linux - which has no runtime MSIF driver.
-- You cannot read from or write to your Sony Memory Card while Linux is running.
+**SD2Vita / Game Card Adapter (`ux0:` in VitaOS)**
+- Primary storage for Linux boot files (`ux0:linux/`), `alpine.img`, swapfiles, games, and user data.
+- Mounted automatically at `/mnt/ux0/` in Linux.
+- Recommended for the best performance and storage capacity.
 
-**SD2Vita / Game Card Adapter or Internal eMMC (Runtime Storage)**
-- This is where all your files, packages, and data live while Linux is running.
-- Mounted at `/mnt/ux0/` (SD2Vita) or `/mnt/ur0/` (internal eMMC).
-- The `alpine.img` package container, DOOM WADs, swapfiles, and any files you create all go here.
+**Internal eMMC / NAND Storage (`ur0:` in VitaOS)**
+- Built-in internal system storage present on all PS Vita consoles.
+- Mounted automatically at `/mnt/ur0/` in Linux.
+- Supports standalone installation without an SD2Vita adapter or memory card, or acts as fallback storage.
+
+**Sony Memory Card Note (`xmc0:` / `uma0:` in VitaOS)**
+- An official Sony memory card is **not required**.
+- If a Sony memory card is inserted, Linux cannot detect or use it because Linux does not have a proprietary MSIF hardware driver.
 
 ```
 Storage Device      VitaOS Name      Linux Path         Role
 ------------------  ---------------  -----------------  ---------------------------
-Sony Memory Card    xmc0: / uma0:    (not accessible)   Boot files only
-SD2Vita Adapter     ux0:             /mnt/ux0/          Runtime storage + alpine.img
-Internal eMMC       ur0:             /mnt/ur0/          Fallback storage
+SD2Vita Adapter     ux0:             /mnt/ux0/          Boot files, runtime storage, alpine.img
+Internal eMMC       ur0:             /mnt/ur0/          Internal boot files or fallback storage
+Sony Memory Card    xmc0: / uma0:    (not accessible)   Not detected or accessible in Linux
 ```
 
 LinuxOnVita automatically detects and mounts your runtime storage partitions:
 
 | Path in Linux | Partition Type | Description |
 | :--- | :--- | :--- |
-| `/mnt/ux0/` | SD2Vita adapter or memory card | Main storage - alpine.img, games, DOOM WADs, swapfiles |
-| `/mnt/ur0/` | Internal eMMC | Internal storage fallback |
+| `/mnt/ux0/` | SD2Vita adapter | Main storage: boot files, alpine.img, games, DOOM WADs, swapfiles |
+| `/mnt/ur0/` | Internal eMMC | Internal storage fallback or standalone internal installation |
 | `/mnt/alpine/` | Ext4 loopback (inside alpine.img) | Alpine Linux persistent container filesystem |
 
 ### Sharing Files Between VitaOS and Linux
@@ -634,8 +720,10 @@ To safeguard VitaOS database integrity and protect SD card flash controllers aga
 
 ## 8. Frequently Asked Questions & Troubleshooting
 
-### Why is an official Sony memory card required?
-The baremetal loader (`payload.bin`) executes in the early boot stage before Linux or VitaOS drivers are running. It uses Sony's proprietary memory card hardware controller (MSIF). It cannot read from SD2Vita game card adapters or internal eMMC memory.
+### Do I need an official Sony memory card?
+No! Starting with version 1.4.0, LinuxOnVita features in-memory DRAM pre-staging. The app loads the Linux kernel (`zImage`) and Device Tree into physical DRAM before jumping to the baremetal loader, allowing Linux to boot directly from SD2Vita (`ux0:`) or internal system storage (`ur0:`).
+
+An official Sony memory card is completely optional. If you do have a Sony card inserted, note that Linux cannot detect or access it at runtime because Linux does not have a proprietary MSIF driver.
 
 ### How do I exit DOOM back to the command prompt?
 Press **START + SELECT** simultaneously from any gameplay or menu screen. DOOM will exit cleanly and restore your terminal cursor and keyboard.
@@ -649,32 +737,32 @@ Run `vita-swap create 512M` to create an extra 512 MB swapfile on your SD card. 
 ### How do I return to VitaOS?
 Simply type `reboot` and press Enter. Your console will perform a cold restart straight into official VitaOS.
 
-### Why does Linux only show 1GB of storage when I have an 8GB memory card?
+### Why does df -h only show 1GB inside the Alpine environment?
 
-This is a very common point of confusion because LinuxOnVita uses **two separate storage devices** with different roles.
+When inside the Alpine Linux chroot (`alpine-chroot enter`), `df -h` reports the filesystem size of `/` as **1GB**.
 
-Your **Sony Memory Card** (8GB in your case) is used **only for booting** - it holds the Linux kernel, device tree, and loader files. Once Linux has finished booting, the Sony Memory Card is **not accessible at runtime**. Linux has no driver for Sony's proprietary MSIF memory card controller.
+This is because `alpine.img` is a fixed-size ext4 loopback image container stored on your SD2Vita card (`/mnt/ux0/alpine.img`) or internal storage (`/mnt/ur0/alpine.img`). By default, it is created with a size of 1GB so that initial setup is fast and takes minimal space.
 
-The **1GB** you see inside Linux is `alpine.img` - a fixed-size ext4 container stored on your **SD2Vita game card adapter** at `/mnt/ux0/alpine.img`. It defaults to 1GB when first created. It is completely separate from your Sony Memory Card and its size is not related to it.
-
-If you have a large SD2Vita card and want more space for packages, you can grow the alpine container:
+If you have plenty of free space on your host storage and want more room for packages, you can resize or recreate the alpine container to a larger size:
 
 ```bash
-# Check free space on your SD card first
+# Check free space on your host storage first
 df -h /mnt/ux0
 
-# Recreate alpine.img at 4GB (WARNING: deletes all installed packages)
+# Recreate alpine.img at 4GB (WARNING: deletes all installed packages in the container)
 alpine-chroot --recreate --size 4G
 ```
 
-To summarise:
+To summarise storage paths:
 
-| What you see | Where it lives | Size |
+| Storage Path | Location | Description |
 | :--- | :--- | :--- |
-| Sony Memory Card | `xmc0:` / `uma0:` | Your card size (e.g. 8GB) - boot files only, not accessible in Linux |
-| SD2Vita / Game Card | `/mnt/ux0/` | Your microSD card size - this is your runtime storage |
-| `alpine.img` container | `/mnt/ux0/alpine.img` on SD2Vita | 1GB by default, resizable with `--size` |
+| `/mnt/ux0/` | SD2Vita microSD | Host storage for kernel, files, swapfiles, and alpine.img |
+| `/mnt/ur0/` | Internal eMMC | Internal storage fallback or standalone install |
+| `/` (inside chroot) | `/mnt/ux0/alpine.img` | Alpine Linux container (1GB default, resizable) |
 
+### Can I use VPNs and mesh networking (Tailscale / ZeroTier / WireGuard)?
+Yes! In version 1.4.0, LinuxOnVita builds `CONFIG_TUN` (Universal TUN/TAP device driver) and `CONFIG_WIREGUARD` directly into the kernel. The device node `/dev/net/tun` is created automatically on boot. Inside Alpine Linux (`alpine-chroot`), you can install Tailscale (`apk add tailscale`) or WireGuard tools (`apk add wireguard-tools`) to connect your Vita to your mesh networks. You can also verify TUN functionality using the built-in `vita-tun` tool (`vita-tun add tun0`, `vita-tun del tun0`).
 
 ---
 

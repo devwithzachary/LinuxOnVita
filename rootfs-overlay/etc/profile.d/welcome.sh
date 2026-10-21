@@ -39,6 +39,7 @@ if [ -t 0 ]; then
     echo "   Useful Commands:"
     echo "     - vita-wifi        : Scan, connect, and manage Wi-Fi networks"
     echo "     - vita-storage     : Manage storage write protection (ro / rw)"
+    echo "     - vita-autostart   : Configure direct boot into desktop (on / off)"
     echo "     - vita-diagnostics : Gather logs & troubleshoot Wi-Fi / SD cards"
     echo "     - alpine-desktop   : Launch IceWM graphical desktop with mouse emulation"
     echo "     - alpine-chroot    : Enter Alpine Linux with 'apk' (isolated container)"

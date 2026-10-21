@@ -55,6 +55,11 @@ start)
         chmod 600 "$SWAP_FILE" 2>/dev/null || true
         swapon -p 10 "$SWAP_FILE" >/dev/null 2>&1 || true
     fi
+
+    # Ensure /dev/net/tun character device exists for VPN and mesh networking (Tailscale, WireGuard, ZeroTier)
+    mkdir -p /dev/net
+    [ -c /dev/net/tun ] || mknod /dev/net/tun c 10 200 2>/dev/null || true
+    chmod 666 /dev/net/tun 2>/dev/null || true
     ;;
 stop)
     sync 2>/dev/null || true

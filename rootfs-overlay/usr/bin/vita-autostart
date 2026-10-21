@@ -1,0 +1,187 @@
+#!/bin/sh
+# vita-autostart: PlayStation Vita Boot & Desktop Autostart Utility
+# Manages persistent preference to boot directly into Alpine Desktop.
+
+CONFIG_UX0="/mnt/ux0/linux/desktop_autostart"
+CONFIG_UR0="/mnt/ur0/linux/desktop_autostart"
+CONFIG_RAM="/etc/desktop_autostart"
+
+is_autostart_enabled() {
+    [ -f "$CONFIG_UX0" ] && return 0
+    [ -f "$CONFIG_UR0" ] && return 0
+    [ -f /mnt/ux0/data/LinuxOnVita/desktop_autostart ] && return 0
+    [ -f /mnt/ur0/data/LinuxOnVita/desktop_autostart ] && return 0
+    [ -f "$CONFIG_RAM" ] && return 0
+    return 1
+}
+
+get_active_target() {
+    if grep -qs ' /mnt/ux0 ' /proc/mounts; then
+        echo "/mnt/ux0"
+    elif grep -qs ' /mnt/ur0 ' /proc/mounts; then
+        echo "/mnt/ur0"
+    else
+        echo ""
+    fi
+}
+
+enable_autostart() {
+    TARGET_DIR=$(get_active_target)
+    if [ -z "$TARGET_DIR" ]; then
+        echo "[!] No persistent storage mounted (/mnt/ux0 or /mnt/ur0)."
+        echo "    Setting autostart in RAM for current session only."
+        touch "$CONFIG_RAM"
+        return 0
+    fi
+
+    TARGET_MOUNT=$(basename "$TARGET_DIR")
+    CONF_FILE="${TARGET_DIR}/linux/desktop_autostart"
+    RO_ELEVATED=0
+
+    if command -v vita-storage >/dev/null 2>&1; then
+        if vita-storage is-ro "$TARGET_MOUNT" 2>/dev/null; then
+            vita-storage rw "$TARGET_MOUNT" -q 2>/dev/null && RO_ELEVATED=1
+        fi
+    fi
+
+    mkdir -p "${TARGET_DIR}/linux" 2>/dev/null
+    touch "$CONF_FILE" 2>/dev/null
+    touch "$CONFIG_RAM" 2>/dev/null
+
+    if [ $RO_ELEVATED -eq 1 ] && command -v vita-storage >/dev/null 2>&1; then
+        sync
+        vita-storage ro "$TARGET_MOUNT" -q 2>/dev/null || true
+    fi
+
+    if [ -f "$CONF_FILE" ]; then
+        echo "[OK] Desktop autostart enabled!"
+        echo "     LinuxOnVita will boot directly into Alpine Desktop on startup."
+        echo "     Config saved to: ${CONF_FILE}"
+        if [ -n "$DISPLAY" ] && command -v yad >/dev/null 2>&1; then
+            yad --info --title="Desktop Autostart" \
+                --window-icon="preferences-desktop" \
+                --text="Desktop autostart is now ENABLED.\nLinuxOnVita will boot directly into desktop on startup." \
+                --button="OK:0" --timeout=3 --center 2>/dev/null &
+        fi
+        return 0
+    else
+        echo "[Error] Failed to write autostart config to ${CONF_FILE}."
+        return 1
+    fi
+}
+
+disable_autostart() {
+    RO_ELEVATED_UX0=0
+    RO_ELEVATED_UR0=0
+
+    if command -v vita-storage >/dev/null 2>&1; then
+        if grep -qs ' /mnt/ux0 ' /proc/mounts && vita-storage is-ro ux0 2>/dev/null; then
+            vita-storage rw ux0 -q 2>/dev/null && RO_ELEVATED_UX0=1
+        fi
+        if grep -qs ' /mnt/ur0 ' /proc/mounts && vita-storage is-ro ur0 2>/dev/null; then
+            vita-storage rw ur0 -q 2>/dev/null && RO_ELEVATED_UR0=1
+        fi
+    fi
+
+    rm -f "$CONFIG_UX0" "$CONFIG_UR0" "$CONFIG_RAM" \
+          /mnt/ux0/data/LinuxOnVita/desktop_autostart \
+          /mnt/ur0/data/LinuxOnVita/desktop_autostart 2>/dev/null
+
+    sync
+
+    if command -v vita-storage >/dev/null 2>&1; then
+        [ $RO_ELEVATED_UX0 -eq 1 ] && vita-storage ro ux0 -q 2>/dev/null || true
+        [ $RO_ELEVATED_UR0 -eq 1 ] && vita-storage ro ur0 -q 2>/dev/null || true
+    fi
+
+    echo "[OK] Desktop autostart disabled."
+    echo "     LinuxOnVita will boot into standard console shell (root@vita:~#)."
+    if [ -n "$DISPLAY" ] && command -v yad >/dev/null 2>&1; then
+        yad --info --title="Desktop Autostart" \
+            --window-icon="preferences-desktop" \
+            --text="Desktop autostart is now DISABLED.\nLinuxOnVita will boot into console shell." \
+            --button="OK:0" --timeout=3 --center 2>/dev/null &
+    fi
+    return 0
+}
+
+toggle_autostart() {
+    if is_autostart_enabled; then
+        disable_autostart
+    else
+        enable_autostart
+    fi
+}
+
+show_status() {
+    echo "========================================================="
+    echo " LinuxOnVita Desktop Autostart Status                    "
+    echo "========================================================="
+    if is_autostart_enabled; then
+        echo " Status:   ENABLED"
+        echo " Action:   Console will boot directly into Alpine Desktop (IceWM)"
+        for c in "$CONFIG_UX0" "$CONFIG_UR0" "$CONFIG_RAM"; do
+            [ -f "$c" ] && echo " Found:    $c"
+        done
+    else
+        echo " Status:   DISABLED"
+        echo " Action:   Console boots into standard shell (root@vita:~#)"
+    fi
+    echo ""
+    echo " Commands:"
+    echo "   vita-autostart enable   - Boot straight into desktop"
+    echo "   vita-autostart disable  - Boot into console shell"
+    echo "   vita-autostart toggle   - Toggle current state"
+    echo "========================================================="
+}
+
+show_help() {
+    cat << 'EOF'
+Usage: vita-autostart [COMMAND]
+       alpine-desktop --autostart [on|off|status]
+
+Configure whether LinuxOnVita boots directly into Alpine Desktop or console shell.
+
+Commands:
+  status        Show current autostart status (default)
+  enable, on    Enable direct boot into Alpine Desktop
+  disable, off  Disable autostart (boot into console terminal)
+  toggle        Toggle autostart between enabled and disabled
+  check         Silent check (exits 0 if enabled, 1 if disabled)
+  help, -h      Show this help message
+
+Examples:
+  vita-autostart enable     # Boot straight into desktop on startup
+  vita-autostart disable    # Boot to root@vita:~# console shell
+  vita-autostart status     # Check current boot preference
+EOF
+    exit 0
+}
+
+case "$1" in
+    check)
+        is_autostart_enabled && exit 0 || exit 1
+        ;;
+    enable|on|1)
+        enable_autostart
+        ;;
+    disable|off|0)
+        disable_autostart
+        ;;
+    toggle)
+        toggle_autostart
+        ;;
+    status)
+        show_status
+        ;;
+    -h|--help|help)
+        show_help
+        ;;
+    "")
+        show_status
+        ;;
+    *)
+        echo "Unknown command: $1 (run 'vita-autostart help' for usage)"
+        exit 1
+        ;;
+esac

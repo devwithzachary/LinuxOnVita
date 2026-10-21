@@ -3,6 +3,75 @@
 All notable changes to LinuxOnVita are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) conventions.
 
+## [v1.4.0] - In Development
+
+### Hardware & Kernel Architecture
+- **Full Quad-Core SMP Enablement (4 Cores Active):**
+  - Resolved secondary CPU boot failure where CPU 1 and CPU 3 failed to come online during Linux SMP initialization (leaving only CPU 0 and CPU 2 active).
+  - Fixed stack pointer collision in `vita-baremetal-linux-loader` `start.s`: stack pointer was initialized to low physical memory (`0x00008000`) instead of the ARM scratchpad (`0x1F007E00`), corrupting CPU registers and colliding with the secondary core mailbox table.
+  - Initialized secondary CPU mailbox jump addresses (`0x1F007F00`) to zero in `cpu123_wait()` and `main()` with memory barriers (`dsb` / `isb`), preventing secondary cores from executing stale SRAM pointers on spurious `wfe` wakeups.
+  - Eliminated the 2-second kernel boot timeout penalty previously caused by CPU 1 and CPU 3 failing to respond to `smp_boot_secondary()`. All 4 Cortex-A9 cores now boot cleanly into SMP mode with 1152 BogoMIPS total compute power.
+- **Sony Memory Card Independence (In-Memory Kernel Pre-Staging):**
+  - Eliminated the mandatory requirement for an official, proprietary Sony PlayStation Vita memory card (MSIF) to boot Linux.
+  - Implemented in-memory DRAM pre-staging in `baremetal-loader.skprx`: while running under VitaOS, the loader reads `zImage` (23MB) and the hardware-specific Device Tree blob into physically contiguous RAM before initiating the Syscon soft reset.
+  - Enabled multi-pool contiguous memory allocation supporting User Main (`0x0C80D060`), CDRAM (`0x40408006`), and Kernel Root partitions with 1MB chunked reading for reliability.
+  - Added scratchpad handover structure at `0x1F007E80` (`magic: 0x564C4E58` / "VNLX") allowing `vita-baremetal-linux-loader` to detect pre-staged assets and bypass the MSIF hardware authentication loop.
+  - Enabled pure SD2Vita (Game Card slot) boot configurations for consoles without official Sony memory cards.
+  - Added support for internal system storage (`ur0:`) for slim (PCH-2000) and PlayStation TV (VTE-1000) consoles.
+- **Virtual Network Tunnel & Mesh Networking Support (`CONFIG_TUN` & WireGuard):**
+  - Enabled built-in Universal TUN/TAP driver (`CONFIG_TUN=y`) in the official kernel configuration for virtual network interfaces.
+  - Enabled native WireGuard VPN protocol support (`CONFIG_WIREGUARD=y`) in the kernel.
+  - Enabled policy routing and firewalling prerequisites (`CONFIG_IP_ADVANCED_ROUTER=y`, `CONFIG_IP_MULTIPLE_TABLES=y`, `CONFIG_NETFILTER=y`, `CONFIG_IP_NF_IPTABLES=y`, `CONFIG_IP_NF_NAT=y`, and `CONFIG_IP_NF_TARGET_MASQUERADE=y`) allowing Tailscale, ZeroTier, and WireGuard to establish overlay networks.
+  - Enabled kernel configuration symbols in `/proc/config.gz` (`CONFIG_IKCONFIG=y`, `CONFIG_IKCONFIG_PROC=y`) for live runtime inspection.
+  - Added automatic `/dev/net/tun` character device node creation (`c 10 200`) in `S05vita` with accessible permissions (`0666`).
+  - Added native `vita-tun` command-line utility in `/usr/bin/vita-tun` for rapid creation, status querying, and deletion of persistent TUN interfaces under BusyBox.
+- **Baremetal Bootloader Optimization:**
+  - Bypassed MSIF card insertion polling, hardware authentication, and FAT mounting during pre-staged boot, reducing baremetal boot time by 2 to 3 seconds.
+  - Added safe, word-aligned in-memory relocation (`safe_memmove`) for `zImage` (`0x44000000`) and DTB (`0x4A000000`) with cache flushing and memory barriers.
+  - Maintained complete backward compatibility: automatically falls back to legacy MSIF memory card loading if pre-staging is unavailable.
+
+### Bootstrapper & Installer App (VPK)
+- **Touchscreen Graphical User Interface (GUI) Overhaul:**
+  - Replaced the legacy terminal/CLI debug screen with a modern, touch-driven handheld graphical user interface.
+  - Implemented 2D hardware-accelerated canvas rendering on `/dev/fb0` (CDRAM) with double-buffered page flipping and display VSync synchronization for tear-free 60 FPS presentation.
+  - Added full touchscreen interaction: tap any partition card to select target storage, and tap large, finger-friendly action buttons to boot, mount, reinstall, or inspect logs.
+  - Preserved complete physical gamepad button shortcut interoperability: Cross (✕) triggers primary action, Square (□) launches debug boot, Triangle (△) copies boot files, Select views logs, and D-Pad cycles partitions.
+  - Added graphical modal progress dialogs for file installation and partition mounting with real-time percentage progress bars and tap-to-dismiss feedback.
+  - Redesigned boot debug log viewer with full-screen presentation, touch scrolling controls, and color-coded status syntax highlighting.
+- **Streamlined Storage Hierarchy & Drive Recommendations:**
+  - Designed an uncluttered storage partition browser that displays only active, mounted drives (`ux0:`, `ur0:`) by default in spacious, easy-to-read cards.
+  - Added an interactive `[+] SHOW ALL STORAGE DRIVES` toggle card to expand unmounted and system partitions on demand.
+  - Added explicit visual recommendation badges: marks `ux0:` with `[RECOMMENDED (SD2VITA)]` (primary recommendation) and `ur0:` with `[RECOMMENDED (INTERNAL)]` (secondary recommendation).
+  - Multi-tier action button cards cleanly presenting controller shortcut badges (`CROSS`, `SQUARE`, `TRIANGLE`, `SELECT`), primary action labels, and descriptive subtext without text overlap.
+- **Multi-Mount Selection & Internal Storage Support:**
+  - Added `ur0:` (internal NAND / eMMC) to partition selection list alongside `ux0:`, `uma0:`, `imc0:`, and `xmc0:`.
+  - Re-ordered partition defaults so `ux0:` (primary SD2Vita / storage) and `ur0:` (internal storage) are prioritized.
+  - Passed target mount parameter directly to `baremetal-loader.skprx` via `tai_module_args_t`.
+  - Updated pre-flight validation checks and LiveArea status notices to confirm Memory Card Independence is active.
+  - Bumped application version to `v1.4.0` (`01.40`).
+
+### Rootfs & System Utilities
+- **Direct-to-Desktop Boot Preference (`vita-autostart` & `alpine-desktop`):**
+  - Added support for booting directly into the IceWM graphical desktop on console startup.
+  - Implemented `/usr/bin/vita-autostart` CLI tool and `alpine-desktop --autostart [on|off|status]` commands to manage persistent autostart configuration (`<mount>/linux/desktop_autostart`).
+  - Added an interactive prompt during initial `alpine-desktop` package installation asking if the user wishes to boot straight into desktop.
+  - Added "Toggle Boot to Desktop" shortcut in the IceWM Settings menu and application launcher.
+  - Hardened `vita-login` on `tty1` with a 3-second bypass countdown (press any key to stay in console shell) and a session-level guard preventing desktop respawn loops when logging out.
+- **Read-Only Storage Safe Wi-Fi Credential Saving (`vita-wifi`):**
+  - Integrated `vita-storage` elevation into `vita-wifi connect` so configuring Wi-Fi persists to storage even when `/mnt/ux0` and `/mnt/ur0` are mounted read-only by default.
+  - Temporarily elevates the target storage partition to read-write mode, writes `wpa_supplicant.conf`, flushes file buffers, and safely locks storage back to read-only protection.
+  - Added persistent Wi-Fi search and save support for internal system storage (`/mnt/ur0/linux/wpa_supplicant.conf`) across `vita-wifi`, `S45wifi`, and `vita-diagnostics`.
+- **Console Touch Keyboard Reshow Button (`fbkeyboard`):**
+  - Added a visible, high-contrast `[KEYBOARD]` button at the bottom-right corner of the screen when the touch keyboard is hidden.
+  - Adjusted virtual console geometry when hidden to 32 rows (`120x32`), preserving the bottom 32 pixels (`y = 512..544`) from terminal scrolling and cursor output.
+  - Added instant visual press feedback with a 40ms button highlight and immediate keyboard restoration upon touch down.
+  - Enhanced poll event loop with a 250ms periodic refresh and `SIGCONT` resume handler ensuring the reshow button remains persistently visible and responsive across console text updates.
+- **Storage Free Space Validation (`alpine-chroot` & `alpine-desktop`):**
+  - Added pre-allocation disk space inspection using POSIX `df` before creating persistent `alpine.img` ext4 containers.
+  - Verifies target storage (`ux0:` or `ur0:`) has sufficient free space for the requested container size plus a 32 MB safety buffer, preventing filesystem exhaustion and broken partial image allocations.
+  - Added automatic cleanup of partially-allocated images if creation is interrupted or fails.
+  - Added flexible unit parsing supporting `G`, `GB`, `M`, and `MB` container size arguments (e.g. `2G`, `2GB`, `512M`, `512MB`) with minimum size validation.
+
 ---
 
 ## [v1.3.1] - 2026-09-30
