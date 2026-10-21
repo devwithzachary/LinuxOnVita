@@ -13,7 +13,7 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
 | :--- | :--- | :--- |
 | **[v1.4.0]** | **Core Architecture, Storage Independence & Quad-Core SMP** | 4-Core SMP performance, Sony card independence, persistent read-only storage safety, `CONFIG_TUN` mesh networking, and CLI keyboard reshow button. |
 | **[v1.5.0]** | **Handheld Ergonomics, Screen Protection & First-Boot Setup** | First-boot onboarding wizard (`vita-setup`), display sleep and auto-dimming (`vita-powerd`), readable console fonts (`vita-font`), handheld TUI control center (`vita-config`), and gamepad input mapping. |
-| **[v1.6.0]** | **Wireless Freedom, Web Management & Performance Controls** | Web-based wireless file transfer portal (`http://vita.local:8080`), CPU overclocking/underclocking (`vita-cpu`: 111-444 MHz), and Bluetooth peripheral pairing (`bluez`). |
+| **[v1.6.0]** | **Wireless Freedom, Web Management & Performance Controls** | Web-based wireless file transfer portal (`http://vita.local:8080`), CPU overclocking/underclocking (`vita-cpu`: 111-444 MHz), Bluetooth peripheral pairing (`bluez`), and in-app GitHub update checker. |
 | **[v1.7.0]** | **Pocket Sysadmin & Handheld Developer Workstation** | Network Swiss Army knife (`vita-nettools` with Tailscale / ZeroTier / nmap), developer environment (`vita-dev` with Python/C/Git), and remote desktop (VNC/RDP). |
 | **[v1.8.0]** | **Direct Framebuffer Gaming & Fantasy Consoles** | TIC-80 and Pico-8 (Fake-08) fantasy consoles, lightweight SDL framebuffer emulators, ScummVM adventure gaming, and x86 user-mode emulation. |
 | **[v1.9.0+]** | **Advanced Hardware Research & Kernel Power States** | Suspend-to-RAM deep sleep states, DSP hardware video decoding, and SGX543 3D acceleration research. |
@@ -129,6 +129,11 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
   * Intuitive network manager applet for the IceWM desktop system tray.
   * Graphical network scanning, password prompt dialogs, and active signal strength indicators.
   * Automatic background reconnection daemon across network dropouts and roaming.
+
+* **In-App Bootstrapper GitHub Release Update Checker (`LinuxOnVita.vpk`):**
+  * Built-in update notification and one-click VPK download capability directly within the VitaOS handheld installer.
+  * Resilient network backend utilizing a bundled lightweight HTTPS proxy, libcurl wrapper, or custom CA bundle handling to bypass legacy PlayStation Vita firmware SSL/TLS constraints seamlessly.
+  * Real-time download progress modal dialogs with direct file saving to `ux0:data/LinuxOnVita.vpk` for effortless VitaShell installation.
 
 ---
 

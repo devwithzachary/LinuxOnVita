@@ -29,14 +29,17 @@ set(VITA_MKSFOEX_FLAGS "${VITA_MKSFOEX_FLAGS} -d PARENTAL_LEVEL=1")
 add_executable(${PROJECT_NAME}
   main.c
   debugScreenFont.c
+  gui.c
 )
 
 target_link_libraries(${PROJECT_NAME}
   SceCtrl_stub
+  SceTouch_stub
   taihen_stub
   SceDisplay_stub
   SceVshBridge_stub
   SceSysmem_stub
+  SceSysmodule_stub
 )
 
 # Create Vita SELF

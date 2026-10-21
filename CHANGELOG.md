@@ -29,6 +29,18 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Maintained complete backward compatibility: automatically falls back to legacy MSIF memory card loading if pre-staging is unavailable.
 
 ### Bootstrapper & Installer App (VPK)
+- **Touchscreen Graphical User Interface (GUI) Overhaul:**
+  - Replaced the legacy terminal/CLI debug screen with a modern, touch-driven handheld graphical user interface.
+  - Implemented 2D hardware-accelerated canvas rendering on `/dev/fb0` (CDRAM) with double-buffered page flipping and display VSync synchronization for tear-free 60 FPS presentation.
+  - Added full touchscreen interaction: tap any partition card to select target storage, and tap large, finger-friendly action buttons to boot, mount, reinstall, or inspect logs.
+  - Preserved complete physical gamepad button shortcut interoperability: Cross (✕) triggers primary action, Square (□) launches debug boot, Triangle (△) copies boot files, Select views logs, and D-Pad cycles partitions.
+  - Added graphical modal progress dialogs for file installation and partition mounting with real-time percentage progress bars and tap-to-dismiss feedback.
+  - Redesigned boot debug log viewer with full-screen presentation, touch scrolling controls, and color-coded status syntax highlighting.
+- **Streamlined Storage Hierarchy & Drive Recommendations:**
+  - Designed an uncluttered storage partition browser that displays only active, mounted drives (`ux0:`, `ur0:`) by default in spacious, easy-to-read cards.
+  - Added an interactive `[+] SHOW ALL STORAGE DRIVES` toggle card to expand unmounted and system partitions on demand.
+  - Added explicit visual recommendation badges: marks `ux0:` with `[RECOMMENDED (SD2VITA)]` (primary recommendation) and `ur0:` with `[RECOMMENDED (INTERNAL)]` (secondary recommendation).
+  - Multi-tier action button cards cleanly presenting controller shortcut badges (`CROSS`, `SQUARE`, `TRIANGLE`, `SELECT`), primary action labels, and descriptive subtext without text overlap.
 - **Multi-Mount Selection & Internal Storage Support:**
   - Added `ur0:` (internal NAND / eMMC) to partition selection list alongside `ux0:`, `uma0:`, `imc0:`, and `xmc0:`.
   - Re-ordered partition defaults so `ux0:` (primary SD2Vita / storage) and `ur0:` (internal storage) are prioritized.
