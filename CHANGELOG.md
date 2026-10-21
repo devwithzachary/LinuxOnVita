@@ -31,6 +31,13 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Updated pre-flight validation checks and LiveArea status notices to confirm Memory Card Independence is active.
   - Bumped application version to `v1.4.0` (`01.40`).
 
+### Rootfs & System Utilities
+- **Storage Free Space Validation (`alpine-chroot` & `alpine-desktop`):**
+  - Added pre-allocation disk space inspection using POSIX `df` before creating persistent `alpine.img` ext4 containers.
+  - Verifies target storage (`ux0:` or `ur0:`) has sufficient free space for the requested container size plus a 32 MB safety buffer, preventing filesystem exhaustion and broken partial image allocations.
+  - Added automatic cleanup of partially-allocated images if creation is interrupted or fails.
+  - Added flexible unit parsing supporting `G`, `GB`, `M`, and `MB` container size arguments (e.g. `2G`, `2GB`, `512M`, `512MB`) with minimum size validation.
+
 ---
 
 ## [v1.3.1] - 2026-09-30

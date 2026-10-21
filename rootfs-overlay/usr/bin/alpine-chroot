@@ -18,7 +18,7 @@ Usage: alpine-chroot [OPTIONS] [-- COMMAND]
        alpine-chroot run COMMAND
 
 Launch an interactive Alpine Linux environment with 'apk' package manager.
-By default, stores a persistent 1GB ext4 image on your SD card or memory card (ux0).
+By default, stores a persistent 1GB ext4 image on SD2Vita (ux0) or internal storage (ur0).
 
 IMPORTANT ISOLATION NOTICE:
   Alpine Linux runs in an isolated chroot userland (/mnt/alpine). Packages
@@ -183,17 +183,25 @@ if [ $USE_RAM -eq 0 ]; then
     TARGET="${MOUNT_POINT}"
     mkdir -p "${TARGET}"
 
-    # Parse and convert size argument (supports 2G / 2g or direct MB integer)
+    # Parse and convert size argument (supports 2G / 2g / 2GB / 2gb or direct MB integer)
     SIZE_MB=${CUSTOM_SIZE_MB:-$DEFAULT_SIZE_MB}
     case "${SIZE_MB}" in
-        *G|*g)
-            NUM=$(echo "${SIZE_MB}" | tr -d 'Gg')
+        *[gG]|*[gG][bB])
+            NUM=$(echo "${SIZE_MB}" | sed 's/[^0-9]//g')
             SIZE_MB=$((NUM * 1024))
             ;;
-        *M|*m)
-            SIZE_MB=$(echo "${SIZE_MB}" | tr -d 'Mm')
+        *[mM]|*[mM][bB])
+            SIZE_MB=$(echo "${SIZE_MB}" | sed 's/[^0-9]//g')
+            ;;
+        *)
+            SIZE_MB=$(echo "${SIZE_MB}" | sed 's/[^0-9]//g')
             ;;
     esac
+
+    if [ -z "$SIZE_MB" ] || [ "$SIZE_MB" -lt 64 ] 2>/dev/null; then
+        echo "Error: Invalid image size '${CUSTOM_SIZE_MB}'. Must be at least 64MB."
+        exit 1
+    fi
 
     # Temporarily grant write access if image lives on a read-only filesystem
     UX0_WAS_RO=0
@@ -224,6 +232,36 @@ if [ $USE_RAM -eq 0 ]; then
         IMG_DIR=$(dirname "${IMG_FILE}")
         mkdir -p "${IMG_DIR}"
 
+        # Verify sufficient free storage is available before allocating
+        AVAIL_KB=$(df -k -P "${IMG_DIR}" 2>/dev/null | awk 'NR==2 {print $4}')
+        [ -z "$AVAIL_KB" ] && AVAIL_KB=$(df -k "${IMG_DIR}" 2>/dev/null | awk 'NR==2 {print $4}')
+        [ -z "$AVAIL_KB" ] && AVAIL_KB=$(df -k "${IMG_DIR}" 2>/dev/null | awk 'END {print $(NF-2)}')
+        case "$AVAIL_KB" in
+            ''|*[!0-9]*) AVAIL_KB="" ;;
+        esac
+
+        if [ -n "$AVAIL_KB" ]; then
+            AVAIL_MB=$(( AVAIL_KB / 1024 ))
+            # Require at least the requested image size plus 32MB safety headroom
+            NEEDED_MB=$(( SIZE_MB + 32 ))
+            if [ "$AVAIL_MB" -lt "$NEEDED_MB" ]; then
+                echo "Error: Insufficient free storage on ${IMG_DIR}!"
+                echo "       Requested size:    ${SIZE_MB} MB ($((SIZE_MB / 1024)) GB)"
+                echo "       Available storage: ${AVAIL_MB} MB"
+                echo "       Required (min):    ${NEEDED_MB} MB (${SIZE_MB} MB image + 32 MB buffer)"
+                echo ""
+                echo "Tip: Free up storage space on ${IMG_DIR}, specify a smaller container size"
+                echo "     (e.g., 'alpine-chroot --size 512M'), or run in temporary RAM mode"
+                echo "     with 'alpine-chroot --ram'."
+                if [ "${UX0_WAS_RO:-0}" -eq 1 ]; then
+                    vita-storage ro ux0 -q 2>/dev/null || true
+                elif [ "${UX0_WAS_RO:-0}" -eq 2 ]; then
+                    vita-storage ro ur0 -q 2>/dev/null || true
+                fi
+                exit 1
+            fi
+        fi
+
         echo "========================================================="
         echo " Creating Persistent Alpine Linux ext4 Image             "
         echo "========================================================="
@@ -233,6 +271,7 @@ if [ $USE_RAM -eq 0 ]; then
 
         dd if=/dev/zero of="${IMG_FILE}" bs=1M count="${SIZE_MB}" 2>/dev/null || {
             echo "Error: Failed to allocate ${SIZE_MB}MB on ${IMG_DIR}!"
+            rm -f "${IMG_FILE}"
             echo "Falling back to temporary RAM mode (/tmp/alpine)..."
             USE_RAM=1
             TARGET="/tmp/alpine"

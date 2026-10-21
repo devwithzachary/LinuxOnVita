@@ -402,7 +402,7 @@ alpine-chroot --size 4G
 # Or recreate an existing image at a new size (WARNING: this deletes all installed packages)
 alpine-chroot --recreate --size 4G
 ```
-The image is stored at `/mnt/ux0/alpine.img`. Use `df -h /mnt/alpine` inside the chroot to see available space.
+The image is stored at `/mnt/ux0/alpine.img` (or `/mnt/ur0/alpine.img` if using internal storage). Before allocating space, `alpine-chroot` automatically verifies that your storage device has sufficient free space to accommodate the requested image size plus a 32 MB safety buffer, preventing disk exhaustion or corrupted partial images. Use `df -h /mnt/alpine` inside the chroot to see available space.
 
 ### Running Commands from the Base Host
 If you want to execute an Alpine-installed program directly from the base prompt without opening an interactive shell:
