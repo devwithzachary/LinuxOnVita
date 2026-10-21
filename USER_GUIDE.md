@@ -126,7 +126,7 @@ If Linux fails to boot, freezes, or the screen goes dark without reaching the sh
 LinuxOnVita transforms your handheld console into a self-contained computer without requiring any external cables or keyboards.
 
 ### On-Screen Touch Keyboard (`fbkeyboard`)
-* **Show / Hide:** Tap the lower third of the touchscreen to bring up the on-screen keyboard. Tap **[Hide]** in the bottom right corner to dismiss it for an unobstructed view of your terminal.
+* **Show / Hide:** Tap **[Hide]** in the bottom-right corner to dismiss the keyboard for an unobstructed view of your terminal. When hidden, a visible **[KEYBOARD]** button appears at the bottom-right corner; tap it at any time to instantly restore the on-screen keyboard.
 * **Letter / Number Switching:** Tap **[?123]** to access numbers and symbols, or **[ABC]** to return to letters.
 * **Special Keys:** Includes dedicated buttons for **Tab**, **Esc**, **Ctrl**, and **Enter**.
 

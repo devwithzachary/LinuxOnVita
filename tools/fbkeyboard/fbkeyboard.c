@@ -369,12 +369,54 @@ static void draw_keyboard(void) {
     }
 }
 
+#define RESHOW_BTN_W 100
+#define RESHOW_BTN_H 26
+#define RESHOW_BTN_X (screen_w - RESHOW_BTN_W - 6)
+#define RESHOW_BTN_Y (screen_h - RESHOW_BTN_H - 3)
+
+static void draw_reshow_button(int pressed) {
+    int bx = RESHOW_BTN_X;
+    int by = RESHOW_BTN_Y;
+    int bw = RESHOW_BTN_W;
+    int bh = RESHOW_BTN_H;
+
+    uint32_t bg = pressed ? COLOR_KEY_PRESS : COLOR_SPECIAL;
+    uint32_t border = pressed ? COLOR_SPECIAL : COLOR_KEY_BORDER;
+    uint32_t text_color = pressed ? COLOR_TEXT : 0xFF11111B;
+
+    // Button body
+    draw_rect(bx + 1, by + 1, bw - 2, bh - 2, bg);
+
+    // Border
+    draw_line_h(bx, by, bw, border);
+    draw_line_h(bx, by + bh - 1, bw, border);
+    for (int j = by; j < by + bh; j++) {
+        if (j >= 0 && j < screen_h) {
+            if (bx >= 0 && bx < screen_w) fb_mem[j * screen_w + bx] = border;
+            if (bx + bw - 1 >= 0 && bx + bw - 1 < screen_w)
+                fb_mem[j * screen_w + (bx + bw - 1)] = border;
+        }
+    }
+
+    // Centered label "[KEYBOARD]"
+    const char *label = "[KEYBOARD]";
+    int text_len = strlen(label);
+    int tx = bx + (bw - text_len * 8) / 2;
+    int ty = by + (bh - 16) / 2;
+    draw_string(tx, ty, label, text_color);
+}
+
+static int is_reshow_touch(int x, int y) {
+    return (x >= RESHOW_BTN_X - 10 && x <= screen_w &&
+            y >= RESHOW_BTN_Y - 10 && y <= screen_h);
+}
+
 static void apply_console_geometry(int active) {
     if (tty_fd < 0) return;
 
     // When keyboard is active: reserve bottom 150px (rows 0-23 for terminal text)
-    // When hidden: restore full 34 rows
-    unsigned short rows = active ? 24 : 34;
+    // When hidden: reserve bottom 32px for [KEYBOARD] button (rows 0-31 for terminal text)
+    unsigned short rows = active ? 24 : 32;
 
     struct vt_sizes vts;
     vts.v_rows = rows;
@@ -386,7 +428,7 @@ static void apply_console_geometry(int active) {
     ws.ws_row = rows;
     ws.ws_col = 120;
     ws.ws_xpixel = screen_w;
-    ws.ws_ypixel = active ? (screen_h - KB_HEIGHT) : screen_h;
+    ws.ws_ypixel = active ? (screen_h - KB_HEIGHT) : (screen_h - 32);
     ioctl(tty_fd, TIOCSWINSZ, &ws);
 }
 
@@ -578,11 +620,14 @@ int main(int argc, char **argv) {
             active_key = NULL;
             if (keyboard_visible) {
                 draw_keyboard();
+            } else {
+                draw_reshow_button(0);
             }
             continue;
         }
 
-        int poll_res = poll(&pfd, 1, 1000);
+        int poll_timeout = keyboard_visible ? 1000 : 250;
+        int poll_res = poll(&pfd, 1, poll_timeout);
 
         if (poll_res < 0) {
             if (errno == EINTR) {
@@ -594,6 +639,8 @@ int main(int argc, char **argv) {
                     active_key = NULL;
                     if (keyboard_visible) {
                         draw_keyboard();
+                    } else {
+                        draw_reshow_button(0);
                     }
                 }
                 continue;
@@ -602,6 +649,9 @@ int main(int argc, char **argv) {
         }
 
         if (poll_res == 0) {
+            if (!keyboard_visible) {
+                draw_reshow_button(0);
+            }
             continue;
         }
 
@@ -613,6 +663,8 @@ int main(int argc, char **argv) {
             active_key = NULL;
             if (keyboard_visible) {
                 draw_keyboard();
+            } else {
+                draw_reshow_button(0);
             }
             continue;
         }
@@ -637,8 +689,10 @@ int main(int argc, char **argv) {
                 was_touching = 1;
 
                 if (!keyboard_visible) {
-                    // Tap on show tab at bottom right unhides keyboard
-                    if (cur_touch_y > screen_h - 30 && cur_touch_x > screen_w - 120) {
+                    // Tap on reshow button at bottom right unhides keyboard
+                    if (is_reshow_touch(cur_touch_x, cur_touch_y)) {
+                        draw_reshow_button(1);
+                        usleep(40000);
                         keyboard_visible = 1;
                         apply_console_geometry(1);
                         init_key_layout();
@@ -671,10 +725,8 @@ int main(int argc, char **argv) {
                         // Hide key
                         keyboard_visible = 0;
                         draw_rect(0, screen_h - KB_HEIGHT, screen_w, KB_HEIGHT, 0x00000000);
-                        // Subtle Show tab
-                        draw_rect(screen_w - 90, screen_h - 22, 90, 22, COLOR_SPECIAL);
-                        draw_string(screen_w - 75, screen_h - 18, "[KB]", 0xFF11111B);
                         apply_console_geometry(0);
+                        draw_reshow_button(0);
                     } else if (active_key->keycode == -98) {
                         // Ctrl+C
                         if (uinput_fd >= 0) {
