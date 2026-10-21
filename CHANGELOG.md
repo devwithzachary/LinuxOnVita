@@ -38,6 +38,10 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Added an interactive prompt during initial `alpine-desktop` package installation asking if the user wishes to boot straight into desktop.
   - Added "Toggle Boot to Desktop" shortcut in the IceWM Settings menu and application launcher.
   - Hardened `vita-login` on `tty1` with a 3-second bypass countdown (press any key to stay in console shell) and a session-level guard preventing desktop respawn loops when logging out.
+- **Read-Only Storage Safe Wi-Fi Credential Saving (`vita-wifi`):**
+  - Integrated `vita-storage` elevation into `vita-wifi connect` so configuring Wi-Fi persists to storage even when `/mnt/ux0` and `/mnt/ur0` are mounted read-only by default.
+  - Temporarily elevates the target storage partition to read-write mode, writes `wpa_supplicant.conf`, flushes file buffers, and safely locks storage back to read-only protection.
+  - Added persistent Wi-Fi search and save support for internal system storage (`/mnt/ur0/linux/wpa_supplicant.conf`) across `vita-wifi`, `S45wifi`, and `vita-diagnostics`.
 - **Storage Free Space Validation (`alpine-chroot` & `alpine-desktop`):**
   - Added pre-allocation disk space inspection using POSIX `df` before creating persistent `alpine.img` ext4 containers.
   - Verifies target storage (`ux0:` or `ur0:`) has sufficient free space for the requested container size plus a 32 MB safety buffer, preventing filesystem exhaustion and broken partial image allocations.

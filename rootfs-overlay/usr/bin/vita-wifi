@@ -67,6 +67,7 @@ ensure_wpa_running() {
         local conf="/etc/wpa_supplicant.conf"
         for candidate in \
             /mnt/ux0/linux/wpa_supplicant.conf \
+            /mnt/ur0/linux/wpa_supplicant.conf \
             /mnt/xmc0/linux/wpa_supplicant.conf \
             /mnt/uma0/linux/wpa_supplicant.conf; do
             if [ -f "$candidate" ]; then
@@ -247,23 +248,47 @@ EOF
     # Save to /etc/wpa_supplicant.conf (RAM)
     cp "$tmp_conf" /etc/wpa_supplicant.conf
 
-    # Save to persistent storage on memory card (ux0, xmc0, uma0)
+    # Save to persistent storage (ux0, ur0, uma0, xmc0)
     local saved_path=""
-    for m in /mnt/ux0 /mnt/xmc0 /mnt/uma0; do
-        if [ -d "$m" ] && touch "$m/.test_rw" 2>/dev/null; then
-            rm -f "$m/.test_rw"
-            mkdir -p "$m/linux"
-            cp "$tmp_conf" "$m/linux/wpa_supplicant.conf"
-            saved_path="$m/linux/wpa_supplicant.conf"
-            break
+    for m in /mnt/ux0 /mnt/ur0 /mnt/uma0 /mnt/xmc0; do
+        if grep -qs " $m " /proc/mounts || [ -d "$m" ]; then
+            local m_name=$(basename "$m")
+            local ro_elevated=0
+
+            # Elevate storage to read-write if currently read-only
+            if command -v vita-storage >/dev/null 2>&1; then
+                if vita-storage is-ro "$m_name" 2>/dev/null; then
+                    vita-storage rw "$m_name" -q 2>/dev/null && ro_elevated=1
+                fi
+            elif grep -E -q " $m [^ ]+ (ro|.*,ro)( |$|,)" /proc/mounts 2>/dev/null; then
+                mount -o remount,rw "$m" 2>/dev/null && ro_elevated=1
+            fi
+
+            mkdir -p "$m/linux" 2>/dev/null
+            if cp "$tmp_conf" "$m/linux/wpa_supplicant.conf" 2>/dev/null; then
+                sync
+                saved_path="$m/linux/wpa_supplicant.conf"
+            fi
+
+            # Safely restore read-only protection
+            if [ $ro_elevated -eq 1 ]; then
+                if command -v vita-storage >/dev/null 2>&1; then
+                    vita-storage ro "$m_name" -q 2>/dev/null || true
+                else
+                    mount -o remount,ro "$m" 2>/dev/null || true
+                fi
+            fi
+
+            [ -n "$saved_path" ] && break
         fi
     done
     rm -f "$tmp_conf"
 
     if [ -n "$saved_path" ]; then
         echo -e "${C_GREEN}[OK] Saved persistent configuration to: $saved_path${C_RESET}"
+        echo -e "${C_GREEN}     (Storage safely restored to read-only protection)${C_RESET}"
     else
-        echo -e "${C_YELLOW}[!] Persistent memory card not writable. Config saved to /etc/wpa_supplicant.conf (RAM).${C_RESET}"
+        echo -e "${C_YELLOW}[!] Persistent storage not writable. Config saved to /etc/wpa_supplicant.conf (RAM only).${C_RESET}"
     fi
 
     echo -e "${C_CYAN}Restarting wireless service on $iface...${C_RESET}"

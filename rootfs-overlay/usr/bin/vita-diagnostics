@@ -462,6 +462,7 @@ fi
 WPA_CONF_FOUND=""
 for conf_path in \
     /mnt/ux0/linux/wpa_supplicant.conf \
+    /mnt/ur0/linux/wpa_supplicant.conf \
     /mnt/xmc0/linux/wpa_supplicant.conf \
     /mnt/uma0/linux/wpa_supplicant.conf \
     /mnt/ur0/wpa_supplicant.conf \
