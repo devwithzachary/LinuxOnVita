@@ -50,18 +50,21 @@ While original proof-of-concept projects proved that modern Linux can boot on th
 
 ## ✨ Features
 
-- **Built-in Touch Keyboard (`fbkeyboard`):** Type directly on the console screen with an on-framebuffer virtual keyboard featuring dual ABC / ?123 layouts, special keys, and a hide toggle.
+- **Full Quad-Core SMP Enablement:** All 4 ARM Cortex-A9 MPCore CPU cores running online simultaneously in full Symmetric Multi-Processing (SMP) mode, delivering 1152 BogoMIPS total compute power.
+- **Sony Memory Card Independence:** Boot Linux directly from SD2Vita (`ux0:`) or internal eMMC storage (`ur0:`) without requiring a proprietary Sony memory card, powered by in-memory kernel pre-staging.
+- **Touchscreen Graphical Bootstrapper (`LinuxOnVita.vpk`):** Modern touch-driven handheld UI with double-buffered tear-free rendering at 60 FPS, smart partition recommendation badges (`ux0:` SD2Vita, `ur0:` internal eMMC), modal progress dialogs, and a full-screen graphical boot log viewer.
+- **Virtual Network Tunnels & Mesh VPNs (`CONFIG_TUN` & WireGuard):** Built-in kernel support for TUN devices and WireGuard, enabling Tailscale, ZeroTier, and secure overlay networks, plus the native `vita-tun` management tool.
+- **Built-in Touch Keyboard (`fbkeyboard`):** Type directly on the console screen with an on-framebuffer virtual keyboard featuring dual ABC / ?123 layouts, special keys, and a persistent bottom-right `[KEYBOARD]` reshow button when hidden.
 - **Physical Gamepad Navigation (`vita-input-mapper`):** Complete console shell navigation using the D-Pad, face buttons, and shoulder triggers synthesized through `/dev/uinput`.
 - **Fixed Controller Logic:** Corrected inverted button mask issues and initialized analog sticks via Syscon for smooth twin-stick controls in games and terminal navigation.
 - **Full Display Brightness:** Patched baremetal bootloaders to initialize displays at 100% brightness on both OLED and LCD models, plus runtime backlight adjustment on PS Vita 2000 via `vita-brightness`.
-- **Interactive On-Device Wi-Fi Manager (`vita-wifi`):** Scan, connect, and switch wireless networks directly on the console with an ASCII signal table. Saves credentials permanently to your memory card without needing to edit config files on a PC.
+- **Interactive On-Device Wi-Fi Manager (`vita-wifi`):** Scan, connect, and switch wireless networks directly on the console with an ASCII signal table. Saves credentials permanently to your storage partition while respecting read-only storage safety.
 - **Fast Boot & OpenSSH:** Boots straight into the Linux terminal. Wi-Fi connects automatically with OpenSSH and mDNS (`vita.local`), ready in ~12 seconds.
-- **Alpine Linux Chroot (`alpine-chroot`):** Run an isolated, persistent Alpine Linux userland on storage with full `apk add` package management.
-- **Turnkey Graphical Desktop & Autostart (`alpine-desktop`, `vita-autostart`):** Run an ultra-lightweight IceWM desktop environment on `/dev/fb0` with analog mouse emulation, touchscreen gestures, bundled apps, and the option to boot directly into the desktop on startup.
+- **Alpine Linux Chroot (`alpine-chroot`):** Run an isolated, persistent Alpine Linux userland on storage with full `apk add` package management and automated space pre-allocation checks.
+- **Turnkey Graphical Desktop & Autostart (`alpine-desktop`, `vita-autostart`):** Run an ultra-lightweight IceWM desktop environment on `/dev/fb0` with analog mouse emulation, touchscreen gestures, bundled apps, and the option to boot directly into the desktop with a 3-second failsafe countdown.
 - **Compressed ZRAM & Memory Safety (`vita-swap`):** Zero-latency LZ4 compressed RAM swap expands usable memory from 512MB to ~768MB-1GB, preventing Out-Of-Memory (OOM) crashes during heavy package installs, Python scripts, or C compilation. Includes physical SD card swapfile auto-mounting.
-- **Storage Auto-Mounting:** Automatically detects and mounts SD2Vita (`/mnt/ux0`), internal memory (`/mnt/ur0`), and secondary storage (`/mnt/uma0`) on boot.
+- **Storage Auto-Mounting & Protection:** Automatically detects and mounts SD2Vita (`/mnt/ux0`), internal memory (`/mnt/ur0`), and secondary storage (`/mnt/uma0`) in read-only mode by default to prevent filesystem corruption and database rebuilds.
 - **Framebuffer DOOM (`vita-doom`):** Pre-installed pure-C `fbdoom` engine with twin-stick controls, analog deadzones, and input isolation.
-- **All-in-One Installer App (`LinuxOnVita.vpk`):** Graphical bootstrapper with real-time partition detection, memory card mount selector, and 1-click on-device installer.
 - **Automated Docker Build:** Build the entire stack (kernel, rootfs, loaders, and VPK) with a single command (`./build.sh all`).
 
 ---
@@ -105,8 +108,11 @@ While original proof-of-concept projects proved that modern Linux can boot on th
 2. Transfer `LinuxOnVita.vpk` to your PS Vita using VitaShell (USB or FTP).
 3. In VitaShell, highlight `LinuxOnVita.vpk` and press **CROSS (✕)** to install. You can install it to any partition (`ux0:`, `uma0:`, etc.) - it does not matter where the app itself lives.
 4. Launch **LinuxOnVita** from the LiveArea.
-5. **Select your target storage partition** (e.g. `ux0:` for SD2Vita, or `ur0:` for internal storage) and press **CROSS (✕)** to install the bundled Linux boot files to it.
-6. Press **CROSS (✕)** to boot straight into Linux!
+5. **Select your target storage partition** in the touch GUI:
+   - **SD2Vita Users (`ux0:`):** Tap `ux0:` (marked `[RECOMMENDED (SD2VITA)]`).
+   - **Internal Storage Users (`ur0:`):** Tap `ur0:` (marked `[RECOMMENDED (INTERNAL)]`).
+   - *Tip:* Tap `[+] SHOW ALL STORAGE DRIVES` if you wish to target secondary partitions (`uma0:`, `imc0:`, `xmc0:`).
+6. Tap **[ BOOT LINUX ]** (or press **CROSS ✕**) to install the bundled boot files and boot straight into Linux!
 
 > [!NOTE]
 > **The VPK app location and the in-app partition selector are two independent things.**

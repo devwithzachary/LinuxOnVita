@@ -91,13 +91,13 @@ LinuxOnVita ${VERSION} - Installation Instructions
 3. Return to the LiveArea home screen, tap the 'LinuxOnVita' bubble, and open it.
 
 4. In the LinuxOnVita app:
-   - The app displays all detected storage mounts and their capacities.
-   - Use D-PAD UP/DOWN or L/R to select your official Sony Memory Card
-     (e.g. 'xmc0:' or 'uma0:' for SD2Vita setups, or 'ux0:' for standard consoles).
-   - Press CROSS (X) to install all bundled Linux files to your memory card.
-   - If files were previously placed on 'ux0:', press TRIANGLE to copy them.
+   - The app displays active mounted storage partitions (ux0: and ur0:) with
+     recommendation badges.
+   - Tap 'ux0:' (RECOMMENDED SD2VITA) or 'ur0:' (RECOMMENDED INTERNAL), or
+     tap '[+] SHOW ALL STORAGE DRIVES' to target secondary partitions.
+   - Tap '[ BOOT LINUX ]' (or press CROSS X) to install the bundled Linux boot files.
 
-5. Press CROSS (X) to boot into Linux!
+5. Tap '[ BOOT LINUX ]' (or press CROSS X) to boot into Linux!
 
 6. (Optional) Connect to Wi-Fi on-device:
    Tap the screen to toggle the virtual keyboard and run 'vita-wifi scan' to connect
@@ -105,19 +105,17 @@ LinuxOnVita ${VERSION} - Installation Instructions
 
 UPDATING FROM AN EARLIER VERSION:
 If you are upgrading an existing LinuxOnVita installation:
-After installing the new 'LinuxOnVita.vpk' and launching the app, you MUST
-press TRIANGLE (△) inside the app to reinstall/update the Linux files
-(kernel zImage, Device Tree blobs, and baremetal loaders) on your memory card.
-Simply pressing CROSS (X) would continue booting the older files already on the card.
-To boot with step-by-step diagnostic logging and hardware checks, press SQUARE (□).
+After installing the new 'LinuxOnVita.vpk' and launching the app, tap '[ REINSTALL ]'
+(or press TRIANGLE) inside the app to reinstall/update the Linux files
+(kernel zImage, Device Tree blobs, and baremetal loaders) on your storage drive.
+Simply pressing CROSS (X) would continue booting older files already on the drive.
+To boot with step-by-step diagnostic logging and hardware checks, tap '[ DEBUG BOOT ]'
+(or press SQUARE).
 
-NOTE FOR SD2VITA USERS:
-An official physical Sony memory card is strictly required on all consoles
-(both 1000 and 2000 models). The baremetal loader initializes storage using
-Sony's proprietary memory card interface (MSIF). It cannot boot Linux from
-SD2Vita or internal storage. If your SD2Vita adapter is mounted as ux0:,
-select your official Sony memory card (typically mounted as 'xmc0:' or
-'uma0:' in VitaShell) inside the app, and install directly to it.
+STORAGE NOTE:
+An official Sony memory card is NOT required. LinuxOnVita pre-stages the Linux
+kernel and Device Tree directly in physical DRAM, allowing direct baremetal boot
+from SD2Vita (ux0:) or internal eMMC storage (ur0:).
 
 Full documentation: https://github.com/devwithzachary/LinuxOnVita
 EOF

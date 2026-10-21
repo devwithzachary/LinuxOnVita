@@ -68,6 +68,8 @@ if [ -d "${PORT_DIR}" ]; then
     "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_LZ4_DECOMPRESS
     "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_TUN
     "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_WIREGUARD
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_IKCONFIG
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_IKCONFIG_PROC
     "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_IP_ADVANCED_ROUTER
     "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_IP_MULTIPLE_TABLES
     "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_NETFILTER
@@ -133,6 +135,8 @@ else
     ./scripts/config --file .config --enable CONFIG_LZ4_DECOMPRESS
     ./scripts/config --file .config --enable CONFIG_TUN
     ./scripts/config --file .config --enable CONFIG_WIREGUARD
+    ./scripts/config --file .config --enable CONFIG_IKCONFIG
+    ./scripts/config --file .config --enable CONFIG_IKCONFIG_PROC
     ./scripts/config --file .config --enable CONFIG_IP_ADVANCED_ROUTER
     ./scripts/config --file .config --enable CONFIG_IP_MULTIPLE_TABLES
     ./scripts/config --file .config --enable CONFIG_NETFILTER

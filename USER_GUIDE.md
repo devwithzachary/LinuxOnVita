@@ -19,6 +19,7 @@ Welcome to the comprehensive user guide for **LinuxOnVita**. This guide is desig
    - [Hardware & System Diagnostics (`vita-diagnostics`)](#5-hardware--system-diagnostics-vita-diagnostics--vita-diag)
    - [Remote SSH & Wireless Terminal](#6-remote-ssh--wireless-terminal)
    - [Rebooting & Powering Down](#7-rebooting--powering-down)
+   - [Virtual Network Tunnels & Mesh VPNs (`CONFIG_TUN` & `vita-tun`)](#8-virtual-network-tunnels--mesh-vpns-config_tun-wireguard--vita-tun)
 5. [Alpine Linux Package Ecosystem (`alpine-chroot`)](#5-alpine-linux-package-ecosystem-alpine-chroot)
    - [Understanding the Isolated Environment](#understanding-the-isolated-environment)
    - [Entering & Exiting Alpine](#entering--exiting-alpine)
@@ -84,12 +85,13 @@ Download **`LinuxOnVita.vpk`** from the [GitHub Releases page](https://github.co
 
 ### Step 4: Configure Storage & Launch Linux
 1. Tap the new **LinuxOnVita** bubble and select **Start**.
-2. The application scans all storage partitions and displays them on screen. **Select your target storage partition** - this is where the Linux boot files (`zImage`, loaders, DTB) will be written:
-   - **SD2Vita Users (`ux0:`):** Select `ux0:` (your microSD card in the Game Card slot).
-   - **Internal Storage Users (`ur0:`):** Select `ur0:` (internal system storage, available on all consoles, ideal for Slim 2000 or PSTV consoles, or setups without an SD2Vita).
-   - Use **D-Pad Up / Down** or **L / R** triggers to select your partition. Your selection is automatically remembered for future boots.
-3. Press **CROSS (✕)** to install the bundled Linux files to your selected partition.
-4. Press **CROSS (✕)** to boot!
+2. The modern touchscreen interface loads smoothly on screen with real-time partition cards and storage badges:
+   - **SD2Vita Users (`ux0:`):** Tap `ux0:` (highlighted with the green `[RECOMMENDED (SD2VITA)]` badge).
+   - **Internal Storage Users (`ur0:`):** Tap `ur0:` (highlighted with the cyan `[RECOMMENDED (INTERNAL)]` badge, ideal for Slim 2000 or PSTV consoles without an SD2Vita).
+   - *Targeting Secondary Drives:* By default, only active mounted drives are shown. Tap `[+] SHOW ALL STORAGE DRIVES` to expand unmounted partitions (`uma0:`, `imc0:`, `xmc0:`).
+   - *Physical Gamepad Navigation:* You can also use **D-Pad Up / Down / Left / Right** to cycle through cards. Your target selection is automatically remembered for future boots.
+3. Tap **[ BOOT LINUX ]** (or press **CROSS ✕**) to install the bundled Linux files to your selected partition with a graphical progress modal.
+4. Tap **[ BOOT LINUX ]** (or press **CROSS ✕**) to boot!
 
 > [!NOTE]
 > **The VPK app install location and the in-app partition selector are independent choices.**
@@ -126,7 +128,7 @@ If Linux fails to boot, freezes, or the screen goes dark without reaching the sh
 LinuxOnVita transforms your handheld console into a self-contained computer without requiring any external cables or keyboards.
 
 ### On-Screen Touch Keyboard (`fbkeyboard`)
-* **Show / Hide:** Tap **[Hide]** in the bottom-right corner to dismiss the keyboard for an unobstructed view of your terminal. When hidden, a visible **[KEYBOARD]** button appears at the bottom-right corner; tap it at any time to instantly restore the on-screen keyboard.
+* **Show / Hide:** Tap **[Hide]** in the bottom-right corner to dismiss the keyboard for an unobstructed view of your terminal. When hidden, a prominent, high-contrast **[KEYBOARD]** button remains pinned at the bottom-right corner; tap it at any time to instantly restore the on-screen keyboard. Terminal text is constrained to 32 rows (`120x32`), ensuring scrolling output never overwrites or erases the reshow button.
 * **Letter / Number Switching:** Tap **[?123]** to access numbers and symbols, or **[ABC]** to return to letters.
 * **Special Keys:** Includes dedicated buttons for **Tab**, **Esc**, **Ctrl**, and **Enter**.
 
@@ -352,6 +354,53 @@ Logging in via SSH gives you a full-sized desktop terminal, making it comfortabl
   poweroff
   ```
   Signals the Syscon power management chip to power down all console rails completely.
+
+---
+
+### 8. Virtual Network Tunnels & Mesh VPNs (`CONFIG_TUN`, WireGuard & `vita-tun`)
+
+LinuxOnVita includes built-in kernel support for virtual network tunnels and VPN protocols without requiring external out-of-tree kernel modules.
+
+#### Included Kernel Drivers:
+* **Universal TUN/TAP Driver (`CONFIG_TUN=y`):** Provides virtual point-to-point network devices required by VPN clients and mesh networking daemons.
+* **Native WireGuard Protocol (`CONFIG_WIREGUARD=y`):** High-speed, modern kernel-space cryptography and tunneling.
+* **Packet Routing & Filtering:** Full policy routing (`CONFIG_IP_ADVANCED_ROUTER=y`, `CONFIG_IP_MULTIPLE_TABLES=y`) and Netfilter NAT masquerading (`CONFIG_IP_NF_IPTABLES=y`, `CONFIG_IP_NF_NAT=y`, `CONFIG_IP_NF_TARGET_MASQUERADE=y`).
+* **Runtime Config Inspection:** Query compiled kernel symbols at any time via `/proc/config.gz`:
+  ```bash
+  zcat /proc/config.gz | grep -E "CONFIG_TUN|CONFIG_WIREGUARD"
+  ```
+
+#### Automatic Device Provisioning:
+On boot, the system automatically creates the character device node at `/dev/net/tun` (`major 10, minor 200`) with accessible `0666` permissions, allowing non-root network daemons to establish tunnels seamlessly.
+
+#### Using `vita-tun` (Interface Management):
+To quickly test or manage persistent TUN devices directly from the base shell:
+```bash
+# Create a persistent TUN interface:
+vita-tun add tun0
+
+# Inspect interface state:
+ip link show tun0
+
+# Remove the interface:
+vita-tun del tun0
+
+# Verify driver and /dev/net/tun availability:
+vita-tun status
+```
+
+#### Mesh Networking inside Alpine Linux:
+Inside the Alpine container (`alpine-chroot`), you can install and run modern mesh networking packages:
+* **Tailscale:** Connect your PS Vita directly into your secure personal tailnet:
+  ```bash
+  alpine-chroot apk add tailscale
+  alpine-chroot tailscaled &
+  alpine-chroot tailscale up
+  ```
+* **WireGuard Tools:** Manage encrypted tunnels using standard `wg` and `wg-quick`:
+  ```bash
+  alpine-chroot apk add wireguard-tools
+  ```
 
 ---
 
@@ -712,6 +761,8 @@ To summarise storage paths:
 | `/mnt/ur0/` | Internal eMMC | Internal storage fallback or standalone install |
 | `/` (inside chroot) | `/mnt/ux0/alpine.img` | Alpine Linux container (1GB default, resizable) |
 
+### Can I use VPNs and mesh networking (Tailscale / ZeroTier / WireGuard)?
+Yes! In version 1.4.0, LinuxOnVita builds `CONFIG_TUN` (Universal TUN/TAP device driver) and `CONFIG_WIREGUARD` directly into the kernel. The device node `/dev/net/tun` is created automatically on boot. Inside Alpine Linux (`alpine-chroot`), you can install Tailscale (`apk add tailscale`) or WireGuard tools (`apk add wireguard-tools`) to connect your Vita to your mesh networks. You can also verify TUN functionality using the built-in `vita-tun` tool (`vita-tun add tun0`, `vita-tun del tun0`).
 
 ---
 
