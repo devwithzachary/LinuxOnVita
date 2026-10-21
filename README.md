@@ -57,6 +57,7 @@ While original proof-of-concept projects proved that modern Linux can boot on th
 - **Interactive On-Device Wi-Fi Manager (`vita-wifi`):** Scan, connect, and switch wireless networks directly on the console with an ASCII signal table. Saves credentials permanently to your memory card without needing to edit config files on a PC.
 - **Fast Boot & OpenSSH:** Boots straight into the Linux terminal. Wi-Fi connects automatically with OpenSSH and mDNS (`vita.local`), ready in ~12 seconds.
 - **Alpine Linux Chroot (`alpine-chroot`):** Run an isolated, persistent Alpine Linux userland on storage with full `apk add` package management.
+- **Turnkey Graphical Desktop & Autostart (`alpine-desktop`, `vita-autostart`):** Run an ultra-lightweight IceWM desktop environment on `/dev/fb0` with analog mouse emulation, touchscreen gestures, bundled apps, and the option to boot directly into the desktop on startup.
 - **Compressed ZRAM & Memory Safety (`vita-swap`):** Zero-latency LZ4 compressed RAM swap expands usable memory from 512MB to ~768MB-1GB, preventing Out-Of-Memory (OOM) crashes during heavy package installs, Python scripts, or C compilation. Includes physical SD card swapfile auto-mounting.
 - **Storage Auto-Mounting:** Automatically detects and mounts SD2Vita (`/mnt/ux0`), internal memory (`/mnt/ur0`), and secondary storage (`/mnt/uma0`) on boot.
 - **Framebuffer DOOM (`vita-doom`):** Pre-installed pure-C `fbdoom` engine with twin-stick controls, analog deadzones, and input isolation.

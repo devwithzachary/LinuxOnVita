@@ -575,6 +575,43 @@ To exit the graphical desktop session:
 
 `alpine-desktop` will cleanly shut down X11, restore `vita-input-mapper` to standard console terminal mode, unmount bind mounts, and return you to the command prompt.
 
+### Booting Directly into Desktop on Startup
+If you use LinuxOnVita primarily as a portable handheld computer, you can configure the system to boot straight into the IceWM graphical desktop environment on power-on:
+
+* **Enable Autostart:**
+  ```bash
+  vita-autostart enable
+  # or
+  alpine-desktop --autostart on
+  ```
+* **Disable Autostart (return to console boot):**
+  ```bash
+  vita-autostart disable
+  # or
+  alpine-desktop --autostart off
+  ```
+* **Check Status:**
+  ```bash
+  vita-autostart status
+  # or
+  alpine-desktop --status
+  ```
+* **From the Graphical Desktop:**
+  Open the IceWM Start Menu and select **Settings** -> **Toggle Boot to Desktop** (or launch from the Applications menu).
+
+**Built-in Failsafe & Exit Protection:**
+When desktop autostart is active, the system displays a 3-second countdown before launching X11:
+```text
+========================================================
+ LinuxOnVita: Booting directly into Alpine Desktop...   
+========================================================
+ Starting desktop in 3 seconds...                       
+ (Press any key to cancel and stay in console shell)    
+========================================================
+```
+* **Bypass Autostart:** Press any key or button during the 3-second countdown to cancel autostart and enter the `root@vita:~#` shell.
+* **Clean Log Out:** Selecting **Log Out** from the IceWM Start Menu cleanly shuts down the desktop and drops you into the console shell. A session-level guard prevents desktop loop respawns, allowing you to work in the terminal for the remainder of your session.
+
 ---
 
 ## 7. Managing Files & Storage

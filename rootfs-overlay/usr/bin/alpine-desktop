@@ -68,6 +68,7 @@ Bundled Applications:
 Options:
   --setup              Download and re-install desktop packages & configs
   --status             Show current desktop installation and container status
+  --autostart [on|off] Configure direct boot to desktop on system startup
   -s, --size <MB|GB>   Container size if creating fresh image (default: 2048M / 2GB)
   -d, --dir <PATH>     Directory to store alpine.img (default: /mnt/ux0)
   -f, --file <PATH>    Exact custom path for the alpine image file
@@ -103,6 +104,17 @@ while [ $# -gt 0 ]; do
         --status)
             CHECK_STATUS=1
             shift
+            ;;
+        --autostart)
+            if [ -n "${2:-}" ] && [ "$(echo "$2" | cut -c1)" != "-" ]; then
+                AUTOSTART_CMD="$2"
+                shift 2
+            else
+                AUTOSTART_CMD="status"
+                shift
+            fi
+            /usr/bin/vita-autostart "$AUTOSTART_CMD"
+            exit $?
             ;;
         --recreate)
             DO_RECREATE=1
@@ -170,6 +182,11 @@ if [ $CHECK_STATUS -eq 1 ]; then
         echo " Desktop Status:    Installed (IceWM Lightweight Ready)"
     else
         echo " Desktop Status:    Not installed yet (runs on first launch)"
+    fi
+    if command -v vita-autostart >/dev/null 2>&1 && vita-autostart check 2>/dev/null; then
+        echo " Boot Autostart:    Enabled (boots directly into desktop on startup)"
+    else
+        echo " Boot Autostart:    Disabled (boots into console shell)"
     fi
     echo "========================================================="
     exit 0
@@ -385,13 +402,15 @@ deploy_desktop_helpers() {
     ln -sf reboot                    "${TARGET}/sbin/poweroff" 2>/dev/null || true
     ln -sf reboot                    "${TARGET}/sbin/halt" 2>/dev/null || true
     cp /usr/bin/vita-storage         "${TARGET}/usr/bin/vita-storage" 2>/dev/null || true
+    [ -f /usr/bin/vita-autostart ] && cp /usr/bin/vita-autostart "${TARGET}/usr/bin/vita-autostart" 2>/dev/null || true
     chmod +x "${TARGET}/usr/bin/vita-desktop-welcome" \
              "${TARGET}/usr/bin/toggle-keyboard" \
              "${TARGET}/usr/bin/taskmanager" \
              "${TARGET}/usr/bin/vita-reboot" \
              "${TARGET}/usr/bin/reboot" \
              "${TARGET}/sbin/reboot" \
-             "${TARGET}/usr/bin/vita-storage" 2>/dev/null || true
+             "${TARGET}/usr/bin/vita-storage" \
+             "${TARGET}/usr/bin/vita-autostart" 2>/dev/null || true
 
     # Install Xfbdev Xorg launcher wrapper inside container
     cat << 'EOF' > "${TARGET}/usr/bin/Xfbdev"
@@ -505,6 +524,18 @@ Exec=/usr/bin/vita-reboot
 Icon=system-reboot
 Terminal=false
 Categories=System;
+EOF
+
+    cat << 'EOF' > "${TARGET}/usr/share/applications/vita-autostart.desktop"
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Toggle Boot to Desktop
+Comment=Toggle whether console boots directly into desktop or terminal
+Exec=/usr/bin/vita-autostart toggle
+Icon=preferences-desktop
+Terminal=false
+Categories=Settings;System;
 EOF
 }
 
@@ -731,6 +762,7 @@ menu "System" "applications-system" {
 }
 menu "Settings" "preferences-system" {
     prog "Welcome Guide" "preferences-desktop" /usr/bin/vita-desktop-welcome
+    prog "Toggle Boot to Desktop" "preferences-desktop" /usr/bin/vita-autostart toggle
     prog "Desktop Preferences" "preferences-desktop" pcmanfm --desktop-pref
 }
 separator
@@ -1118,6 +1150,18 @@ if [ $NEEDS_SETUP -eq 1 ]; then
     echo "========================================================="
     echo " [SUCCESS] Alpine Linux Graphical Desktop Installed!   "
     echo "========================================================="
+    echo ""
+    printf " Would you like to boot directly into the desktop on startup? [y/N]: "
+    read -t 10 -r AUTO_ANSWER 2>/dev/null || AUTO_ANSWER="n"
+    case "$AUTO_ANSWER" in
+        [yY]|[yY][eE][sS])
+            /usr/bin/vita-autostart enable
+            ;;
+        *)
+            echo " Desktop autostart left disabled. You can launch it anytime with 'alpine-desktop'."
+            echo " (To enable autostart later, run 'alpine-desktop --autostart on')"
+            ;;
+    esac
     echo ""
 fi
 

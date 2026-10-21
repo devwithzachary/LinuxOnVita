@@ -32,6 +32,12 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Bumped application version to `v1.4.0` (`01.40`).
 
 ### Rootfs & System Utilities
+- **Direct-to-Desktop Boot Preference (`vita-autostart` & `alpine-desktop`):**
+  - Added support for booting directly into the IceWM graphical desktop on console startup.
+  - Implemented `/usr/bin/vita-autostart` CLI tool and `alpine-desktop --autostart [on|off|status]` commands to manage persistent autostart configuration (`<mount>/linux/desktop_autostart`).
+  - Added an interactive prompt during initial `alpine-desktop` package installation asking if the user wishes to boot straight into desktop.
+  - Added "Toggle Boot to Desktop" shortcut in the IceWM Settings menu and application launcher.
+  - Hardened `vita-login` on `tty1` with a 3-second bypass countdown (press any key to stay in console shell) and a session-level guard preventing desktop respawn loops when logging out.
 - **Storage Free Space Validation (`alpine-chroot` & `alpine-desktop`):**
   - Added pre-allocation disk space inspection using POSIX `df` before creating persistent `alpine.img` ext4 containers.
   - Verifies target storage (`ux0:` or `ur0:`) has sufficient free space for the requested container size plus a 32 MB safety buffer, preventing filesystem exhaustion and broken partial image allocations.

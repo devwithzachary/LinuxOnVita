@@ -1,9 +1,62 @@
 #!/bin/sh
 # Vita Linux console auto-login wrapper
-# Clears the boot messages and starts an interactive login shell
+# Clears boot messages, evaluates desktop autostart preference,
+# and starts an interactive login shell or launches Alpine Desktop.
 
 if [ "$(tty 2>/dev/null)" = "/dev/tty1" ]; then
     clear 2>/dev/null || printf '\033[2J\033[H'
+
+    # Check if desktop autostart is configured (runs once per boot)
+    if [ ! -f /tmp/.desktop_autostart_done ]; then
+        AUTOSTART=0
+        if command -v vita-autostart >/dev/null 2>&1 && vita-autostart check 2>/dev/null; then
+            AUTOSTART=1
+        elif [ -f /mnt/ux0/linux/desktop_autostart ] || [ -f /mnt/ur0/linux/desktop_autostart ] || [ -f /etc/desktop_autostart ]; then
+            AUTOSTART=1
+        fi
+
+        if [ $AUTOSTART -eq 1 ]; then
+            touch /tmp/.desktop_autostart_done
+
+            # Check if container image exists
+            IMG_EXISTS=0
+            if [ -f /mnt/ux0/alpine.img ] || [ -f /mnt/ur0/alpine.img ]; then
+                IMG_EXISTS=1
+            fi
+
+            if [ $IMG_EXISTS -eq 1 ] && command -v alpine-desktop >/dev/null 2>&1; then
+                echo "========================================================"
+                echo " LinuxOnVita: Booting directly into Alpine Desktop...   "
+                echo "========================================================"
+                echo " Starting desktop in 3 seconds...                       "
+                echo " (Press any key to cancel and stay in console shell)    "
+                echo "========================================================"
+                echo ""
+
+                CANCEL=0
+                if read -t 3 -n 1 -r _dummy 2>/dev/null; then
+                    CANCEL=1
+                fi
+
+                if [ $CANCEL -eq 0 ]; then
+                    echo "Starting Alpine Desktop..."
+                    /usr/bin/alpine-desktop
+                    # After desktop session exits (Log Out), clear and proceed to console shell
+                    clear 2>/dev/null || printf '\033[2J\033[H'
+                else
+                    echo ""
+                    echo "Autostart canceled. Entering console shell..."
+                    sleep 1
+                    clear 2>/dev/null || printf '\033[2J\033[H'
+                fi
+            else
+                echo "Notice: Desktop autostart is enabled, but alpine.img was not found."
+                echo "        Run 'alpine-desktop' to set up the desktop environment."
+                echo ""
+                sleep 2
+            fi
+        fi
+    fi
 fi
 
 exec /bin/sh -l
