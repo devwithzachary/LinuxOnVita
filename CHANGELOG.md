@@ -18,6 +18,11 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Added scratchpad handover structure at `0x1F007E80` (`magic: 0x564C4E58` / "VNLX") allowing `vita-baremetal-linux-loader` to detect pre-staged assets and bypass the MSIF hardware authentication loop.
   - Enabled pure SD2Vita (Game Card slot) boot configurations for consoles without official Sony memory cards.
   - Added support for internal system storage (`ur0:`) for slim (PCH-2000) and PlayStation TV (VTE-1000) consoles.
+- **Virtual Network Tunnel & Mesh Networking Support (`CONFIG_TUN` & WireGuard):**
+  - Enabled built-in Universal TUN/TAP driver (`CONFIG_TUN=y`) in the official kernel configuration for virtual network interfaces.
+  - Enabled native WireGuard VPN protocol support (`CONFIG_WIREGUARD=y`) in the kernel.
+  - Enabled policy routing and firewalling prerequisites (`CONFIG_IP_ADVANCED_ROUTER=y`, `CONFIG_IP_MULTIPLE_TABLES=y`, `CONFIG_NETFILTER=y`, `CONFIG_IP_NF_IPTABLES=y`, `CONFIG_IP_NF_NAT=y`, and `CONFIG_IP_NF_TARGET_MASQUERADE=y`) allowing Tailscale, ZeroTier, and WireGuard to establish overlay networks.
+  - Added automatic `/dev/net/tun` character device node creation (`c 10 200`) in `S05vita` with accessible permissions (`0666`).
 - **Baremetal Bootloader Optimization:**
   - Bypassed MSIF card insertion polling, hardware authentication, and FAT mounting during pre-staged boot, reducing baremetal boot time by 2 to 3 seconds.
   - Added safe, word-aligned in-memory relocation (`safe_memmove`) for `zImage` (`0x44000000`) and DTB (`0x4A000000`) with cache flushing and memory barriers.
