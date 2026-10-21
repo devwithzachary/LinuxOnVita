@@ -71,9 +71,9 @@ While original proof-of-concept projects proved that modern Linux can boot on th
 1. **Custom Firmware:** Any PS Vita (1000 OLED, 2000 Slim, or PlayStation TV) running **3.60 or 3.65** with HENkaku / Ensō (see [vita.hacks.guide](https://vita.hacks.guide)).
 2. **Enable Unsafe Homebrew (Critical):**
    - Open **Settings** -> **HENkaku Settings** -> check **Enable Unsafe Homebrew [✓]**. If unchecked, the loader plugin will fail with error `0x8002D003`.
-3. **Official Sony Memory Card Strictly Required:**
-   - The baremetal loader interfaces directly with Sony's proprietary memory card hardware (MSIF). It cannot boot from SD2Vita game-card adapters or internal eMMC (`imc0:`).
-   - *SD2Vita Users:* Your SD2Vita adapter mounts as `ux0:`, and your official Sony card is typically `xmc0:` or `uma0:`. The LinuxOnVita app automatically detects your Sony card and installs boot files directly to it.
+3. **Supported Storage (SD2Vita or Internal eMMC):**
+   - **No Sony memory card required!** Linux boot files and runtime storage can be installed directly to your **SD2Vita** (`ux0:`) or internal system storage (**`ur0:`**).
+   - *Note on Sony Memory Cards:* The proprietary Sony memory card interface (MSIF) cannot be detected or accessed by Linux at runtime. You do not need an official Sony memory card to install or boot Linux.
 
 > [!WARNING]
 > **Kernel Plugin Compatibility - Read Before Installing**
@@ -104,12 +104,12 @@ While original proof-of-concept projects proved that modern Linux can boot on th
 2. Transfer `LinuxOnVita.vpk` to your PS Vita using VitaShell (USB or FTP).
 3. In VitaShell, highlight `LinuxOnVita.vpk` and press **CROSS (✕)** to install. You can install it to any partition (`ux0:`, `uma0:`, etc.) - it does not matter where the app itself lives.
 4. Launch **LinuxOnVita** from the LiveArea.
-5. **Select your Sony Memory Card partition** (e.g. `xmc0:` or `uma0:` for SD2Vita users, `ux0:` for standard consoles) and press **CROSS (✕)** to install the bundled Linux boot files to it.
+5. **Select your target storage partition** (e.g. `ux0:` for SD2Vita, or `ur0:` for internal storage) and press **CROSS (✕)** to install the bundled Linux boot files to it.
 6. Press **CROSS (✕)** to boot straight into Linux!
 
 > [!NOTE]
 > **The VPK app location and the in-app partition selector are two independent things.**
-> The partition you select inside the app is only where the **Linux boot files** (kernel, loaders, device tree) are written on your Sony Memory Card. The app bubble itself can live anywhere on your LiveArea.
+> The partition you select inside the app is where the **Linux boot files** (kernel, loaders, device tree) are written (`ux0:linux/` or `ur0:linux/`). The app bubble itself can live on any partition on your LiveArea.
 
 
 > [!IMPORTANT]
@@ -134,7 +134,7 @@ For full usage instructions, gamepad shortcuts, and Wi-Fi setup, see the **[Comp
 | **Storage (eMMC / ur0)** | **Working** | Auto-detected SCE partitions (`/dev/mmcblk0p1`-`p12`), `ur0` mounted at `/mnt/ur0` |
 | **Storage (SD2Vita / ux0)** | **Working** | Powered via Syscon `0x888`, auto-mounted at `/mnt/ux0` (`/dev/mmcblk1p1`) |
 | **Memory Expansion (ZRAM)** | **Working** | 256MB compressed LZ4 RAM swap pool with `vita-swap` management |
-| **Storage (Sony Memory Card)** | **Loader Only** | Boot files loaded via baremetal MSIF driver; Linux MSIF runtime driver not yet implemented |
+| **Storage (Sony Memory Card)** | **Not Supported** | Proprietary MSIF hardware not accessible in Linux; no Sony card required for boot or runtime |
 | **UART0 Serial Console** | **Working** | 115200 baud serial debug console |
 | **Battery Fuel Gauge** | **Not yet supported** | Isolated on Syscon (Ernie) private I2C bus; runtime streaming unsupported |
 | **Bluetooth** | **Not yet supported** | Marvell SD8787 Bluetooth driver not enabled in kernel config |
@@ -176,9 +176,9 @@ All compiled outputs are saved to `output/`:
 * **Error `0x8002D003` when launching LinuxOnVita:**
   Unsafe Homebrew is disabled. On your Vita, go to **Settings** -> **HENkaku Settings** -> check **Enable Unsafe Homebrew**.
 * **"Memory card not inserted" on boot:**
-  An official Sony memory card is strictly required on all consoles (both 1000 and 2000 models). The baremetal bootloader only speaks to Sony MSIF hardware and cannot read from internal eMMC or SD2Vita adapters.
+  This only occurs if using legacy loaders without pre-staging. Update `LinuxOnVita.vpk` to v1.4.0 or later and press **TRIANGLE (△)** to update your boot files, enabling in-memory pre-staging for direct SD2Vita (`ux0:`) or internal (`ur0:`) boot without a Sony memory card.
 * **Frozen on `Uncompressing Linux... done, booting the kernel`:**
-  The Device Tree blob does not match your hardware. In LinuxOnVita, reinstall boot files or ensure `vita1000.dtb` (OLED) or `vita2000.dtb` (LCD) is copied to your memory card's `linux/vita.dtb`.
+  The Device Tree blob does not match your hardware. In LinuxOnVita, reinstall boot files or ensure `vita1000.dtb` (OLED) or `vita2000.dtb` (LCD) is copied to `<mount>/linux/vita.dtb`.
 * **Boot loop when returning to VitaOS after running Linux:**
   This is caused by a USB streaming or storage remapping kernel plugin (e.g. VitaUSBStream, YAMT, StorageMgr) conflicting with hardware state left by the baremetal loader. To recover: hold **L trigger** on power-on to bypass plugins, then open VitaShell, edit `ur0:tai/config.txt` (or `ux0:tai/config.txt`), and comment out or remove the offending `*KERNEL*` plugin entry. See the [compatibility warning above](#prerequisites) for the full explanation.
 

@@ -44,10 +44,11 @@ typedef struct {
 } MountEntry;
 
 static MountEntry g_mounts[] = {
-    {"xmc0:", 0, 0, 0},
     {"ux0:", 0, 0, 0},
+    {"ur0:", 0, 0, 0},
     {"uma0:", 0, 0, 0},
     {"imc0:", 0, 0, 0},
+    {"xmc0:", 0, 0, 0},
 };
 #define NUM_MOUNTS (sizeof(g_mounts) / sizeof(g_mounts[0]))
 static int g_selected_mount_idx = 0;
@@ -184,14 +185,16 @@ static int dir_exists(const char *path) {
 
 static int mount_partition(const char *mount_name) {
   SceVshMountId id;
-  if (strcmp(mount_name, "xmc0:") == 0)
+  if (strcmp(mount_name, "ur0:") == 0)
+    return 0;
+  else if (strcmp(mount_name, "ux0:") == 0)
+    id = SCE_VSH_MOUNT_UX0;
+  else if (strcmp(mount_name, "xmc0:") == 0)
     id = SCE_VSH_MOUNT_XMC0;
   else if (strcmp(mount_name, "uma0:") == 0)
     id = SCE_VSH_MOUNT_UMA0;
   else if (strcmp(mount_name, "imc0:") == 0)
     id = SCE_VSH_MOUNT_IMC0;
-  else if (strcmp(mount_name, "ux0:") == 0)
-    id = SCE_VSH_MOUNT_UX0;
   else
     return -1;
 
@@ -747,14 +750,14 @@ static void boot_linux(const char *mount, int debug_mode) {
     debug_log_printf(COLOR_GREEN,
                      "   - Sony Memory Card:      INSERTED (MSIF interface active)\n");
   } else {
-    debug_log_printf(COLOR_RED,
-                     "   - Sony Memory Card:      NOT DETECTED in MSIF slot!\n");
+    debug_log_printf(COLOR_CYAN,
+                     "   - Sony Memory Card:      NOT DETECTED (Pre-staging active)\n");
     debug_log_printf(
-        COLOR_YELLOW,
-        "     [!] Warning: Baremetal loader requires an authentic Sony Memory Card.\n");
+        COLOR_GREEN,
+        "     [OK] Memory Card Independence: Booting directly via RAM pre-staging!\n");
     debug_log_printf(
-        COLOR_YELLOW,
-        "     [!] Linux cannot boot from SD2Vita without Sony MSIF storage.\n");
+        COLOR_GREEN,
+        "     [OK] Pure SD2Vita and internal storage (ur0:) boot fully supported.\n");
   }
 
   debug_log_printf(COLOR_WHITE, "   - GameCard Slot:         %s\n\n",
@@ -970,8 +973,8 @@ static void boot_linux(const char *mount, int debug_mode) {
   tai_module_args_t argg;
   argg.size = sizeof(argg);
   argg.pid = KERNEL_PID;
-  argg.args = 0;
-  argg.argp = NULL;
+  argg.args = strlen(mount) + 1;
+  argg.argp = (void *)mount;
   argg.flags = 0;
 
   SceUID mod_id = -1;
@@ -1069,16 +1072,16 @@ int main(int argc, char *argv[]) {
     psvDebugScreenSetFgColor(COLOR_CYAN);
     printf("========================================================\n");
     printf(" PlayStation Vita Linux Bootstrapper & Installer\n");
-    printf(" Project LinuxOnVita (v1.3.1)\n");
+    printf(" Project LinuxOnVita (v1.4.0)\n");
     printf("========================================================\n");
     psvDebugScreenSetFgColor(COLOR_WHITE);
     printf(" Port by xerpi, CreepNT, DvaMishkiLapa, DevWithZachary\n\n");
 
-    /* Hardware requirement notice */
-    psvDebugScreenSetFgColor(COLOR_YELLOW);
-    printf(" [!] Sony Memory Card Required (MSIF) - cannot boot from SD2Vita\n");
+    /* Storage architecture notice */
+    psvDebugScreenSetFgColor(COLOR_GREEN);
+    printf(" [*] Memory Card Independence Active: Direct SD2Vita/ur0 boot!\n");
     psvDebugScreenSetFgColor(COLOR_WHITE);
-    printf("     Target must be Sony card (ux0: on standard, xmc0:/uma0: on SD2Vita)\n\n");
+    printf("     In-memory kernel pre-staging enabled (Sony card not required)\n\n");
 
     /* Storage mounts display (<= 54 chars/line) */
     printf(" Storage Partitions (Target: %s ", target_mount);

@@ -48,10 +48,19 @@ index 0cf3692..4bd16f2 100644
  	for (bss = &_bss_start; bss < &_bss_end; bss++)
  		*bss = 0;
 diff --git a/src/start.s b/src/start.s
-index 8706ff8..d849dbf 100644
+index 8706ff8..d386396 100644
 --- a/src/start.s
 +++ b/src/start.s
-@@ -15,9 +15,11 @@ _start:
+@@ -8,16 +8,18 @@
+ 
+ # r0 = Sysroot buffer paddr
+ _start:
+-	# Disable interrupts and enter System mode
+-	cpsid aif, #0x1F
++	# Disable interrupts and enter Supervisor (SVC) mode
++	cpsid aif, #0x13
+ 
+ 	# Get CPU ID
  	mrc p15, 0, r1, c0, c0, 5
  	ands r1, r1, #0xF
  

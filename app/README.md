@@ -5,11 +5,10 @@ LinuxOnVita is an all-in-one bootstrapper and payload installer application for 
 ## Features
 
 - **All-in-One Packaging:** Bundles the complete Linux kernel (`zImage`), Device Tree blobs (`*.dtb`), and baremetal loaders directly inside the VPK.
-- **Dynamic Storage Mount Selection:** Detects all active storage partitions (`xmc0:`, `ux0:`, `uma0:`, `imc0:`) and displays their total capacity and free space in real-time.
-- **Sony Memory Card Targeting:** Allows users with SD2Vita adapters (where SD is `ux0:` and the Sony card is `xmc0:` or `uma0:`) to select their exact memory card mount point.
-- **Persistent Preferences:** Automatically saves and restores your chosen memory card mount across reboots in `ur0:data/LinuxOnVita/mount.cfg`.
-- **On-Device Installation:** Checks file presence on your chosen memory card partition (`<mount>/linux/`) and installs all bundled files with a single button press.
-- **Boot File Copy Helper:** Enables copying kernel and Device Tree boot files from `ux0:` to your target memory card directly from the UI.
+- **Dynamic Storage Mount Selection:** Detects all active storage partitions (`ux0:`, `ur0:`, `uma0:`, `imc0:`, `xmc0:`) and displays their total capacity and free space in real-time.
+- **In-Memory Kernel Pre-Staging:** Pre-stages the Linux kernel (`zImage`) and Device Tree into physical DRAM before jumping to the loader, allowing Linux to boot directly from SD2Vita (`ux0:`) or internal storage (`ur0:`) without an official Sony memory card!
+- **Persistent Preferences:** Automatically saves and restores your chosen storage mount across reboots in `ur0:data/LinuxOnVita/mount.cfg`.
+- **On-Device Installation:** Checks file presence on your chosen storage partition (`<mount>/linux/`) and installs all bundled files with a single button press.
 - **Dual Firmware Support:** Automatically tries the standard baremetal loader and falls back to firmware 3.60 offsets if needed.
 - **Safe Wi-Fi Preservation:** Does not overwrite existing `wpa_supplicant.conf` files if wireless credentials are already configured.
 
@@ -17,17 +16,16 @@ LinuxOnVita is an all-in-one bootstrapper and payload installer application for 
 
 - **CROSS (X):** Boot Linux (Normal) / Install Linux files to target mount (on first run)
 - **SQUARE ([ ]):** Boot Linux in Debug Mode (runs diagnostic logging)
-- **TRIANGLE (/\\):** Reinstall or update Linux files to the selected memory card mount
+- **TRIANGLE (/\\):** Reinstall or update Linux files to the selected storage mount
 - **SELECT:** View persistent boot debug log on screen
-- **D-PAD UP / DOWN:** Navigate and select target memory card mount (`xmc0:`, `ux0:`, `uma0:`, `imc0:`)
-- **L / R Shoulders:** Previous / Next target memory card mount
+- **D-PAD UP / DOWN:** Navigate and select target storage mount (`ux0:`, `ur0:`, `uma0:`, `imc0:`, `xmc0:`)
+- **L / R Shoulders:** Previous / Next target storage mount
 - **START:** Exit to LiveArea
 
 ## Hardware Storage Note
 
-The baremetal loader (MSIF) communicates directly with the proprietary Sony Memory Card controller. It cannot boot Linux from SD2Vita adapters (game card slot) or internal eMMC storage (`imc0:`).
-- For standard setups: the Sony Memory Card is mounted as `ux0:`.
-- For SD2Vita setups: the Sony Memory Card is typically mounted as `xmc0:` (VitaShell/YAMT default) or `uma0:` (StorageMgr).
+- **No Sony Memory Card Required:** With in-memory kernel pre-staging, Linux boots directly from SD2Vita (`ux0:`) or internal storage (`ur0:`).
+- **Sony Memory Card Runtime Note:** If an official Sony memory card is inserted, Linux cannot detect or access it at runtime because Linux does not have a proprietary MSIF driver. All runtime files and packages reside on SD2Vita (`/mnt/ux0/`) or internal storage (`/mnt/ur0/`).
 
 ## Credits & Copyright
 

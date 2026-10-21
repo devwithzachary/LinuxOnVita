@@ -11,6 +11,25 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Fixed stack pointer collision in `vita-baremetal-linux-loader` `start.s`: stack pointer was initialized to low physical memory (`0x00008000`) instead of the ARM scratchpad (`0x1F007E00`), corrupting CPU registers and colliding with the secondary core mailbox table.
   - Initialized secondary CPU mailbox jump addresses (`0x1F007F00`) to zero in `cpu123_wait()` and `main()` with memory barriers (`dsb` / `isb`), preventing secondary cores from executing stale SRAM pointers on spurious `wfe` wakeups.
   - Eliminated the 2-second kernel boot timeout penalty previously caused by CPU 1 and CPU 3 failing to respond to `smp_boot_secondary()`. All 4 Cortex-A9 cores now boot cleanly into SMP mode with 1152 BogoMIPS total compute power.
+- **Sony Memory Card Independence (In-Memory Kernel Pre-Staging):**
+  - Eliminated the mandatory requirement for an official, proprietary Sony PlayStation Vita memory card (MSIF) to boot Linux.
+  - Implemented in-memory DRAM pre-staging in `baremetal-loader.skprx`: while running under VitaOS, the loader reads `zImage` (23MB) and the hardware-specific Device Tree blob into physically contiguous RAM before initiating the Syscon soft reset.
+  - Enabled multi-pool contiguous memory allocation supporting User Main (`0x0C80D060`), CDRAM (`0x40408006`), and Kernel Root partitions with 1MB chunked reading for reliability.
+  - Added scratchpad handover structure at `0x1F007E80` (`magic: 0x564C4E58` / "VNLX") allowing `vita-baremetal-linux-loader` to detect pre-staged assets and bypass the MSIF hardware authentication loop.
+  - Enabled pure SD2Vita (Game Card slot) boot configurations for consoles without official Sony memory cards.
+  - Added support for internal system storage (`ur0:`) for slim (PCH-2000) and PlayStation TV (VTE-1000) consoles.
+- **Baremetal Bootloader Optimization:**
+  - Bypassed MSIF card insertion polling, hardware authentication, and FAT mounting during pre-staged boot, reducing baremetal boot time by 2 to 3 seconds.
+  - Added safe, word-aligned in-memory relocation (`safe_memmove`) for `zImage` (`0x44000000`) and DTB (`0x4A000000`) with cache flushing and memory barriers.
+  - Maintained complete backward compatibility: automatically falls back to legacy MSIF memory card loading if pre-staging is unavailable.
+
+### Bootstrapper & Installer App (VPK)
+- **Multi-Mount Selection & Internal Storage Support:**
+  - Added `ur0:` (internal NAND / eMMC) to partition selection list alongside `ux0:`, `uma0:`, `imc0:`, and `xmc0:`.
+  - Re-ordered partition defaults so `ux0:` (primary SD2Vita / storage) and `ur0:` (internal storage) are prioritized.
+  - Passed target mount parameter directly to `baremetal-loader.skprx` via `tai_module_args_t`.
+  - Updated pre-flight validation checks and LiveArea status notices to confirm Memory Card Independence is active.
+  - Bumped application version to `v1.4.0` (`01.40`).
 
 ---
 
