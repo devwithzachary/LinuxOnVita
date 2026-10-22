@@ -250,10 +250,21 @@ elif command -v fbset >/dev/null 2>&1; then
 fi
 
 {
+    CPU_FREQ="Unknown"
+    CPU_GOV="Unknown"
+    if [ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq ]; then
+        cur_khz=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>/dev/null || echo "0")
+        CPU_FREQ="$((cur_khz / 1000)) MHz"
+    fi
+    if [ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor ]; then
+        CPU_GOV=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo "Unknown")
+    fi
+
     echo "=== SECTION 1: SYSTEM HARDWARE & KERNEL ==="
     echo "Hardware Model:     $HW_MODEL"
     echo "Kernel Version:     $KERNEL_VER"
     echo "CPU Architecture:   $CPU_MODEL ($CPU_CORES cores online)"
+    echo "CPU Frequency:      $CPU_FREQ (Governor: $CPU_GOV)"
     echo "Framebuffer /dev/fb0: Resolution $FB_RES"
     if [ -f /proc/device-tree/compatible ]; then
         echo -n "Device Tree Comp:   "

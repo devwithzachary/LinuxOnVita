@@ -17,8 +17,22 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Erased leftover graphical data and frame buffer remnants from the LiveArea installer application by initializing the entire 1280x720 CDRAM display buffer (`0x20000000`) to solid black (`0xFF000000`) immediately after enabling CDRAM in `vita-baremetal-linux-loader`.
   - Resolved the persistent vertical artifact and scanline glitch along the far-right screen boundary (pixels 952 to 960) visible on PS Vita 2000 LCD panels.
   - Updated virtual console initialization in `S40input` to execute a full screen clear before establishing VT100 top and bottom scrolling margins (`\033[2J\033[1;21r\033[1;1H`), preventing character cell artifacts and stale frame buffer scanlines outside the active scrolling region.
+- **Hardware Power & Dynamic CPU Frequency Scaling (`vita-cpufreq`):**
+  - Implemented a dedicated native Linux kernel CPU frequency driver (`drivers/cpufreq/vita-cpufreq.c`) for the PlayStation Vita SoC (CXD5441GG).
+  - Enabled dynamic frequency scaling across 5 hardware operating points: 111 MHz, 166 MHz, 222 MHz, 333 MHz, and 444 MHz via Pervasive BaseClk registers (`0xE3103000`).
+  - Updated Device Tree OPP tables (`arch/arm/boot/dts/vita.dtsi`) with complete 111-444 MHz operating points and 444 MHz baseline frequency.
+  - Added blocklist entry to `cpufreq-dt-platdev.c` allowing `vita-cpufreq` to seamlessly drive `/sys/devices/system/cpu/cpu0/cpufreq/` across all 4 Cortex-A9 cores without conflicts.
+  - Enabled all standard kernel cpufreq governors: `performance`, `powersave`, `userspace`, `ondemand`, and `conservative` in `vita_defconfig`.
+    - Configured Linux `vita-cpufreq` driver to initialize hardware BaseClk registers directly to 444 MHz on baremetal boot, safely bypassing VitaOS power hooks.
 
 ### Handheld User Experience & RootFS
+- **CPU Power & Frequency Control CLI (`vita-cpu` / `vita-power`):**
+  - Created a turnkey command-line utility `/usr/bin/vita-cpu` (with symlink `/usr/bin/vita-power`) supporting subcommands `status`, `max`, `balanced`, `powersave`, `ondemand`, `set <mhz>`, and `gui`.
+  - Supported 1-touch profile switching: `max` locks to 444 MHz performance mode, `balanced` sets 333 MHz standard baseline, `powersave` sets 111 MHz energy saving, and `ondemand` enables dynamic load-based scaling.
+  - Built an interactive touch GUI profile selector powered by `yad` under X11 and interactive TUI fallback for the console.
+  - Created an IceWM desktop taskbar widget applet (`/usr/bin/vita-cpu-widget`) docking into the system tray with live tooltip frequency telemetry and 1-click profile switching.
+  - Integrated CPU frequency controls directly into IceWM Start Menu (`CPU Power & Frequency`) and added desktop launcher shortcuts to `/root/Desktop` and `/usr/share/applications`.
+  - Added CPU frequency and active governor reporting to `vita-diagnostics` system telemetry reports.
 - **Touchscreen Keyboard (`fbkeyboard`) Margin Alignment:**
   - Corrected key width calculation in `init_key_layout()` for the rightmost keys across all rows (`Bksp`, `Enter`, `/`, `Hide`, etc.) so they stretch precisely to the right screen boundary (`screen_w - 4`), eliminating the 1-2 pixel truncation gap on the right margin.
   - Switched keyboard hide clear buffer color to solid black (`0xFF000000`) for seamless console presentation.

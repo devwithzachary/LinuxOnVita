@@ -12,8 +12,8 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
 | Version | Milestone Theme | Primary User Value |
 | :--- | :--- | :--- |
 | **[v1.4.0]** | **Core Architecture, Storage Independence & Quad-Core SMP** | 4-Core SMP performance, Sony card independence, persistent read-only storage safety, `CONFIG_TUN` mesh networking, and CLI keyboard reshow button. |
-| **[v1.5.0]** | **Handheld Ergonomics, Screen Protection & First-Boot Setup** | First-boot onboarding wizard (`vita-setup`), display sleep and auto-dimming (`vita-powerd`), readable console fonts (`vita-font`), handheld TUI control center (`vita-config`), and gamepad input mapping. |
-| **[v1.6.0]** | **Wireless Freedom, Web Management & Performance Controls** | Web-based wireless file transfer portal (`http://vita.local:8080`), CPU overclocking/underclocking (`vita-cpu`: 111-444 MHz), Bluetooth peripheral pairing (`bluez`), and in-app GitHub update checker. |
+| **[v1.5.0]** | **Handheld Ergonomics, Screen Protection & Performance Controls** | Hardware CPU frequency scaling (`vita-cpu`: 111-444 MHz), first-boot onboarding wizard (`vita-setup`), display sleep and auto-dimming (`vita-powerd`), readable console fonts (`vita-font`), handheld TUI control center (`vita-config`), and gamepad input mapping. |
+| **[v1.6.0]** | **Wireless Freedom, Web Management & Peripheral Controls** | Web-based wireless file transfer portal (`http://vita.local:8080`), Bluetooth peripheral pairing (`bluez`), desktop Wi-Fi GUI manager, and in-app GitHub update checker. |
 | **[v1.7.0]** | **Pocket Sysadmin & Handheld Developer Workstation** | Network Swiss Army knife (`vita-nettools` with Tailscale / ZeroTier / nmap), developer environment (`vita-dev` with Python/C/Git), and remote desktop (VNC/RDP). |
 | **[v1.8.0]** | **Direct Framebuffer Gaming & Fantasy Consoles** | TIC-80 and Pico-8 (Fake-08) fantasy consoles, lightweight SDL framebuffer emulators, ScummVM adventure gaming, and x86 user-mode emulation. |
 | **[v1.9.0+]** | **Advanced Hardware Research & Kernel Power States** | Suspend-to-RAM deep sleep states, DSP hardware video decoding, and SGX543 3D acceleration research. |
@@ -53,6 +53,16 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
 
 **Priority:** CRITICAL (Highest)
 **Focus Areas:** Battery life preservation, OLED burn-in protection, readable console fonts, guided onboarding, and gamepad ergonomics.
+
+* **Hardware Power & CPU Frequency Control (`vita-cpu` / `vita-power`):**
+  * Dynamic CPU frequency scaling across hardware operating points:
+    * **444 MHz:** High-performance mode for code compilation, desktop responsiveness, and software emulation.
+    * **333 MHz:** Standard baseline balancing speed and battery longevity.
+    * **111 MHz / 166 MHz:** Powersave mode for background downloads, music playback, or long terminal reading sessions.
+  * Native kernel cpufreq driver (`vita-cpufreq`) and Device Tree OPP table (111, 166, 222, 333, 444 MHz).
+  * Baremetal loader primes SoC PLLs and voltage regulators to 444 MHz peak performance prior to standby.
+  * Turnkey CLI utility (`vita-cpu [status | max | powersave | ondemand | set <mhz> | gui]`) and symlink `vita-power`.
+  * Interactive touch GUI dialog and IceWM desktop taskbar widget applet with live tooltip telemetry.
 
 * **Display Sleep, Auto-Dimming & Power Management (`vita-powerd`):**
   * **OLED & LCD Burn-In Prevention:** Background event monitor tracking `/dev/input/event*` for touch, stick, and button activity.
@@ -112,13 +122,6 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
   * **Live System Telemetry Dashboard:** Real-time visual monitoring of CPU frequency, per-core load, battery percentage, RAM/ZRAM usage, and Wi-Fi signal.
   * **In-Browser Web Terminal (`ttyd`):** Access the Vita command prompt from a laptop or tablet browser without needing SSH keys configured.
   * **Zero-Conf Discovery:** Automatic local network discovery via mDNS / Bonjour.
-
-* **Hardware Power & CPU Frequency Control (`vita-cpu` / `vita-power`):**
-  * Dynamic CPU frequency scaling across hardware operating points:
-    * **444 MHz:** High-performance mode for code compilation, desktop responsiveness, and software emulation.
-    * **333 MHz:** Standard baseline balancing speed and battery longevity.
-    * **111 MHz / 166 MHz:** Powersave mode for background downloads, music playback, or long terminal reading sessions.
-  * CLI utility (`vita-cpu [status | max | powersave | ondemand]`) and IceWM desktop taskbar widget.
 
 * **Bluetooth Subsystem & Peripheral Pairing (`bluez` / `vita-bluetooth`):**
   * Kernel Bluetooth driver bringup with userspace `bluez` stack.

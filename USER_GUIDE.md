@@ -20,6 +20,7 @@ Welcome to the comprehensive user guide for **LinuxOnVita**. This guide is desig
    - [Remote SSH & Wireless Terminal](#6-remote-ssh--wireless-terminal)
    - [Rebooting & Powering Down](#7-rebooting--powering-down)
    - [Virtual Network Tunnels & Mesh VPNs (`CONFIG_TUN` & `vita-tun`)](#8-virtual-network-tunnels--mesh-vpns-config_tun-wireguard--vita-tun)
+   - [Hardware Power & CPU Frequency Control (`vita-cpu` / `vita-power`)](#9-hardware-power--cpu-frequency-control-vita-cpu--vita-power)
 5. [Alpine Linux Package Ecosystem (`alpine-chroot`)](#5-alpine-linux-package-ecosystem-alpine-chroot)
    - [Understanding the Isolated Environment](#understanding-the-isolated-environment)
    - [Entering & Exiting Alpine](#entering--exiting-alpine)
@@ -401,6 +402,51 @@ Inside the Alpine container (`alpine-chroot`), you can install and run modern me
   ```bash
   alpine-chroot apk add wireguard-tools
   ```
+
+---
+
+### 9. Hardware Power & CPU Frequency Control (`vita-cpu` / `vita-power`)
+LinuxOnVita includes hardware power management and dynamic CPU frequency scaling for the PlayStation Vita's quad-core ARM Cortex-A9 MPCore processor. You can switch between maximum performance for compilation and desktop responsiveness, balanced standard operation, dynamic load-based scaling, or deep powersave mode for background tasks and long battery life.
+
+#### Hardware Operating Points:
+* **444 MHz (Max Performance):** Locks all cores to peak frequency. Ideal for code compilation, web browsing in Badwolf, desktop responsiveness, and software emulation.
+* **333 MHz (Balanced Standard):** Standard baseline balancing compute throughput and battery longevity.
+* **222 MHz (Intermediate):** Moderate power-efficient baseline.
+* **166 MHz (Moderate Powersave):** Reduced energy profile for low-intensity workflows.
+* **111 MHz (Deep Powersave):** Minimum clock frequency. Conserves maximum battery during background file downloads, music playback, or long terminal reading sessions.
+
+#### Command-Line Usage:
+```bash
+# View active CPU frequency, active governor, and supported operating points:
+vita-cpu status
+# or using the power alias:
+vita-power status
+
+# Switch to 444 MHz maximum performance mode:
+vita-cpu max
+
+# Switch to 333 MHz standard balanced profile:
+vita-cpu balanced
+
+# Enable dynamic load-based frequency scaling (111 - 444 MHz):
+vita-cpu ondemand
+
+# Switch to 111 MHz deep powersave mode:
+vita-cpu powersave
+
+# Set an explicit operating point in MHz (111, 166, 222, 333, 444):
+vita-cpu set 222
+
+# Launch the interactive touch GUI dialog:
+vita-cpu gui
+```
+
+#### IceWM Desktop Taskbar Widget & GUI:
+When running the graphical desktop (`alpine-desktop`):
+* **Taskbar Tray Applet (`vita-cpu-widget`):** A live notification widget docks into the IceWM taskbar system tray. Hovering over the icon displays the live frequency and active governor tooltip.
+* **1-Tap Profile Switching:** Left-clicking or tapping the tray widget opens the graphical touch profile selector (`vita-cpu gui`). Right-clicking brings up a direct profile selection menu.
+* **Start Menu Integration:** Fast profile shortcuts are accessible directly under **Start Menu -> CPU Power & Frequency**.
+* **Desktop Shortcut:** Double-click or tap the **CPU Power** icon on the desktop.
 
 ---
 

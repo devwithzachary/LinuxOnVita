@@ -537,6 +537,18 @@ Icon=preferences-desktop
 Terminal=false
 Categories=Settings;System;
 EOF
+
+    cat << 'EOF' > "${TARGET}/usr/share/applications/vita-cpu.desktop"
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=CPU Power & Frequency
+Comment=Switch PlayStation Vita hardware CPU clock and frequency governors
+Exec=/usr/bin/vita-cpu gui
+Icon=utilities-system-monitor
+Terminal=false
+Categories=Settings;System;
+EOF
 }
 
 # Configure X11 Framebuffer & Input Devices (Touchscreen, Buttons, Mouse)
@@ -737,12 +749,21 @@ EOF
     cat << 'EOF' > "${TARGET}/root/.icewm/menu"
 prog "Welcome Guide" "preferences-desktop" /usr/bin/vita-desktop-welcome
 prog "On-Screen Keyboard" "input-keyboard" /usr/bin/toggle-keyboard
+prog "CPU Power & Frequency" "utilities-system-monitor" /usr/bin/vita-cpu gui
 prog "File Manager" "system-file-manager" pcmanfm
 prog "Web Browser" "web-browser" badwolf
 prog "Text Editor" "text-editor" mousepad
 prog "Activity Monitor" "utilities-system-monitor" /usr/bin/taskmanager
 prog "Terminal" "utilities-terminal" sakura
 separator
+menu "CPU Power & Frequency" "utilities-system-monitor" {
+    prog "CPU Profile Selector (GUI)" "utilities-system-monitor" /usr/bin/vita-cpu gui
+    separator
+    prog "Max Performance (444 MHz)" "speedometer" /usr/bin/vita-cpu max
+    prog "Balanced Standard (333 MHz)" "speedometer" /usr/bin/vita-cpu balanced
+    prog "Dynamic Scaling (On-Demand)" "speedometer" /usr/bin/vita-cpu ondemand
+    prog "Powersave (111 MHz)" "battery" /usr/bin/vita-cpu powersave
+}
 menu "Accessories" "applications-accessories" {
     prog "Welcome Guide" "preferences-desktop" /usr/bin/vita-desktop-welcome
     prog "On-Screen Keyboard" "input-keyboard" /usr/bin/toggle-keyboard
@@ -754,6 +775,7 @@ menu "Internet" "applications-internet" {
     prog "Badwolf Web Browser" "web-browser" badwolf
 }
 menu "System" "applications-system" {
+    prog "CPU Power & Frequency" "utilities-system-monitor" /usr/bin/vita-cpu gui
     prog "Activity Monitor (GUI)" "utilities-system-monitor" /usr/bin/taskmanager
     prog "Process Monitor (htop)" "utilities-terminal" sakura -e htop
     prog "Process Monitor (top)" "utilities-terminal" sakura -e top
@@ -762,6 +784,7 @@ menu "System" "applications-system" {
 }
 menu "Settings" "preferences-system" {
     prog "Welcome Guide" "preferences-desktop" /usr/bin/vita-desktop-welcome
+    prog "CPU Power & Frequency" "utilities-system-monitor" /usr/bin/vita-cpu gui
     prog "Toggle Boot to Desktop" "preferences-desktop" /usr/bin/vita-autostart toggle
     prog "Desktop Preferences" "preferences-desktop" pcmanfm --desktop-pref
 }
@@ -790,10 +813,11 @@ EOF
     cp "${TARGET}/root/.icewm/menu" "${TARGET}/usr/share/icewm/menu" 2>/dev/null || true
     cp "${TARGET}/root/.icewm/winoptions" "${TARGET}/usr/share/icewm/winoptions" 2>/dev/null || true
 
-    # 4. IceWM Startup script (starts PCManFM desktop manager)
+    # 4. IceWM Startup script (starts PCManFM desktop manager and CPU taskbar widget)
     cat << 'EOF' > "${TARGET}/root/.icewm/startup"
 #!/bin/sh
 pcmanfm --desktop &
+[ -x /usr/bin/vita-cpu-widget ] && /usr/bin/vita-cpu-widget &
 EOF
     chmod +x "${TARGET}/root/.icewm/startup"
     cp "${TARGET}/root/.icewm/startup" "${TARGET}/root/.config/icewm/startup" 2>/dev/null || true
@@ -972,6 +996,18 @@ Exec=sakura
 Icon=utilities-terminal
 Terminal=false
 Categories=System;TerminalEmulator;
+EOF
+
+    cat << 'EOF' > "${TARGET}/root/Desktop/vita-cpu.desktop"
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=CPU Power
+Comment=Configure PlayStation Vita CPU clock and power profiles
+Exec=/usr/bin/vita-cpu gui
+Icon=utilities-system-monitor
+Terminal=false
+Categories=Settings;System;
 EOF
 
     cat << 'EOF' > "${TARGET}/root/Desktop/reboot.desktop"

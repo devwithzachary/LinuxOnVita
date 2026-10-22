@@ -51,6 +51,7 @@ While original proof-of-concept projects proved that modern Linux can boot on th
 ## ✨ Features
 
 - **Full Quad-Core SMP Enablement:** All 4 ARM Cortex-A9 MPCore CPU cores running online simultaneously in full Symmetric Multi-Processing (SMP) mode, delivering 1152 BogoMIPS total compute power.
+- **Hardware Power & Dynamic CPU Frequency Scaling (`vita-cpu` / `vita-power`):** Dynamic clock frequency control across 111, 166, 222, 333, and 444 MHz operating points via native kernel driver (`vita-cpufreq`), standard cpufreq governors, CLI utility, touch GUI dialog, and an IceWM desktop taskbar widget.
 - **Sony Memory Card Independence:** Boot Linux directly from SD2Vita (`ux0:`) or internal eMMC storage (`ur0:`) without requiring a proprietary Sony memory card, powered by in-memory kernel pre-staging.
 - **Touchscreen Graphical Bootstrapper (`LinuxOnVita.vpk`):** Modern touch-driven handheld UI with double-buffered tear-free rendering at 60 FPS, smart partition recommendation badges (`ux0:` SD2Vita, `ur0:` internal eMMC), modal progress dialogs, and a full-screen graphical boot log viewer.
 - **Virtual Network Tunnels & Mesh VPNs (`CONFIG_TUN` & WireGuard):** Built-in kernel support for TUN devices and WireGuard, enabling Tailscale, ZeroTier, and secure overlay networks, plus the native `vita-tun` management tool.
