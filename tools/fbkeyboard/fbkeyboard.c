@@ -243,7 +243,7 @@ static void init_key_layout(void) {
         };
         int x = 4;
         for (size_t i = 0; i < sizeof(r0)/sizeof(r0[0]); i++) {
-            int kw = (r0[i].w_rel * (screen_w - 8)) / 116;
+            int kw = (i == sizeof(r0)/sizeof(r0[0]) - 1) ? ((screen_w - 4) - x) : ((r0[i].w_rel * (screen_w - 8)) / 116);
             keys[num_keys++] = (Key){r0[i].l, r0[i].s, r0[i].k, 0, x, kb_y, kw, row_h, (r0[i].k == KEY_BACKSPACE)};
             x += kw;
         }
@@ -258,7 +258,7 @@ static void init_key_layout(void) {
         };
         x = 4;
         for (size_t i = 0; i < sizeof(r1)/sizeof(r1[0]); i++) {
-            int kw = (r1[i].w_rel * (screen_w - 8)) / 116;
+            int kw = (i == sizeof(r1)/sizeof(r1[0]) - 1) ? ((screen_w - 4) - x) : ((r1[i].w_rel * (screen_w - 8)) / 116);
             keys[num_keys++] = (Key){r1[i].l, r1[i].s, r1[i].k, 0, x, kb_y, kw, row_h, (r1[i].k == KEY_TAB || r1[i].k == KEY_ENTER)};
             x += kw;
         }
@@ -273,7 +273,7 @@ static void init_key_layout(void) {
         };
         x = 4;
         for (size_t i = 0; i < sizeof(r2)/sizeof(r2[0]); i++) {
-            int kw = (r2[i].w_rel * (screen_w - 8)) / 116;
+            int kw = (i == sizeof(r2)/sizeof(r2[0]) - 1) ? ((screen_w - 4) - x) : ((r2[i].w_rel * (screen_w - 8)) / 116);
             keys[num_keys++] = (Key){r2[i].l, r2[i].s, r2[i].k, 0, x, kb_y, kw, row_h, (r2[i].k == KEY_LEFTSHIFT)};
             x += kw;
         }
@@ -290,7 +290,7 @@ static void init_key_layout(void) {
         };
         x = 4;
         for (size_t i = 0; i < sizeof(r3)/sizeof(r3[0]); i++) {
-            int kw = (r3[i].w_rel * (screen_w - 8)) / 126;
+            int kw = (i == sizeof(r3)/sizeof(r3[0]) - 1) ? ((screen_w - 4) - x) : ((r3[i].w_rel * (screen_w - 8)) / 126);
             keys[num_keys++] = (Key){r3[i].l, r3[i].s, r3[i].k, 0, x, kb_y, kw, r3_h, (r3[i].k == -100 || r3[i].k == -99)};
             x += kw;
         }
@@ -305,7 +305,7 @@ static void init_key_layout(void) {
         };
         int x = 4;
         for (size_t i = 0; i < sizeof(r0)/sizeof(r0[0]); i++) {
-            int kw = (r0[i].w_rel * (screen_w - 8)) / 116;
+            int kw = (i == sizeof(r0)/sizeof(r0[0]) - 1) ? ((screen_w - 4) - x) : ((r0[i].w_rel * (screen_w - 8)) / 116);
             keys[num_keys++] = (Key){r0[i].l, r0[i].s, r0[i].k, 0, x, kb_y, kw, row_h, (r0[i].k == KEY_BACKSPACE)};
             x += kw;
         }
@@ -320,7 +320,7 @@ static void init_key_layout(void) {
         };
         x = 4;
         for (size_t i = 0; i < sizeof(r1)/sizeof(r1[0]); i++) {
-            int kw = (r1[i].w_rel * (screen_w - 8)) / 116;
+            int kw = (i == sizeof(r1)/sizeof(r1[0]) - 1) ? ((screen_w - 4) - x) : ((r1[i].w_rel * (screen_w - 8)) / 116);
             keys[num_keys++] = (Key){r1[i].l, r1[i].s, r1[i].k, r1[i].shift, x, kb_y, kw, row_h, (r1[i].k == KEY_TAB)};
             x += kw;
         }
@@ -337,7 +337,7 @@ static void init_key_layout(void) {
         };
         x = 4;
         for (size_t i = 0; i < sizeof(r2)/sizeof(r2[0]); i++) {
-            int kw = (r2[i].w_rel * (screen_w - 8)) / 116;
+            int kw = (i == sizeof(r2)/sizeof(r2[0]) - 1) ? ((screen_w - 4) - x) : ((r2[i].w_rel * (screen_w - 8)) / 116);
             keys[num_keys++] = (Key){r2[i].l, r2[i].s, r2[i].k, r2[i].shift, x, kb_y, kw, row_h, 0};
             x += kw;
         }
@@ -354,7 +354,7 @@ static void init_key_layout(void) {
         };
         x = 4;
         for (size_t i = 0; i < sizeof(r3)/sizeof(r3[0]); i++) {
-            int kw = (r3[i].w_rel * (screen_w - 8)) / 126;
+            int kw = (i == sizeof(r3)/sizeof(r3[0]) - 1) ? ((screen_w - 4) - x) : ((r3[i].w_rel * (screen_w - 8)) / 126);
             keys[num_keys++] = (Key){r3[i].l, r3[i].s, r3[i].k, r3[i].shift, x, kb_y, kw, r3_h, (r3[i].k == -100 || r3[i].k == -99 || r3[i].k == -98)};
             x += kw;
         }
@@ -724,7 +724,7 @@ int main(int argc, char **argv) {
                     } else if (active_key->keycode == -99) {
                         // Hide key
                         keyboard_visible = 0;
-                        draw_rect(0, screen_h - KB_HEIGHT, screen_w, KB_HEIGHT, 0x00000000);
+                        draw_rect(0, screen_h - KB_HEIGHT, screen_w, KB_HEIGHT, 0xFF000000);
                         apply_console_geometry(0);
                         draw_reshow_button(0);
                     } else if (active_key->keycode == -98) {

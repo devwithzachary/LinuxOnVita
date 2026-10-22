@@ -13,6 +13,19 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Updated `baremetal-loader.skprx` DTB selection and `sysroot_model_is_vita2k()` to detect `0x800000`, `0x820000`, microUSB hardware flag (`sysroot->hw_info & 0x08`), and internal memory emulation flag (`sysroot->hw_info & 0x10`).
   - Added loop timeout safety guards to `lcd_spi_read()` in `libbaremetal` to prevent infinite loops during LCD DDB panel identification queries.
   - Ensured PS Vita 2000 Slim consoles correctly select `vita2000.dtb`, initialize the LCD panel and backlight at full brightness, and boot cleanly into Linux.
+- **CDRAM Framebuffer Initialization & Right Margin Glitch Elimination:**
+  - Erased leftover graphical data and frame buffer remnants from the LiveArea installer application by initializing the entire 1280x720 CDRAM display buffer (`0x20000000`) to solid black (`0xFF000000`) immediately after enabling CDRAM in `vita-baremetal-linux-loader`.
+  - Resolved the persistent vertical artifact and scanline glitch along the far-right screen boundary (pixels 952 to 960) visible on PS Vita 2000 LCD panels.
+  - Updated virtual console initialization in `S40input` to execute a full screen clear before establishing VT100 top and bottom scrolling margins (`\033[2J\033[1;21r\033[1;1H`), preventing character cell artifacts and stale frame buffer scanlines outside the active scrolling region.
+
+### Handheld User Experience & RootFS
+- **Touchscreen Keyboard (`fbkeyboard`) Margin Alignment:**
+  - Corrected key width calculation in `init_key_layout()` for the rightmost keys across all rows (`Bksp`, `Enter`, `/`, `Hide`, etc.) so they stretch precisely to the right screen boundary (`screen_w - 4`), eliminating the 1-2 pixel truncation gap on the right margin.
+  - Switched keyboard hide clear buffer color to solid black (`0xFF000000`) for seamless console presentation.
+- **Clean Boot Diagnostics & Read-Only Storage Safety (`S99bootlog`):**
+  - Fixed spurious "Read-only file system" error spam across the console during boot: replaced POSIX `[ -w /mnt/ux0 ]` inode mode checks with mount status inspection (`/proc/mounts`) to accurately detect read-only mounted filesystems.
+  - Protected persistent storage by writing diagnostic logs to SD2Vita (`ux0:linux/boot.log`) or internal memory (`ur0:boot.log`) only when partitions are explicitly mounted read-write.
+  - Redirected the 35-second asynchronous boot logging daemon to `/tmp/bootlog-daemon.log` to prevent background messages and shell redirection errors from leaking onto `/dev/tty1` and corrupting the interactive terminal prompt.
 
 ### Bootstrapper & Installer App (VPK)
 - **Application Version Bump:**

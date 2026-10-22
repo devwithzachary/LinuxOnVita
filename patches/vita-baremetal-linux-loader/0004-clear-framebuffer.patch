@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: DevWithZachary <devwithzachary@pm.me>
+Date: Thu, 22 Oct 2026 14:00:00 +0100
+Subject: [PATCH] Clear CDRAM framebuffer memory to black at boot
+
+---
+ src/main.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/src/main.c b/src/main.c
+index a912f45..c7962ee 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -199,6 +199,13 @@ int main(struct sysroot_buffer *sysroot)
+ 	uart_init(0, 115200);
+ 
+ 	cdram_enable();
++
++	/* Clear entire framebuffer in CDRAM to solid black (0xFF000000) to erase
++	 * any leftover graphics from LiveArea or installer app */
++	volatile uint32_t *fb = (volatile uint32_t *)0x20000000;
++	for (uint32_t i = 0; i < (1280 * 720); i++)
++		fb[i] = 0xFF000000;
++
+ 	i2c_init_bus(1);
+ 	syscon_init();
+ 
+-- 
+2.39.5
