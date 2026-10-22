@@ -13,9 +13,11 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Updated `baremetal-loader.skprx` DTB selection and `sysroot_model_is_vita2k()` to detect `0x800000`, `0x820000`, microUSB hardware flag (`sysroot->hw_info & 0x08`), and internal memory emulation flag (`sysroot->hw_info & 0x10`).
   - Added loop timeout safety guards to `lcd_spi_read()` in `libbaremetal` to prevent infinite loops during LCD DDB panel identification queries.
   - Ensured PS Vita 2000 Slim consoles correctly select `vita2000.dtb`, initialize the LCD panel and backlight at full brightness, and boot cleanly into Linux.
-- **CDRAM Framebuffer Initialization & Right Margin Glitch Elimination:**
-  - Erased leftover graphical data and frame buffer remnants from the LiveArea installer application by initializing the entire 1280x720 CDRAM display buffer (`0x20000000`) to solid black (`0xFF000000`) immediately after enabling CDRAM in `vita-baremetal-linux-loader`.
-  - Resolved the persistent vertical artifact and scanline glitch along the far-right screen boundary (pixels 952 to 960) visible on PS Vita 2000 LCD panels.
+- **PS Vita 2000 Slim LCD DSI Timings & Screen Glitch Elimination:**
+  - Resolved the persistent combed line artifact along the right bezel and horizontal hatching at the top of the display on PS Vita 2000 Slim LCD panels.
+  - Corrected Video Identification Code (VIC) in `libbaremetal`: `display_init_lcd()` previously called `dsi_start_master()` and `dsi_start_display()` with `vic = 0` (Samsung OLED panel timings: `htotal = 1050`, `HSW = 66`, `vtotal = 594`, `VBP = 42`).
+  - Corrected `vic` to `0x20` (Sony / JDI LCD panel timings: `htotal = 1375`, `HSW = 391`, `vtotal = 567`, `VBP = 15`) in `display_init_lcd()`, matching the exact horizontal sync pulse width and line blanking periods required by the PS Vita 2000 Slim LCD timing controller.
+  - Initialized the entire 1280x720 CDRAM display buffer (`0x20000000`) to solid black (`0xFF000000`) immediately after enabling CDRAM in `vita-baremetal-linux-loader` to erase leftover graphical data and frame buffer remnants from the LiveArea installer application.
   - Updated virtual console initialization in `S40input` to execute a full screen clear before establishing VT100 top and bottom scrolling margins (`\033[2J\033[1;21r\033[1;1H`), preventing character cell artifacts and stale frame buffer scanlines outside the active scrolling region.
 - **Hardware Power & Dynamic CPU Frequency Scaling (`vita-cpufreq`):**
   - Implemented a dedicated native Linux kernel CPU frequency driver (`drivers/cpufreq/vita-cpufreq.c`) for the PlayStation Vita SoC (CXD5441GG).

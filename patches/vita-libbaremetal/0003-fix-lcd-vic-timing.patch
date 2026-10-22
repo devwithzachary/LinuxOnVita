@@ -1,0 +1,23 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: DevWithZachary <devwithzachary@pm.me>
+Date: Thu, 22 Oct 2026 17:15:00 +0100
+Subject: [PATCH] Fix LCD DSI timing by setting VIC to 0x20 for Vita 2000 Slim
+
+---
+ libbaremetal/src/display.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/libbaremetal/src/display.c b/libbaremetal/src/display.c
+index 282c0f2..b154cb1 100644
+--- a/libbaremetal/src/display.c
++++ b/libbaremetal/src/display.c
+@@ -153,7 +153,7 @@ static void display_init_oled(void)
+ 
+ static void display_init_lcd(void)
+ {
+-	static const uint32_t vic = 0;
++	static const uint32_t vic = 0x20;
+ 	uint32_t pixelclock;
+ 
+ 	dsi_get_pixelclock_for_vic(vic, 24, &pixelclock);
+-- 
