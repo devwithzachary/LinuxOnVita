@@ -22,7 +22,7 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
 
 ## Detailed Milestone Specifications
 
-### [v1.4.0] - Core Bootloader Architecture, Storage Independence & SMP Performance (Current)
+### [v1.4.0] - Core Bootloader Architecture, Storage Independence & SMP Performance (Released)
 
 **Focus Areas:** Full Quad-Core SMP enablement, Sony memory card independence, storage protection, and virtual network tunneling.
 
@@ -49,7 +49,7 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
 
 ---
 
-### [v1.5.0] - Handheld Ergonomics, Screen Protection & First-Boot Setup
+### [v1.5.0] - Handheld Ergonomics, Screen Protection & First-Boot Setup (Current)
 
 **Priority:** CRITICAL (Highest)
 **Focus Areas:** Battery life preservation, OLED burn-in protection, readable console fonts, guided onboarding, and gamepad ergonomics.

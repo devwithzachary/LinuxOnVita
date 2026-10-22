@@ -3,7 +3,22 @@
 All notable changes to LinuxOnVita are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) conventions.
 
-## [v1.4.0] - In Development
+## [v1.5.0] - In Development
+
+### Hardware & Kernel Architecture
+- **PS Vita 2000 (Slim) Hardware Model Detection & LCD Display Initialization:**
+  - Resolved boot failure on retail PS Vita 2000 Slim consoles (specifically USS-1002 motherboard revisions such as PCH-2016, with `hardware_info = 0x00822238` / `hw_mask = 0x820000`).
+  - Fixed DTB model selection in `baremetal-loader.skprx` and `sysroot_model_is_vita2k()` in `libbaremetal`: previously only checked for `hw_mask == 0x800000` (USS-1001 launch models), causing USS-1002 models to fall back to `vita1000.dtb` and call `display_init(DISPLAY_TYPE_OLED)`.
+  - Resolved unlit LCD panel on reboot: `oled_init()` executed SPI commands on nonexistent OLED hardware and never activated LCD backlight power (GPIO 1, pin 7 and I2C backlight controller `0xC8`), leaving the screen dark and controls unresponsive.
+  - Updated `baremetal-loader.skprx` DTB selection and `sysroot_model_is_vita2k()` to detect `0x800000`, `0x820000`, microUSB hardware flag (`sysroot->hw_info & 0x08`), and internal memory emulation flag (`sysroot->hw_info & 0x10`).
+  - Added loop timeout safety guards to `lcd_spi_read()` in `libbaremetal` to prevent infinite loops during LCD DDB panel identification queries.
+  - Ensured PS Vita 2000 Slim consoles correctly select `vita2000.dtb`, initialize the LCD panel and backlight at full brightness, and boot cleanly into Linux.
+
+### Bootstrapper & Installer App (VPK)
+- **Application Version Bump:**
+  - Bumped application version to `v1.5.0` (`01.50`).
+
+## [v1.4.0] - 2026-10-21
 
 ### Hardware & Kernel Architecture
 - **Full Quad-Core SMP Enablement (4 Cores Active):**

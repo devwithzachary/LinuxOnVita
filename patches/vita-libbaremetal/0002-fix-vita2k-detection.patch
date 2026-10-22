@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: DevWithZachary <devwithzachary@pm.me>
+Date: Thu, 22 Oct 2026 11:45:00 +0100
+Subject: [PATCH] Fix Vita 2000 Slim detection for USS-1002 motherboards and add SPI read timeout
+
+---
+ libbaremetal/src/lcd.c     | 5 ++++-
+ libbaremetal/src/sysroot.c | 3 ++-
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/libbaremetal/src/lcd.c b/libbaremetal/src/lcd.c
+index 328e017..a8d8de3 100644
+--- a/libbaremetal/src/lcd.c
++++ b/libbaremetal/src/lcd.c
+@@ -231,8 +231,11 @@ static void lcd_spi_read(uint8_t *buffer, uint32_t size, int header_bits)
+ 	pervasive_clock_enable_spi(2);
+ 
+ 	while (readcnt < size) {
+-		while (spi_regs[0xA] == 0)
++		uint32_t timeout = 100000;
++		while (spi_regs[0xA] == 0 && --timeout)
+ 			;
++		if (!timeout)
++			break;
+ 
+ 		tmp = tmp | (spi_regs[0] << tmp_bits);
+ 		tmp_bits = tmp_bits + 16;
+diff --git a/libbaremetal/src/sysroot.c b/libbaremetal/src/sysroot.c
+index 5fb6ebe..228a1fe 100644
+--- a/libbaremetal/src/sysroot.c
++++ b/libbaremetal/src/sysroot.c
+@@ -57,7 +57,8 @@ int sysroot_model_is_vita2k(void)
+ 	if (sysroot_model_is_dolce())
+ 		return 0;
+ 
+-	if (hw_info_mask == 0x800000)
++	if (hw_info_mask == 0x800000 || hw_info_mask == 0x820000 ||
++	    (sysroot->hw_info & 0x08) || (sysroot->hw_info & 0x10))
+ 		return 1;
+ 
+ 	return 0;
+-- 
