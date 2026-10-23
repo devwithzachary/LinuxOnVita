@@ -45,11 +45,13 @@ detect_hardware() {
 }
 
 show_help() {
-    echo "Usage: vita-brightness [get | set <0-100> | max]"
+    echo "Usage: vita-brightness [get | set <0-100> | up | down | max]"
     echo ""
     echo "Commands:"
     echo "  get           - Display current screen brightness and hardware status"
     echo "  set <0-100>   - Set LCD screen brightness percentage (0=Off, 100=Full)"
+    echo "  up            - Increase screen brightness by +10%"
+    echo "  down          - Decrease screen brightness by -10%"
     echo "  max           - Set LCD screen to 100% full brightness"
     echo ""
     echo "Hardware Differences:"
@@ -195,6 +197,20 @@ case "$CMD" in
         ;;
     max)
         set_brightness 100
+        ;;
+    up|step-up)
+        CURR=100
+        [ -f "${STATE_FILE}" ] && CURR=$(cat "${STATE_FILE}" 2>/dev/null || echo "100")
+        NEW=$(( CURR + 10 ))
+        [ "$NEW" -gt 100 ] && NEW=100
+        set_brightness "$NEW"
+        ;;
+    down|step-down)
+        CURR=100
+        [ -f "${STATE_FILE}" ] && CURR=$(cat "${STATE_FILE}" 2>/dev/null || echo "100")
+        NEW=$(( CURR - 10 ))
+        [ "$NEW" -lt 0 ] && NEW=0
+        set_brightness "$NEW"
         ;;
     set)
         if [ -z "$2" ]; then

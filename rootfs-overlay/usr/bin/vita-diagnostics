@@ -585,6 +585,11 @@ KEYBOARD_PID=$(pidof fbkeyboard 2>/dev/null || true)
     echo "=== SECTION 5: INPUT & CONSOLE SUBSYSTEM ==="
     echo "vita-input-mapper: $([ -n "$INPUT_MAPPER_PID" ] && echo "RUNNING (PID: $INPUT_MAPPER_PID)" || echo "NOT RUNNING")"
     echo "fbkeyboard:        $([ -n "$KEYBOARD_PID" ] && echo "RUNNING (PID: $KEYBOARD_PID)" || echo "NOT RUNNING")"
+    if command -v vita-led >/dev/null 2>&1; then
+        echo ""
+        echo "--- PlayStation Button LED Status ---"
+        vita-led status 2>/dev/null || true
+    fi
     echo ""
     echo "--- Input Devices (/proc/bus/input/devices) ---"
     cat /proc/bus/input/devices 2>/dev/null || true

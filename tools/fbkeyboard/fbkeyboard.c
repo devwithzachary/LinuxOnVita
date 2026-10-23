@@ -48,8 +48,23 @@ static Key keys[64];
 static int num_keys = 0;
 
 static int shift_active = 0;
+static int caps_lock = 0;
+static uint64_t last_shift_tap_ms = 0;
+static volatile sig_atomic_t g_toggle_visibility = 0;
 static int keyboard_visible = 1;
 static int keyboard_page = 0; // 0 = ABC, 1 = ?123 Symbols
+
+static uint64_t get_time_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
+}
+
+static int is_repeatable_key(int keycode) {
+    return (keycode == KEY_BACKSPACE || keycode == KEY_SPACE ||
+            keycode == KEY_UP || keycode == KEY_DOWN ||
+            keycode == KEY_LEFT || keycode == KEY_RIGHT);
+}
 
 static int fb_fd = -1;
 static int tty_fd = -1;
@@ -203,8 +218,28 @@ static void draw_line_h(int x, int y, int w, uint32_t color) {
 }
 
 static void draw_key(const Key *k, int pressed) {
-    uint32_t bg = pressed ? COLOR_KEY_PRESS : (k->is_special ? COLOR_SPECIAL : COLOR_KEY_BG);
-    uint32_t text_color = (k->is_special && !pressed) ? 0xFF11111B : COLOR_TEXT;
+    uint32_t bg;
+    uint32_t text_color;
+    const char *label = (shift_active && k->shift_label) ? k->shift_label : k->label;
+
+    if (k->keycode == KEY_LEFTSHIFT) {
+        if (caps_lock) {
+            bg = pressed ? 0xFFE0AF68 : 0xFFF5A97F; // Catppuccin Peach / illuminated amber
+            text_color = 0xFF11111B;               // High contrast dark text
+            label = "CAPS";
+        } else if (shift_active) {
+            bg = pressed ? COLOR_KEY_PRESS : COLOR_SPECIAL;
+            text_color = pressed ? COLOR_TEXT : 0xFF11111B;
+            label = "Shift";
+        } else {
+            bg = pressed ? COLOR_KEY_PRESS : COLOR_KEY_BG;
+            text_color = COLOR_TEXT;
+            label = "Shift";
+        }
+    } else {
+        bg = pressed ? COLOR_KEY_PRESS : (k->is_special ? COLOR_SPECIAL : COLOR_KEY_BG);
+        text_color = (k->is_special && !pressed) ? 0xFF11111B : COLOR_TEXT;
+    }
 
     // Key body
     draw_rect(k->x + 1, k->y + 1, k->w - 2, k->h - 2, bg);
@@ -220,7 +255,6 @@ static void draw_key(const Key *k, int pressed) {
         }
     }
 
-    const char *label = (shift_active && k->shift_label) ? k->shift_label : k->label;
     int text_len = strlen(label);
     int tx = k->x + (k->w - text_len * 8) / 2;
     int ty = k->y + (k->h - 16) / 2;
@@ -527,6 +561,11 @@ static void handle_sigcont(int sig) {
     g_resumed = 1;
 }
 
+static void handle_sigusr1(int sig) {
+    (void)sig;
+    g_toggle_visibility = 1;
+}
+
 static void drain_pending_touch(int fd) {
     int fl = fcntl(fd, F_GETFL, 0);
     if (fl < 0) return;
@@ -596,6 +635,21 @@ int main(int argc, char **argv) {
     sa.sa_flags = 0;
     sigaction(SIGCONT, &sa, NULL);
 
+    // Register SIGUSR1 handler to toggle keyboard visibility on demand (e.g. via PS Button)
+    struct sigaction sa_usr1;
+    memset(&sa_usr1, 0, sizeof(sa_usr1));
+    sa_usr1.sa_handler = handle_sigusr1;
+    sigemptyset(&sa_usr1.sa_mask);
+    sa_usr1.sa_flags = 0;
+    sigaction(SIGUSR1, &sa_usr1, NULL);
+
+    // Write PID for signal management
+    FILE *pid_file = fopen("/var/run/fbkeyboard.pid", "w");
+    if (pid_file) {
+        fprintf(pid_file, "%d\n", getpid());
+        fclose(pid_file);
+    }
+
     drain_pending_touch(touch_fd);
 
     int flags = fcntl(touch_fd, F_GETFL, 0);
@@ -605,6 +659,10 @@ int main(int argc, char **argv) {
     int cur_touch_x = -1, cur_touch_y = -1;
     int is_touching = 0;
     int was_touching = 0;
+    int key_emitted = 0;
+    uint64_t touch_start_ms = 0;
+    uint64_t last_repeat_ms = 0;
+    uint64_t last_damage_check = 0;
     Key *active_key = NULL;
 
     struct pollfd pfd;
@@ -617,6 +675,7 @@ int main(int argc, char **argv) {
             drain_pending_touch(touch_fd);
             is_touching = 0;
             was_touching = 0;
+            key_emitted = 0;
             active_key = NULL;
             if (keyboard_visible) {
                 draw_keyboard();
@@ -626,7 +685,39 @@ int main(int argc, char **argv) {
             continue;
         }
 
-        int poll_timeout = keyboard_visible ? 1000 : 250;
+        if (g_toggle_visibility) {
+            g_toggle_visibility = 0;
+            keyboard_visible = !keyboard_visible;
+            if (!keyboard_visible) {
+                draw_rect(0, screen_h - KB_HEIGHT, screen_w, KB_HEIGHT, 0xFF000000);
+                apply_console_geometry(0);
+                draw_reshow_button(0);
+            } else {
+                apply_console_geometry(1);
+                init_key_layout();
+                draw_keyboard();
+            }
+            continue;
+        }
+
+        // Damage detection & auto-healing: sample probe pixels at 100ms interval
+        uint64_t now_ms = get_time_ms();
+        if (keyboard_visible && (now_ms - last_damage_check >= 100)) {
+            last_damage_check = now_ms;
+            int top_y = screen_h - KB_HEIGHT;
+            int check_x1 = screen_w / 4;
+            int check_x2 = screen_w / 2;
+            int check_x3 = (3 * screen_w) / 4;
+            if (fb_mem[top_y * screen_w + check_x1] != COLOR_KEY_BORDER ||
+                fb_mem[top_y * screen_w + check_x2] != COLOR_KEY_BORDER ||
+                fb_mem[top_y * screen_w + check_x3] != COLOR_KEY_BORDER) {
+                draw_keyboard();
+            }
+        }
+
+        // When a repeatable key is actively being held down, poll with 20ms timeout to trigger repeats
+        int poll_timeout = (is_touching && active_key && is_repeatable_key(active_key->keycode))
+                           ? 20 : (keyboard_visible ? 100 : 250);
         int poll_res = poll(&pfd, 1, poll_timeout);
 
         if (poll_res < 0) {
@@ -636,6 +727,7 @@ int main(int argc, char **argv) {
                     drain_pending_touch(touch_fd);
                     is_touching = 0;
                     was_touching = 0;
+                    key_emitted = 0;
                     active_key = NULL;
                     if (keyboard_visible) {
                         draw_keyboard();
@@ -643,9 +735,39 @@ int main(int argc, char **argv) {
                         draw_reshow_button(0);
                     }
                 }
+                if (g_toggle_visibility) {
+                    g_toggle_visibility = 0;
+                    keyboard_visible = !keyboard_visible;
+                    if (!keyboard_visible) {
+                        draw_rect(0, screen_h - KB_HEIGHT, screen_w, KB_HEIGHT, 0xFF000000);
+                        apply_console_geometry(0);
+                        draw_reshow_button(0);
+                    } else {
+                        apply_console_geometry(1);
+                        init_key_layout();
+                        draw_keyboard();
+                    }
+                }
                 continue;
             }
             break;
+        }
+
+        // Handle key repeat on long-press (after 400ms delay, repeat every 80ms)
+        if (is_touching && active_key && is_repeatable_key(active_key->keycode)) {
+            uint64_t now = get_time_ms();
+            if ((now - touch_start_ms >= 400) && (now - last_repeat_ms >= 80)) {
+                const char *lbl = shift_active ? active_key->shift_label : active_key->label;
+                if (shift_active && uinput_fd >= 0) emit_key(uinput_fd, KEY_LEFTSHIFT, 1);
+                emit_key_or_tty(uinput_fd, active_key->keycode, active_key->need_shift, lbl, 1);
+                emit_key_or_tty(uinput_fd, active_key->keycode, active_key->need_shift, lbl, 0);
+                if (shift_active && !caps_lock) {
+                    if (uinput_fd >= 0) emit_key(uinput_fd, KEY_LEFTSHIFT, 0);
+                    shift_active = 0;
+                    draw_keyboard();
+                }
+                last_repeat_ms = now;
+            }
         }
 
         if (poll_res == 0) {
@@ -660,11 +782,27 @@ int main(int argc, char **argv) {
             drain_pending_touch(touch_fd);
             is_touching = 0;
             was_touching = 0;
+            key_emitted = 0;
             active_key = NULL;
             if (keyboard_visible) {
                 draw_keyboard();
             } else {
                 draw_reshow_button(0);
+            }
+            continue;
+        }
+
+        if (g_toggle_visibility) {
+            g_toggle_visibility = 0;
+            keyboard_visible = !keyboard_visible;
+            if (!keyboard_visible) {
+                draw_rect(0, screen_h - KB_HEIGHT, screen_w, KB_HEIGHT, 0xFF000000);
+                apply_console_geometry(0);
+                draw_reshow_button(0);
+            } else {
+                apply_console_geometry(1);
+                init_key_layout();
+                draw_keyboard();
             }
             continue;
         }
@@ -711,12 +849,33 @@ int main(int argc, char **argv) {
                         break;
                     }
                 }
+
+                if (active_key && is_repeatable_key(active_key->keycode)) {
+                    // Repeatable key: emit immediate stroke and record start time for long-press repeat
+                    const char *lbl = shift_active ? active_key->shift_label : active_key->label;
+                    if (shift_active && uinput_fd >= 0) emit_key(uinput_fd, KEY_LEFTSHIFT, 1);
+                    emit_key_or_tty(uinput_fd, active_key->keycode, active_key->need_shift, lbl, 1);
+                    emit_key_or_tty(uinput_fd, active_key->keycode, active_key->need_shift, lbl, 0);
+                    if (shift_active && !caps_lock) {
+                        if (uinput_fd >= 0) emit_key(uinput_fd, KEY_LEFTSHIFT, 0);
+                        shift_active = 0;
+                        draw_keyboard();
+                    }
+                    key_emitted = 1;
+                    touch_start_ms = get_time_ms();
+                    last_repeat_ms = touch_start_ms;
+                } else {
+                    key_emitted = 0;
+                }
             } else if (!is_touching && was_touching) {
                 was_touching = 0;
                 if (active_key) {
                     draw_key(active_key, 0);
 
-                    if (active_key->keycode == -100) {
+                    if (key_emitted) {
+                        // Repeatable key was already emitted on initial press and/or repeats
+                        key_emitted = 0;
+                    } else if (active_key->keycode == -100) {
                         // Toggle between ABC and ?123 Symbols
                         keyboard_page = !keyboard_page;
                         init_key_layout();
@@ -739,14 +898,26 @@ int main(int argc, char **argv) {
                             ioctl(tty_fd, TIOCSTI, &c);
                         }
                     } else if (active_key->keycode == KEY_LEFTSHIFT) {
-                        shift_active = !shift_active;
+                        uint64_t now = get_time_ms();
+                        if (caps_lock) {
+                            caps_lock = 0;
+                            shift_active = 0;
+                            last_shift_tap_ms = 0;
+                        } else if (now - last_shift_tap_ms <= 350) {
+                            caps_lock = 1;
+                            shift_active = 1;
+                            last_shift_tap_ms = 0;
+                        } else {
+                            shift_active = !shift_active;
+                            last_shift_tap_ms = now;
+                        }
                         draw_keyboard();
                     } else {
                         const char *lbl = shift_active ? active_key->shift_label : active_key->label;
                         if (shift_active && uinput_fd >= 0) emit_key(uinput_fd, KEY_LEFTSHIFT, 1);
                         emit_key_or_tty(uinput_fd, active_key->keycode, active_key->need_shift, lbl, 1);
                         emit_key_or_tty(uinput_fd, active_key->keycode, active_key->need_shift, lbl, 0);
-                        if (shift_active) {
+                        if (shift_active && !caps_lock) {
                             if (uinput_fd >= 0) emit_key(uinput_fd, KEY_LEFTSHIFT, 0);
                             shift_active = 0;
                             draw_keyboard();
@@ -758,6 +929,7 @@ int main(int argc, char **argv) {
         }
     }
 
+    unlink("/var/run/fbkeyboard.pid");
     munmap(fb_mem, fb_size);
     close(fb_fd);
     if (uinput_fd >= 0) close(uinput_fd);

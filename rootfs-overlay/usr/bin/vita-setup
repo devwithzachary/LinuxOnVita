@@ -37,7 +37,7 @@ else
 fi
 
 clear_screen() {
-    clear 2>/dev/null || printf '\033[2J\033[H'
+    clear 2>/dev/null || printf '\033[2J\033[1;24r\033[1;1H'
 }
 
 print_header() {
@@ -653,6 +653,35 @@ step_desktop() {
     esac
 
     echo ""
+    echo "Configure PlayStation Button Blue LED Activity Mode:"
+    echo "Choose how the front blue PS Button LED operates:"
+    printf "  ${C_BOLD}1) Heartbeat Pulse (Default)${C_RESET} : Rhythmic pulse reflecting CPU load\n"
+    printf "  ${C_BOLD}2) Disk / Storage I/O${C_RESET}       : Blinks during SD card / Game Card access\n"
+    printf "  ${C_BOLD}3) Solid Blue Glow${C_RESET}          : Steady illumination\n"
+    printf "  ${C_BOLD}4) Disabled (Off)${C_RESET}           : LED turned off completely\n"
+    echo ""
+    printf "Enter choice [1-4] (Default: 1): "
+    read -r led_choice
+    case "$led_choice" in
+        2)
+            command -v vita-led >/dev/null 2>&1 && vita-led disk >/dev/null 2>&1 || true
+            printf "${C_GREEN}[OK] PS Button LED set to Storage I/O activity mode.${C_RESET}\n"
+            ;;
+        3)
+            command -v vita-led >/dev/null 2>&1 && vita-led on >/dev/null 2>&1 || true
+            printf "${C_GREEN}[OK] PS Button LED set to Solid illumination.${C_RESET}\n"
+            ;;
+        4)
+            command -v vita-led >/dev/null 2>&1 && vita-led off >/dev/null 2>&1 || true
+            printf "${C_GREEN}[OK] PS Button LED turned off.${C_RESET}\n"
+            ;;
+        *)
+            command -v vita-led >/dev/null 2>&1 && vita-led heartbeat >/dev/null 2>&1 || true
+            printf "${C_GREEN}[OK] PS Button LED set to Heartbeat pulse mode.${C_RESET}\n"
+            ;;
+    esac
+
+    echo ""
     printf "${C_BOLD}Press [Enter] to complete setup... ${C_RESET}"
     read -r _dummy
 }
@@ -695,6 +724,10 @@ step_completion() {
     fi
     printf "  * %-14s : %s\n" "Desktop Boot" "$autostart_status"
 
+    local led_info="Heartbeat"
+    [ -f /etc/vita-led.conf ] && led_info=$(grep '^mode=' /etc/vita-led.conf 2>/dev/null | cut -d= -f2 || echo "heartbeat")
+    printf "  * %-14s : %s\n" "PS Button LED" "$led_info"
+
     echo "================================================================================"
     echo "  Useful Commands to Know:"
     echo "    - vita-setup       : Re-run this setup wizard anytime"
@@ -703,6 +736,7 @@ step_completion() {
     echo "    - vita-wifi        : Scan, connect, and manage Wi-Fi connections"
     echo "    - vita-storage     : Manage storage write protection (ro / rw)"
     echo "    - vita-brightness  : Adjust display backlight & brightness"
+    echo "    - vita-led         : Set PS Button LED mode (heartbeat, disk, on, off)"
     echo "    - vita-cpu         : View & tune CPU frequency (444, 333, 111 MHz)"
     echo "    - reboot           : Clean hardware reset back to PlayStation Vita LiveArea"
     echo "================================================================================"

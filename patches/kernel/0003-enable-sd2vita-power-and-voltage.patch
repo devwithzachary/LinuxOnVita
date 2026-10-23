@@ -63,7 +63,12 @@ index d616ccdd5..c434234ef 100644
 +	else
 +		dev_info(&spi->dev, "Game Card slot power enabled (cmd 0x888)\n");
 +
-+	/* Trigger card detect rescan on SDIF1 (bus 1) */
++	/*
++	 * Allow power rail and card internal microcontroller to settle,
++	 * then fully re-initialize SDIF1 host and trigger MMC card rescan.
++	 */
++	msleep(20);
++	sdhci_vita_reinit_host(1);
 +	sdhci_vita_trigger_rescan(1);
 +
  	return devm_mfd_add_devices(syscon->dev, PLATFORM_DEVID_NONE,
@@ -113,6 +118,24 @@ index 467779c09..dcad53713 100644
  }
  
  /**
+@@ -211,10 +233,10 @@ void sdhci_vita_reinit_host(int bus_index)
+ 	misc_base = ioremap(PERVASIVE_MISC_BASE, 0x400);
+ 	if (misc_base) {
+ 		val = readl(misc_base + 0x124);
+-		if (bus_index == 2) {
+-			/* Set bit 2 = 1 for 1.8V */
+-			val |= BIT(2);
+-			writel(val, misc_base + 0x124);
+-			mb();
+-		}
++		if (bus_index == 0 || bus_index == 2)
++			val |= BIT(bus_index);
++		else
++			val &= ~BIT(bus_index);
++		writel(val, misc_base + 0x124);
++		mb();
+ 		iounmap(misc_base);
+ 	}
 @@ -376,6 +398,31 @@ void sdhci_vita_trigger_rescan(int bus_index)
  }
  EXPORT_SYMBOL_GPL(sdhci_vita_trigger_rescan);

@@ -23,6 +23,7 @@ Welcome to the comprehensive user guide for **LinuxOnVita**. This guide is desig
    - [Virtual Network Tunnels & Mesh VPNs (`CONFIG_TUN` & `vita-tun`)](#9-virtual-network-tunnels--mesh-vpns-config_tun-wireguard--vita-tun)
    - [Hardware Power & CPU Frequency Control (`vita-cpu` / `vita-power`)](#10-hardware-power--cpu-frequency-control-vita-cpu--vita-power)
    - [Display Sleep, Auto-Dimming & Power Management (`vita-powerd`)](#11-display-sleep-auto-dimming--power-management-vita-powerd)
+   - [PlayStation Button LED Control (`vita-led`)](#12-playstation-button-led-control-vita-led)
 5. [Alpine Linux Package Ecosystem (`alpine-chroot`)](#5-alpine-linux-package-ecosystem-alpine-chroot)
    - [Understanding the Isolated Environment](#understanding-the-isolated-environment)
    - [Entering & Exiting Alpine](#entering--exiting-alpine)
@@ -140,12 +141,15 @@ If Linux fails to boot, freezes, or the screen goes dark without reaching the sh
 LinuxOnVita transforms your handheld console into a self-contained computer without requiring any external cables or keyboards.
 
 ### On-Screen Touch Keyboard (`fbkeyboard`)
-* **Show / Hide:** Tap **[Hide]** in the bottom-right corner to dismiss the keyboard for an unobstructed view of your terminal. When hidden, a prominent, high-contrast **[KEYBOARD]** button remains pinned at the bottom-right corner; tap it at any time to instantly restore the on-screen keyboard. Terminal text is constrained to 32 rows (`120x32`), ensuring scrolling output never overwrites or erases the reshow button.
+* **Show / Hide:** Tap **[Hide]** in the bottom-right corner to dismiss the keyboard for an unobstructed view of your terminal. When hidden, a prominent, high-contrast **[KEYBOARD]** button remains pinned at the bottom-right corner; tap it at any time to instantly restore the on-screen keyboard. Terminal text is constrained to rows 1-24 (`120x24`), ensuring scrolling output never overwrites or erases the keyboard or reshow button.
+* **Hardware PS Button Toggle:** Press the physical PlayStation button on the console to toggle keyboard visibility on and off instantly.
+* **Caps Lock Toggle:** Double-tap the **Shift** key to engage Caps Lock mode. When active, the key illuminates in high-visibility amber with a **[CAPS]** label. Tap Shift once again to return to standard typing.
+* **Key Repeat on Long-Press:** Holding down **Backspace**, **Spacebar**, or any **Arrow key** automatically repeats after a 400ms delay at fast 80ms intervals.
 * **Letter / Number Switching:** Tap **[?123]** to access numbers and symbols, or **[ABC]** to return to letters.
-* **Special Keys:** Includes dedicated buttons for **Tab**, **Esc**, **Ctrl**, and **Enter**.
+* **Special Keys:** Includes dedicated buttons for **Tab**, **Esc**, **Ctrl**, **Enter**, and **Ctrl+C**.
 
 ### Physical Gamepad Navigation (`vita-input-mapper`)
-You can control the terminal shell entirely with the Vita's physical gamepad buttons:
+You can control the terminal shell and desktop entirely with the Vita's physical gamepad buttons:
 
 | Button | Action | Shell Equivalent |
 | :--- | :--- | :--- |
@@ -155,8 +159,13 @@ You can control the terminal shell entirely with the Vita's physical gamepad but
 | **Circle (○)** | Delete character | `Backspace` |
 | **Square (□)** | Insert space | `Spacebar` |
 | **Triangle (△)** | Auto-complete path/command | `Tab` |
+| **Select** | Escape / exit edit mode / cancel | `Escape` (`KEY_ESC` for `vi`, `nano`, menus) |
+| **Start** | Execute command / Super key | `Enter` (Terminal) / `Super` (Desktop) |
 | **L-Trigger** | Cancel command / process | `Ctrl + C` (`SIGINT`) |
 | **R-Trigger** | Scroll terminal buffer | `Page Up` |
+| **PS Button** | Toggle touch keyboard | Toggles `fbkeyboard` visibility on / off |
+| **Volume Up (+)** | Step display brightness up | Increases brightness by +10% |
+| **Volume Down (-)** | Step display brightness down | Decreases brightness by -10% |
 
 ---
 
@@ -184,7 +193,7 @@ vita-setup --reset       # Reset completion flag to re-run on next boot
 3. **Storage Protection Modes:** Choose whether storage partitions mount in Safe Read-Only mode (`ro` - recommended to safeguard VitaOS filesystem data) or Read-Write mode (`rw` - direct access).
 4. **Memory Optimization:** Select between 256 MB or 512 MB in-RAM compressed ZRAM pools, and optionally create a 512 MB or 1 GB SD card swapfile (`/mnt/ux0/swapfile`) to eliminate Out-Of-Memory (OOM) crashes.
 5. **Alpine Linux Storage Container:** Guided creation of your persistent ext4 `alpine.img` container on SD2Vita (`/mnt/ux0`) or internal storage (`/mnt/ur0`) with automatic free space verification.
-6. **Graphical Desktop & Boot Preferences:** Check for IceWM desktop packages, prompt to download and install packages over Wi-Fi, and configure whether the console boots directly to the IceWM desktop or to the fast text console shell.
+6. **Graphical Desktop, Boot Mode & LED Preferences:** Check for IceWM desktop packages, prompt to download and install packages over Wi-Fi, configure whether the console boots directly to the IceWM desktop or to the fast text console shell, and choose the front blue PlayStation Button LED mode (heartbeat, disk activity, solid on, off).
 
 > [!TIP]
 > You can safely exit or skip the wizard at any time by pressing **s**. You can re-run `vita-setup` whenever you want to reconfigure your console.
@@ -530,6 +539,31 @@ SLEEP_TIMEOUT=300      # Seconds before sleeping (0 = disabled)
 DIM_BRIGHTNESS=20      # Brightness percentage when dimmed
 POWER_HOLD_SECS=3      # Seconds to hold Power button for shutdown
 ```
+
+---
+
+### 12. PlayStation Button LED Control (`vita-led`)
+LinuxOnVita gives you complete control over the front blue PlayStation Home button LED via the Linux kernel LED class and trigger subsystem:
+
+```bash
+vita-led                 # Display current LED trigger status, brightness, and device node
+vita-led heartbeat       # Set subtle rhythmic pulse reflecting CPU load
+vita-led disk            # Blink on SD card and Game Card storage read/write activity (mmc0)
+vita-led activity        # Modulate LED brightness with instantaneous CPU activity
+vita-led on              # Turn blue LED on with steady, solid illumination
+vita-led off             # Turn blue LED off completely
+vita-led set <trigger>   # Set an arbitrary kernel trigger (timer, oneshot, etc.)
+vita-led apply           # Reapply saved LED preferences from configuration file
+```
+
+#### Activity Trigger Modes:
+* **`heartbeat`:** A smooth double-flash cardiac pulse whose tempo scales dynamically with system load average.
+* **`disk` (or `storage`):** Blinks in real-time on hardware MMC read/write operations, functioning as an authentic disk activity indicator.
+* **`activity` (or `cpu`):** Dynamically scales LED intensity based on instantaneous CPU core utilization.
+* **`on` / `off`:** Static illumination control for night-time or low-distraction use.
+
+#### Automatic Persistence:
+LED preferences are saved to `/etc/vita-led.conf` and `/mnt/ux0/linux/led.conf`, restoring automatically across system boots via `/etc/init.d/S40input`.
 
 ---
 

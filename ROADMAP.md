@@ -52,7 +52,7 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
 ### [v1.5.0] - Handheld Ergonomics, Screen Protection & First-Boot Setup (Current)
 
 **Priority:** CRITICAL (Highest)
-**Focus Areas:** Battery life preservation, OLED burn-in protection, readable console fonts, guided onboarding, and gamepad ergonomics.
+**Focus Areas:** Battery life preservation, OLED burn-in protection, guided onboarding, and gamepad ergonomics.
 
 * **Hardware Power & CPU Frequency Control (`vita-cpu` / `vita-power`):**
   * Dynamic CPU frequency scaling across hardware operating points:
@@ -84,18 +84,13 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
   * **Memory Optimization:** Automatic configuration of ZRAM RAM compression and swapfile sizing tailored to the available storage.
   * **Diagnostic Baseline:** Automated hardware verification confirming screen, network, and storage health.
 
-* **High-DPI Console Font Switcher (`vita-font`):**
-  * Resolves the tiny 8x16 font (120x34) issue on the 5-inch 960x544 display.
-  * Bundle clean bitmap fonts into rootfs (Terminus 12x24 and 16x32).
-  * Simple CLI tool: `vita-font [small | medium | large]` allowing instant switching between high density (120x34) and comfortable handheld reading (80x22 or 60x17).
-
 * **Gamepad Input Mapping & Keyboard Polish:**
-  * **Key Repeat on Long-Press:** Holding Backspace, Space, or Arrow keys in `fbkeyboard` repeats after 400ms at 80ms intervals.
-  * **Caps Lock Toggle:** Double-tapping Shift in `fbkeyboard` locks uppercase mode with an illuminated indicator.
-  * **Select Button (`BTN_SELECT`):** Mapped to `KEY_ESC` in `vita-input-mapper` (essential for `vi`, `nano`, command cancellation, and curses menus).
-  * **Volume Buttons (`KEY_VOLUMEUP` / `KEY_VOLUMEDOWN`):** Step display brightness up or down by 10% (or control ALSA audio volume).
-  * **PS Button (`BTN_MODE`):** Configurable to toggle `fbkeyboard` visibility or launch the quick overlay menu.
-  * **PlayStation LED Daemon (`vita-led`):** Configurable activity triggers for the blue PS button LED (disk I/O activity or heartbeat pulse).
+  * **Key Repeat on Long-Press:** Holding Backspace, Space, or Arrow keys in `fbkeyboard` repeats after 400ms at 80ms intervals, with single-tap protection to prevent duplicate keystrokes.
+  * **Caps Lock Toggle:** Double-tapping Shift in `fbkeyboard` locks uppercase mode with an illuminated amber `[CAPS]` indicator on the key, unlocked by tapping Shift once again.
+  * **Select Button (`BTN_SELECT`):** Mapped to `KEY_ESC` in `vita-input-mapper` across both terminal and desktop modes (essential for `vi`, `nano`, command cancellation, and ncurses menus).
+  * **Volume Buttons (`KEY_VOLUMEUP` / `KEY_VOLUMEDOWN`):** Step display brightness up or down by 10% on the fly via `vita-brightness up` and `vita-brightness down`.
+  * **PS Button (`BTN_MODE`):** Configured to toggle `fbkeyboard` visibility on demand via `SIGUSR1`, automatically restoring full-screen terminal scrolling when hidden.
+  * **PlayStation LED Control Utility (`vita-led`):** Configurable activity triggers for the blue PS button LED (`gpio-led-ps-button-blue`) supporting heartbeat pulse, disk / storage I/O, CPU activity, solid on, and off, persisted across boots via `S40input` and integrated into `vita-setup`.
 
 ---
 
@@ -166,6 +161,12 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
 * **Remote Desktop & Pocket Terminal Client (VNC / RDP / SSH Kiosk):**
   * **Handheld Remote Monitor:** Connect to remote desktops, home PCs, or headless Raspberry Pis via `remmina` or lightweight VNC/RDP client.
   * **Desktop Streaming Server (`x11vnc`):** Stream the Vita's IceWM desktop to a laptop or tablet monitor for easy configuration on a full-size display.
+
+* **High-DPI Console Font Switcher (`vita-font`) & Dynamic Keyboard Sizing (`vita-keyboard`):**
+  * Resolves the tiny 8x16 font (120x34) issue on the 5-inch 960x544 display.
+  * Bundle clean bitmap fonts into rootfs (Terminus 12x24 and 16x32).
+  * Turnkey CLI tool: `vita-font [small | medium | large]` allowing instant switching between high density (120x34) and comfortable handheld reading (80x22 or 60x17).
+  * Dynamic on-screen touch keyboard sizing with height presets (compact, medium, large) and coordinated terminal geometry.
 
 ---
 

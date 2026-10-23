@@ -3,7 +3,7 @@
 All notable changes to LinuxOnVita are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) conventions.
 
-## [v1.5.0] - In Development
+## [v1.5.0] - 2026-10-23
 
 ### Hardware & Kernel Architecture
 - **PS Vita 2000 (Slim) Hardware Model Detection & LCD Display Initialization:**
@@ -17,9 +17,14 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Resolved the combed line artifact along the right bezel and persistent top-edge scanline duplication / ghosting on PS Vita 2000 Slim LCD panels.
   - Corrected Video Identification Code (VIC) in `libbaremetal`: `display_init_lcd()` previously called `dsi_start_master()` and `dsi_start_display()` with `vic = 0` (Samsung OLED panel timings: `htotal = 1050`, `HSW = 66`, `vtotal = 594`, `VBP = 42`).
   - Corrected `vic` to `0x20` (Sony / JDI LCD panel timings: `htotal = 1375`, `HSW = 391`, `vtotal = 567`, `VBP = 15`) in `display_init_lcd()`, matching the exact horizontal sync pulse width and line blanking periods required by the PS Vita 2000 Slim LCD timing controller.
-  - Fixed inverted Vertical Back Porch (VBP) and Vertical Sync Width (VSW) DSI packet configuration: `dsi_start_master()` in `libbaremetal` previously assigned `VSW` to `packet[6]` and `VBP` to `packet[15]`, which inverted Sony's native packet ordering (`packet[7]` = VBP, `packet[0x10]` = VSS). On the 2000 Slim video-mode LCD panel, this caused VBP to program as only 4 lines instead of 15, starting active video 11 scanlines early during vertical blanking and replicating the first line of text at the top bezel. Restoring `packet[6]` = VBP (15 lines) and `packet[15]` = VSW (4 lines) perfectly synchronizes the packet sequencer with `dsi_start_display()`.
+  - Restored correct Vertical Sync Width (`packet[6] = VSW - 2`) and Vertical Back Porch (`packet[15] = VBP - 3`) packet ordering in `dsi_start_master()`, ensuring the full 15 lines of vertical blanking and eliminating top-edge scanline duplication.
   - Initialized the entire 1280x720 CDRAM display buffer (`0x20000000`) to solid black (`0xFF000000`) immediately after enabling CDRAM in `vita-baremetal-linux-loader` to erase leftover graphical data and frame buffer remnants from the LiveArea installer application.
-  - Updated virtual console initialization in `S40input` to execute a full screen clear before establishing VT100 top and bottom scrolling margins (`\033[2J\033[1;21r\033[1;1H`), preventing character cell artifacts and stale frame buffer scanlines outside the active scrolling region.
+  - Updated virtual console initialization in `S40input` to execute a full screen clear before establishing VT100 top and bottom scrolling margins (`\033[2J\033[1;24r\033[1;1H`), preventing character cell artifacts and stale frame buffer scanlines outside the active scrolling region.
+- **SD2Vita Storage Mounting & Power Sequencing Reliability:**
+  - Resolved SD2Vita microSD cards failing to mount (`mmc2: error -110 whilst initialising SD card`, `Card stuck being busy!`, and ADMA timeout errors during boot).
+  - Powered on the physical Game Card slot (`syscon_short_command_write(0x888, 1, 2)`) early during baremetal loader execution (`vita-baremetal-linux-loader/src/main.c`), ensuring 3.3V VCC is fully stabilized and microSD card internal microcontrollers are ready before the Linux kernel starts.
+  - Added a 20ms hardware settling delay and full controller re-initialization (`sdhci_vita_reinit_host(1)`) in `vita-syscon.c` before triggering card detection rescan on SDIF1.
+  - Updated `sdhci_vita_reinit_host()` in `sdhci-vita.c` to properly configure Pervasive I/O pad voltage register (`0xE3100124`) to 3.3V for bus 1 (Game Card / SD2Vita) and bus 3 (microSD).
 - **Hardware Power & Dynamic CPU Frequency Scaling (`vita-cpufreq`):**
   - Implemented a dedicated native Linux kernel CPU frequency driver (`drivers/cpufreq/vita-cpufreq.c`) for the PlayStation Vita SoC (CXD5441GG).
   - Enabled dynamic frequency scaling across 5 hardware operating points: 111 MHz, 166 MHz, 222 MHz, 333 MHz, and 444 MHz via Pervasive BaseClk registers (`0xE3103000`).
@@ -63,6 +68,17 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - **Permanent Alpine Storage Container:** Guided creation of persistent ext4 `alpine.img` containers on SD2Vita (`/mnt/ux0`) or internal memory (`/mnt/ur0`) with automatic free storage validation, ext4 formatting, and mini-rootfs extraction.
   - **IceWM Graphical Desktop & Boot Autostart:** Automatically checks for desktop package installation, prompts to download packages over Wi-Fi via `alpine-desktop --setup`, and configures whether the system boots directly into the IceWM graphical desktop or into the fast text console shell.
   - **Completion State & Status Reporting:** Sets persistent `.setup_done` flags on storage, provides a summary card of all configured subsystems, and supports focused subcommands (`vita-setup --wifi`, `--storage`, `--memory`, `--alpine`, `--desktop`, `--status`, `--reset`).
+- **Gamepad Input Mapping & Keyboard Polish:**
+  - **Key Repeat on Long-Press:** Holding down Backspace, Spacebar, or Arrow keys in `fbkeyboard` repeats after a 400ms delay at fast 80ms intervals, with single-tap protection to prevent accidental duplicate keystrokes.
+  - **Caps Lock Toggle:** Double-tapping Shift in `fbkeyboard` (within 350ms) locks uppercase mode with an illuminated amber `[CAPS]` indicator on the key, automatically unlocked by tapping Shift once again.
+  - **Select Button Escape Mapping (`BTN_SELECT` -> `KEY_ESC`):** Mapped physical Select button to `KEY_ESC` in `vita-input-mapper` across both terminal and desktop modes, providing instant exit and mode switching in `vi`, `nano`, command shells, and ncurses menus.
+  - **Hardware Volume Buttons Display Brightness Stepping:** Mapped physical Volume Up and Volume Down buttons in `vita-input-mapper` to step screen backlight brightness up or down by 10% on the fly via `vita-brightness up` and `vita-brightness down`.
+  - **PlayStation Button Keyboard Visibility Toggle (`BTN_MODE`):** Configured physical PS button in `vita-input-mapper` to toggle `fbkeyboard` visibility on demand via `SIGUSR1`, automatically restoring full-screen terminal scrolling geometry when hidden.
+  - **PlayStation Blue LED Control Utility (`vita-led`):** Created turnkey `/usr/bin/vita-led` utility to control the front blue PS Button LED (`gpio-led-ps-button-blue`), supporting `heartbeat` pulse, `disk` (MMC storage I/O activity), `activity` (instant CPU load modulation), solid `on`, and `off`.
+  - **LED Persistence & Onboarding Integration:** Persisted LED preferences across boots in `/mnt/ux0/linux/led.conf` and `/etc/vita-led.conf` via `/etc/init.d/S40input`, added LED telemetry to `vita-diagnostics`, and integrated LED mode selection directly into Step 6 of `vita-setup`.
+- **Virtual Terminal Boundaries & Keyboard Damage Auto-Healing (`fbkeyboard`):**
+  - Integrated kernel-level virtual terminal size clamping (`ioctl(VT_RESIZE)`) in `fbkeyboard` to restrict console scrolling to rows 1-24 (pixel range y=0 to y=384), reserving a guaranteed 10-pixel buffer above the 150px touch keyboard (y=394 to y=544) so terminal output never collides with on-screen keys.
+  - Integrated real-time damage detection into the `fbkeyboard` event loop, sampling probe pixels along the top border line at 100ms intervals to automatically heal and redraw the keyboard if rogue output overwrites the lower display.
 
 ### Bootstrapper & Installer App (VPK)
 - **Application Version Bump:**
