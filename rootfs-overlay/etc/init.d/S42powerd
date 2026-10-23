@@ -1,0 +1,42 @@
+#!/bin/sh
+# S42powerd: Start PlayStation Vita display sleep & power daemon (vita-powerd)
+
+PIDFILE="/var/run/vita-powerd.pid"
+DAEMON="/usr/bin/vita-powerd"
+
+case "$1" in
+start)
+    if [ -x "$DAEMON" ]; then
+        echo "Starting PS Vita power daemon (vita-powerd)..."
+        if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+            echo "vita-powerd is already running (PID $(cat "$PIDFILE"))."
+        else
+            "$DAEMON" --daemon
+            echo "vita-powerd started."
+        fi
+    fi
+    ;;
+stop)
+    echo "Stopping PS Vita power daemon..."
+    if [ -f "$PIDFILE" ]; then
+        kill "$(cat "$PIDFILE")" 2>/dev/null || true
+        rm -f "$PIDFILE"
+    fi
+    killall vita-powerd 2>/dev/null || true
+    echo "vita-powerd stopped."
+    ;;
+restart)
+    $0 stop
+    sleep 1
+    $0 start
+    ;;
+status)
+    if [ -x "$DAEMON" ]; then
+        "$DAEMON" status
+    fi
+    ;;
+*)
+    echo "Usage: $0 {start|stop|restart|status}"
+    exit 1
+    ;;
+esac

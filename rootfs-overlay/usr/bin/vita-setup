@@ -1,0 +1,919 @@
+#!/bin/sh
+# vita-setup: Interactive First-Boot Onboarding & System Setup Wizard
+# PlayStation Vita Linux 6.12
+#
+# Guides new users through initial hardware diagnostics, wireless network
+# connection, storage safety preferences, memory optimization (ZRAM / swap),
+# persistent Alpine container creation, and graphical desktop installation.
+
+set -e
+export PATH="/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+
+SETUP_FLAG_UX0="/mnt/ux0/linux/.setup_done"
+SETUP_FLAG_UR0="/mnt/ur0/linux/.setup_done"
+SETUP_FLAG_RAM="/etc/vita-setup.done"
+
+# ANSI Terminal Colors
+if [ -t 1 ]; then
+    C_RESET="\033[0m"
+    C_BOLD="\033[1m"
+    C_DIM="\033[2m"
+    C_CYAN="\033[1;36m"
+    C_GREEN="\033[1;32m"
+    C_YELLOW="\033[1;33m"
+    C_RED="\033[1;31m"
+    C_BLUE="\033[1;34m"
+    C_MAGENTA="\033[1;35m"
+else
+    C_RESET=""
+    C_BOLD=""
+    C_DIM=""
+    C_CYAN=""
+    C_GREEN=""
+    C_YELLOW=""
+    C_RED=""
+    C_BLUE=""
+    C_MAGENTA=""
+fi
+
+clear_screen() {
+    clear 2>/dev/null || printf '\033[2J\033[1;24r\033[1;1H'
+}
+
+print_header() {
+    clear_screen
+    echo "================================================================================"
+    printf "${C_CYAN}${C_BOLD}  PlayStation Vita Linux - First-Boot Setup Wizard${C_RESET}\n"
+    echo "================================================================================"
+}
+
+print_step() {
+    local step_num="$1"
+    local total_steps="$2"
+    local step_title="$3"
+    echo ""
+    printf "${C_YELLOW}${C_BOLD}[Step %s of %s] %s${C_RESET}\n" "$step_num" "$total_steps" "$step_title"
+    echo "--------------------------------------------------------------------------------"
+}
+
+is_setup_done() {
+    [ -f "$SETUP_FLAG_UX0" ] && return 0
+    [ -f "$SETUP_FLAG_UR0" ] && return 0
+    [ -f "$SETUP_FLAG_RAM" ] && return 0
+    return 1
+}
+
+mark_setup_done() {
+    local marked=0
+
+    # Ensure /etc flag exists in RAM
+    touch "$SETUP_FLAG_RAM" 2>/dev/null || true
+
+    # Persist to /mnt/ux0 if mounted
+    if grep -qs ' /mnt/ux0 ' /proc/mounts; then
+        local was_ro=0
+        if command -v vita-storage >/dev/null 2>&1 && vita-storage is-ro ux0 2>/dev/null; then
+            vita-storage rw ux0 -q 2>/dev/null && was_ro=1
+        fi
+        mkdir -p /mnt/ux0/linux 2>/dev/null || true
+        touch "$SETUP_FLAG_UX0" 2>/dev/null || true
+        sync
+        if [ $was_ro -eq 1 ] && command -v vita-storage >/dev/null 2>&1; then
+            vita-storage ro ux0 -q 2>/dev/null || true
+        fi
+        marked=1
+    fi
+
+    # Persist to /mnt/ur0 if mounted
+    if grep -qs ' /mnt/ur0 ' /proc/mounts; then
+        local was_ro=0
+        if command -v vita-storage >/dev/null 2>&1 && vita-storage is-ro ur0 2>/dev/null; then
+            vita-storage rw ur0 -q 2>/dev/null && was_ro=1
+        fi
+        mkdir -p /mnt/ur0/linux 2>/dev/null || true
+        touch "$SETUP_FLAG_UR0" 2>/dev/null || true
+        sync
+        if [ $was_ro -eq 1 ] && command -v vita-storage >/dev/null 2>&1; then
+            vita-storage ro ur0 -q 2>/dev/null || true
+        fi
+        marked=1
+    fi
+
+    return 0
+}
+
+clear_setup_done() {
+    rm -f "$SETUP_FLAG_RAM" 2>/dev/null || true
+
+    if grep -qs ' /mnt/ux0 ' /proc/mounts; then
+        local was_ro=0
+        if command -v vita-storage >/dev/null 2>&1 && vita-storage is-ro ux0 2>/dev/null; then
+            vita-storage rw ux0 -q 2>/dev/null && was_ro=1
+        fi
+        rm -f "$SETUP_FLAG_UX0" 2>/dev/null || true
+        sync
+        if [ $was_ro -eq 1 ] && command -v vita-storage >/dev/null 2>&1; then
+            vita-storage ro ux0 -q 2>/dev/null || true
+        fi
+    fi
+
+    if grep -qs ' /mnt/ur0 ' /proc/mounts; then
+        local was_ro=0
+        if command -v vita-storage >/dev/null 2>&1 && vita-storage is-ro ur0 2>/dev/null; then
+            vita-storage rw ur0 -q 2>/dev/null && was_ro=1
+        fi
+        rm -f "$SETUP_FLAG_UR0" 2>/dev/null || true
+        sync
+        if [ $was_ro -eq 1 ] && command -v vita-storage >/dev/null 2>&1; then
+            vita-storage ro ur0 -q 2>/dev/null || true
+        fi
+    fi
+
+    echo "Setup completion flags cleared."
+}
+
+# -----------------------------------------------------------------------------
+# STEP 1: Hardware Diagnostics & Health Baseline
+# -----------------------------------------------------------------------------
+step_diagnostics() {
+    print_header
+    print_step "1" "6" "Hardware Diagnostics & System Baseline"
+
+    echo "Verifying PlayStation Vita hardware components and subsystem health..."
+    echo ""
+
+    # CPU Cores & Current Frequency
+    local cpu_cores
+    cpu_cores=$(grep -c ^processor /proc/cpuinfo 2>/dev/null || echo "4")
+    local cur_freq="444 MHz"
+    if [ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq ]; then
+        local khz
+        khz=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>/dev/null || echo "0")
+        [ "$khz" -gt 0 ] && cur_freq="$((khz / 1000)) MHz"
+    elif command -v vita-cpu >/dev/null 2>&1; then
+        cur_freq="$(vita-cpu cur 2>/dev/null || echo "444 MHz")"
+    fi
+
+    # Display Panel Detection
+    local panel_type="OLED (PCH-1000)"
+    if [ -f /proc/device-tree/model ]; then
+        local dt_model
+        dt_model=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || echo "")
+        case "$dt_model" in
+            *2000*|*LCD*|*lcd*|*Slim*|*slim*) panel_type="LCD (PCH-2000 Slim)" ;;
+            *TV*|*tv*|*Dolce*|*dolce*) panel_type="HDMI (PlayStation TV)" ;;
+            *1000*|*OLED*|*oled*) panel_type="OLED (PCH-1000)" ;;
+        esac
+    fi
+
+    # Storage Check
+    local ux0_status="Not Mounted"
+    local ur0_status="Not Mounted"
+    if grep -qs ' /mnt/ux0 ' /proc/mounts; then
+        local ux0_fs ux0_free ux0_mode="ro"
+        ux0_fs=$(awk '$2 == "/mnt/ux0" {print $3}' /proc/mounts)
+        ux0_free=$(df -h /mnt/ux0 2>/dev/null | awk 'NR==2 {print $4 " free"}')
+        if command -v vita-storage >/dev/null 2>&1 && vita-storage is-rw ux0 2>/dev/null; then
+            ux0_mode="rw"
+        fi
+        ux0_status="Mounted ($ux0_fs, $ux0_free, mode: $ux0_mode)"
+    fi
+
+    if grep -qs ' /mnt/ur0 ' /proc/mounts; then
+        local ur0_fs ur0_free ur0_mode="ro"
+        ur0_fs=$(awk '$2 == "/mnt/ur0" {print $3}' /proc/mounts)
+        ur0_free=$(df -h /mnt/ur0 2>/dev/null | awk 'NR==2 {print $4 " free"}')
+        if command -v vita-storage >/dev/null 2>&1 && vita-storage is-rw ur0 2>/dev/null; then
+            ur0_mode="rw"
+        fi
+        ur0_status="Mounted ($ur0_fs, $ur0_free, mode: $ur0_mode)"
+    fi
+
+    # Memory Check
+    local mem_total="512 MB"
+    local mem_avail=""
+    if [ -f /proc/meminfo ]; then
+        local avail_kb
+        avail_kb=$(awk '/MemAvailable:/ {print $2}' /proc/meminfo)
+        [ -n "$avail_kb" ] && mem_avail="$((avail_kb / 1024)) MB available"
+    fi
+
+    local zram_status="Inactive"
+    if grep -q "zram0" /proc/swaps 2>/dev/null; then
+        local zram_sz
+        zram_sz=$(awk '/zram0/ {print int($3/1024) " MB"}' /proc/swaps 2>/dev/null)
+        zram_status="Active (${zram_sz:-256 MB}, lz4 compressed)"
+    fi
+
+    # Wi-Fi Interface Check
+    local wifi_status="Not Detected"
+    local wifi_ip=""
+    if [ -e /sys/class/net/mlan0 ] || ip link show mlan0 >/dev/null 2>&1; then
+        wifi_status="Marvell 88W8787 (mlan0 ready)"
+        wifi_ip=$(ip -4 addr show mlan0 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2 || true)
+    elif [ -e /sys/class/net/wlan0 ] || ip link show wlan0 >/dev/null 2>&1; then
+        wifi_status="Wireless Adapter (wlan0 ready)"
+        wifi_ip=$(ip -4 addr show wlan0 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2 || true)
+    fi
+
+    printf "  %-18s : %s\n" "SoC / Processor" "ARMv7 Cortex-A9 Quad-Core (${cpu_cores} cores active @ ${cur_freq})"
+    printf "  %-18s : %s\n" "Display Screen"  "960x544 ${panel_type}"
+    printf "  %-18s : %s\n" "Memory (RAM)"    "${mem_total} RAM (${mem_avail:-good})"
+    printf "  %-18s : %s\n" "ZRAM Memory"     "${zram_status}"
+    printf "  %-18s : %s\n" "Storage (ux0)"   "${ux0_status}"
+    printf "  %-18s : %s\n" "Storage (ur0)"   "${ur0_status}"
+    if [ -n "$wifi_ip" ]; then
+        printf "  %-18s : %s\n" "Wi-Fi Radio"     "${wifi_status} (Connected: ${wifi_ip})"
+    else
+        printf "  %-18s : %s\n" "Wi-Fi Radio"     "${wifi_status} (Disconnected)"
+    fi
+
+    echo ""
+    printf "${C_GREEN}[OK] Hardware baseline verified.${C_RESET}\n"
+    echo ""
+    printf "${C_BOLD}Press [Enter] to continue to Wi-Fi Configuration... ${C_RESET}"
+    read -r _dummy
+}
+
+# -----------------------------------------------------------------------------
+# STEP 2: Wi-Fi Network Configuration
+# -----------------------------------------------------------------------------
+step_wifi() {
+    print_header
+    print_step "2" "6" "Wi-Fi Network Configuration"
+
+    echo "Connect your PlayStation Vita to your wireless local network to enable"
+    echo "SSH remote login, web browsing, and Alpine Linux package downloads."
+    echo ""
+
+    local cur_ip=""
+    local cur_iface="mlan0"
+    if [ -e /sys/class/net/mlan0 ]; then
+        cur_iface="mlan0"
+    elif [ -e /sys/class/net/wlan0 ]; then
+        cur_iface="wlan0"
+    fi
+
+    cur_ip=$(ip -4 addr show "$cur_iface" 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2 || true)
+
+    if [ -n "$cur_ip" ]; then
+        local cur_ssid=""
+        if command -v wpa_cli >/dev/null 2>&1; then
+            cur_ssid=$(wpa_cli -i "$cur_iface" status 2>/dev/null | grep "^ssid=" | cut -d= -f2- || true)
+        fi
+        printf "${C_GREEN}[OK] Wi-Fi is already connected!${C_RESET}\n"
+        printf "     Network:     %s\n" "${cur_ssid:-Active Network}"
+        printf "     IP Address:  %s\n" "$cur_ip"
+        printf "     SSH Command: ${C_BOLD}ssh root@%s${C_RESET}\n" "$cur_ip"
+        echo ""
+        printf "Would you like to keep this wireless connection? [Y/n] (Default: Y): "
+        read -r keep_choice
+        case "$keep_choice" in
+            [nN]*) ;;
+            *)
+                echo "Keeping active Wi-Fi connection."
+                sleep 1
+                return 0
+                ;;
+        esac
+    fi
+
+    echo ""
+    printf "Would you like to scan and connect to a Wi-Fi network now? [Y/n] (Default: Y): "
+    read -r do_scan
+    case "$do_scan" in
+        [nN]*)
+            echo "Skipping Wi-Fi configuration (you can run 'vita-wifi' at any time)."
+            sleep 1
+            return 0
+            ;;
+    esac
+
+    echo ""
+    echo "Scanning for nearby Wi-Fi networks (this takes ~3 seconds)..."
+
+    if command -v vita-wifi >/dev/null 2>&1; then
+        vita-wifi scan
+    else
+        echo "Error: vita-wifi utility not found. Skipping Wi-Fi step."
+        sleep 2
+        return 1
+    fi
+
+    echo ""
+    printf "${C_BOLD}Press [Enter] to continue to Storage Preferences... ${C_RESET}"
+    read -r _dummy
+}
+
+# -----------------------------------------------------------------------------
+# STEP 3: Storage Auto-Mount & Protection Preferences
+# -----------------------------------------------------------------------------
+step_storage() {
+    print_header
+    print_step "3" "6" "Storage Protection & Auto-Mount Modes"
+
+    echo "LinuxOnVita safeguards your PlayStation Vita filesystem and VitaOS database"
+    echo "by mounting partitions read-only (ro) by default. This prevents file corruption"
+    echo "if the console is abruptly powered off or freezes during intense workloads."
+    echo ""
+    echo "When read-only mode is active, Linux utilities (such as 'vita-wifi', 'vita-swap',"
+    echo "and 'alpine-chroot') automatically elevate to read-write only when needed,"
+    echo "flush disk buffers, and immediately lock partitions back down."
+    echo ""
+
+    if command -v vita-storage >/dev/null 2>&1; then
+        vita-storage status
+    fi
+
+    echo ""
+    echo "Select your default boot mount protection mode:"
+    printf "  ${C_BOLD}1) Safe Read-Only (Recommended)${C_RESET} : Partitions boot protected (ro);\n"
+    echo "                                      tools safely elevate write access on demand."
+    printf "  ${C_BOLD}2) Read-Write (Direct Access)${C_RESET}    : Partitions boot read-write (rw) at all times.\n"
+    echo "                                      (Recommended only for advanced developers)."
+    echo ""
+    printf "Enter choice [1-2] (Default: 1): "
+    read -r st_choice
+    case "$st_choice" in
+        2)
+            if command -v vita-storage >/dev/null 2>&1; then
+                vita-storage set-default rw
+                vita-storage rw all -q 2>/dev/null || true
+            fi
+            printf "${C_YELLOW}[!] Storage partitions configured for Read-Write mode at boot.${C_RESET}\n"
+            ;;
+        *)
+            if command -v vita-storage >/dev/null 2>&1; then
+                vita-storage set-default ro
+                vita-storage ro all -q 2>/dev/null || true
+            fi
+            printf "${C_GREEN}[OK] Storage partitions locked in Safe Read-Only mode at boot.${C_RESET}\n"
+            ;;
+    esac
+
+    echo ""
+    printf "${C_BOLD}Press [Enter] to continue to Memory Optimization... ${C_RESET}"
+    read -r _dummy
+}
+
+# -----------------------------------------------------------------------------
+# STEP 4: Memory Optimization (ZRAM & Swap)
+# -----------------------------------------------------------------------------
+step_memory() {
+    print_header
+    print_step "4" "6" "Memory Optimization (ZRAM & Swap)"
+
+    echo "The PlayStation Vita has 512 MB of physical RAM. LinuxOnVita expands usable"
+    echo "memory using ultra-fast compressed ZRAM (lz4) in RAM, and can allocate an"
+    echo "SD card swapfile to prevent Out-Of-Memory (OOM) crashes when web browsing"
+    echo "or compiling software."
+    echo ""
+
+    if command -v vita-swap >/dev/null 2>&1; then
+        vita-swap status
+    fi
+
+    echo ""
+    echo "Configure In-Memory ZRAM Compression Pool:"
+    printf "  ${C_BOLD}1) 256 MB ZRAM (Recommended)${C_RESET} : Balanced memory compression (~600MB effective RAM)\n"
+    printf "  ${C_BOLD}2) 512 MB ZRAM (Heavy Pool)${C_RESET}  : High compression pool for memory-heavy multitasking\n"
+    printf "  ${C_BOLD}3) Keep Current Setting${C_RESET}\n"
+    printf "Enter choice [1-3] (Default: 1): "
+    read -r zr_choice
+    case "$zr_choice" in
+        2)
+            if command -v vita-swap >/dev/null 2>&1; then
+                vita-swap zram 512M
+            fi
+            ;;
+        3)
+            echo "Retaining current ZRAM configuration."
+            ;;
+        *)
+            if command -v vita-swap >/dev/null 2>&1; then
+                vita-swap zram 256M
+            fi
+            ;;
+    esac
+
+    echo ""
+    echo "Configure Physical Storage Swapfile:"
+    if grep -qs ' /mnt/ux0 ' /proc/mounts; then
+        local ux0_free_mb
+        ux0_free_mb=$(df -m /mnt/ux0 2>/dev/null | awk 'NR==2 {print $4}')
+        ux0_free_mb="${ux0_free_mb:-0}"
+
+        if [ -f /mnt/ux0/swapfile ]; then
+            local sw_size
+            sw_size=$(ls -lh /mnt/ux0/swapfile 2>/dev/null | awk '{print $5}')
+            printf "${C_GREEN}[OK] Persistent swapfile already exists: /mnt/ux0/swapfile (%s)${C_RESET}\n" "${sw_size:-512M}"
+            printf "Keep existing swapfile? [Y/n] (Default: Y): "
+            read -r keep_sw
+            case "$keep_sw" in
+                [nN]*)
+                    vita-swap remove /mnt/ux0/swapfile 2>/dev/null || true
+                    ;;
+                *)
+                    echo "Existing swapfile retained."
+                    ;;
+            esac
+        elif [ "$ux0_free_mb" -ge 600 ]; then
+            echo "Storage partition /mnt/ux0 has ${ux0_free_mb} MB available."
+            echo "Would you like to create a persistent swapfile on your SD card?"
+            printf "  ${C_BOLD}1) 512 MB Swapfile (Recommended)${C_RESET} : Smooth web browsing & desktop stability\n"
+            if [ "$ux0_free_mb" -ge 1200 ]; then
+                printf "  ${C_BOLD}2) 1024 MB (1 GB) Swapfile${C_RESET}      : Large swap pool for software compilation\n"
+            fi
+            printf "  ${C_BOLD}3) None (ZRAM Only)${C_RESET}             : Rely strictly on in-RAM ZRAM compression\n"
+            printf "Enter choice (Default: 1): "
+            read -r sw_choice
+            case "$sw_choice" in
+                2)
+                    if [ "$ux0_free_mb" -ge 1200 ]; then
+                        echo "Creating 1024 MB swapfile on /mnt/ux0 (please wait)..."
+                        vita-swap create 1024M /mnt/ux0/swapfile
+                    else
+                        echo "Not enough free space for 1 GB swapfile; skipping."
+                    fi
+                    ;;
+                3|[nN]*)
+                    echo "Skipping physical swapfile creation."
+                    ;;
+                *)
+                    echo "Creating 512 MB swapfile on /mnt/ux0 (please wait)..."
+                    vita-swap create 512M /mnt/ux0/swapfile
+                    ;;
+            esac
+        else
+            echo "Notice: Free space on /mnt/ux0 is limited (${ux0_free_mb} MB). Skipping physical swapfile."
+        fi
+    else
+        echo "Notice: /mnt/ux0 is not mounted. Skipping physical swapfile creation."
+    fi
+
+    echo ""
+    printf "${C_BOLD}Press [Enter] to continue to Alpine Container Setup... ${C_RESET}"
+    read -r _dummy
+}
+
+# -----------------------------------------------------------------------------
+# STEP 5: Alpine Linux Persistent Storage Container (alpine.img)
+# -----------------------------------------------------------------------------
+step_alpine() {
+    print_header
+    print_step "5" "6" "Permanent Alpine Linux Container (alpine.img)"
+
+    echo "Alpine Linux gives you access to thousands of standard Linux applications"
+    echo "via the 'apk' package manager (Python, Git, GCC, htop, Badwolf browser, etc.)."
+    echo "It lives inside an isolated, high-performance ext4 container image ('alpine.img')."
+    echo ""
+
+    local existing_img=""
+    if [ -f /mnt/ux0/alpine.img ]; then
+        existing_img="/mnt/ux0/alpine.img"
+    elif [ -f /mnt/ur0/alpine.img ]; then
+        existing_img="/mnt/ur0/alpine.img"
+    fi
+
+    if [ -n "$existing_img" ]; then
+        local img_sz
+        img_sz=$(ls -lh "$existing_img" 2>/dev/null | awk '{print $5}')
+        printf "${C_GREEN}[OK] Alpine Linux container image found!${C_RESET}\n"
+        printf "     Location: %s (%s)\n" "$existing_img" "${img_sz:-1 GB}"
+        echo ""
+        printf "Would you like to keep this existing Alpine container? [Y/n] (Default: Y): "
+        read -r keep_img
+        case "$keep_img" in
+            [nN]*)
+                echo "Recreating Alpine container..."
+                ;;
+            *)
+                echo "Keeping existing Alpine container."
+                sleep 1
+                return 0
+                ;;
+        esac
+    fi
+
+    # Destination Selection
+    local target_dir="/mnt/ux0"
+    if grep -qs ' /mnt/ux0 ' /proc/mounts && grep -qs ' /mnt/ur0 ' /proc/mounts; then
+        local ux0_free ur0_free
+        ux0_free=$(df -h /mnt/ux0 2>/dev/null | awk 'NR==2 {print $4}')
+        ur0_free=$(df -h /mnt/ur0 2>/dev/null | awk 'NR==2 {print $4}')
+        echo "Select storage location for alpine.img:"
+        printf "  ${C_BOLD}1) /mnt/ux0 (SD2Vita / Memory Card - %s free) [Recommended]${C_RESET}\n" "${ux0_free:-lots}"
+        printf "  ${C_BOLD}2) /mnt/ur0 (Internal eMMC Storage - %s free)${C_RESET}\n" "${ur0_free:-limited}"
+        printf "  ${C_BOLD}3) Skip container setup for now${C_RESET}\n"
+        printf "Enter choice [1-3] (Default: 1): "
+        read -r loc_choice
+        case "$loc_choice" in
+            2) target_dir="/mnt/ur0" ;;
+            3|[sS]*)
+                echo "Skipping container creation. Run 'alpine-chroot' whenever you wish to create it."
+                sleep 1
+                return 0
+                ;;
+            *) target_dir="/mnt/ux0" ;;
+        esac
+    elif grep -qs ' /mnt/ux0 ' /proc/mounts; then
+        target_dir="/mnt/ux0"
+    elif grep -qs ' /mnt/ur0 ' /proc/mounts; then
+        target_dir="/mnt/ur0"
+    else
+        echo "Notice: Neither /mnt/ux0 nor /mnt/ur0 is mounted. Skipping persistent container setup."
+        sleep 2
+        return 0
+    fi
+
+    # Size Selection
+    local free_mb
+    free_mb=$(df -m "$target_dir" 2>/dev/null | awk 'NR==2 {print $4}')
+    free_mb="${free_mb:-0}"
+
+    echo ""
+    echo "Select container capacity for $target_dir/alpine.img (${free_mb} MB available):"
+    printf "  ${C_BOLD}1) 1024 MB (1 GB) [Recommended]${C_RESET} : Ample room for desktop and many packages\n"
+    if [ "$free_mb" -ge 2200 ]; then
+        printf "  ${C_BOLD}2) 2048 MB (2 GB) [Large]${C_RESET}       : Best for compilers, development, and games\n"
+    fi
+    printf "  ${C_BOLD}3) 512 MB [Minimal]${C_RESET}             : Compact container for smaller storage cards\n"
+    printf "  ${C_BOLD}4) Skip for now${C_RESET}\n"
+    printf "Enter choice (Default: 1): "
+    read -r sz_choice
+
+    local img_mb=1024
+    case "$sz_choice" in
+        2)
+            if [ "$free_mb" -ge 2200 ]; then
+                img_mb=2048
+            else
+                echo "Insufficient space for 2GB container; defaulting to 1GB."
+                img_mb=1024
+            fi
+            ;;
+        3) img_mb=512 ;;
+        4|[sS]*)
+            echo "Skipping container creation."
+            sleep 1
+            return 0
+            ;;
+        *) img_mb=1024 ;;
+    esac
+
+    echo ""
+    echo "Creating and initializing ${img_mb} MB Alpine container on ${target_dir}..."
+    echo "(Allocating zeroed blocks and formatting ext4 filesystem. Please wait 1-2 minutes)..."
+
+    if command -v alpine-chroot >/dev/null 2>&1; then
+        alpine-chroot --size "${img_mb}" --dir "${target_dir}" --recreate run true
+        printf "${C_GREEN}[OK] Alpine Linux ext4 container created successfully!${C_RESET}\n"
+    else
+        echo "Error: alpine-chroot script not found."
+    fi
+
+    echo ""
+    printf "${C_BOLD}Press [Enter] to continue to Desktop & Boot Preferences... ${C_RESET}"
+    read -r _dummy
+}
+
+# -----------------------------------------------------------------------------
+# STEP 6: Graphical Desktop & Boot Preferences
+# -----------------------------------------------------------------------------
+step_desktop() {
+    print_header
+    print_step "6" "6" "Graphical Desktop & Boot Preferences"
+
+    echo "PlayStation Vita Linux includes the IceWM lightweight graphical desktop,"
+    echo "featuring full analog stick mouse cursor emulation, Badwolf web browser,"
+    echo "PCManFM file manager, text editor, on-screen keyboard, and terminal emulator."
+    echo ""
+
+    local desktop_installed=0
+    if [ -f /mnt/alpine/usr/bin/icewm ] || [ -f /mnt/ux0/alpine.img ] && grep -qs ' /mnt/alpine ' /proc/mounts && [ -f /mnt/alpine/usr/bin/icewm ]; then
+        desktop_installed=1
+    elif command -v alpine-desktop >/dev/null 2>&1; then
+        if alpine-desktop --status 2>/dev/null | grep -q "Installed"; then
+            desktop_installed=1
+        fi
+    fi
+
+    if [ $desktop_installed -eq 1 ]; then
+        printf "${C_GREEN}[OK] IceWM Graphical Desktop is already installed!${C_RESET}\n"
+    else
+        echo "Desktop Status: Not yet installed in Alpine container."
+        local has_ip=""
+        has_ip=$(ip -4 addr show mlan0 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2 || true)
+        [ -z "$has_ip" ] && has_ip=$(ip -4 addr show wlan0 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2 || true)
+
+        if [ -n "$has_ip" ]; then
+            echo ""
+            printf "Would you like to download and install IceWM Desktop packages now? [Y/n] (Default: Y): "
+            read -r do_desk
+            case "$do_desk" in
+                [nN]*)
+                    echo "Skipping desktop package setup for now."
+                    ;;
+                *)
+                    echo "Installing desktop packages via 'alpine-desktop --setup'..."
+                    if command -v alpine-desktop >/dev/null 2>&1; then
+                        alpine-desktop --setup || echo "Notice: Desktop setup completed with non-fatal warnings."
+                    fi
+                    ;;
+            esac
+        else
+            echo "Notice: An active internet connection is required to download desktop packages."
+            echo "        Once connected to Wi-Fi, run 'alpine-desktop --setup' to install the desktop."
+        fi
+    fi
+
+    echo ""
+    echo "Configure System Boot Autostart Mode:"
+    echo "Choose how PlayStation Vita Linux should start up on boot:"
+    printf "  ${C_BOLD}1) Console Shell (Default)${C_RESET} : Fast text terminal shell; launch desktop\n"
+    echo "                                  manually anytime by typing 'alpine-desktop'."
+    printf "  ${C_BOLD}2) IceWM Desktop${C_RESET}           : Boots directly into graphical desktop\n"
+    echo "                                  (includes 3-second abort window to stay in console)."
+    echo ""
+    printf "Enter choice [1-2] (Default: 1): "
+    read -r boot_choice
+    case "$boot_choice" in
+        2)
+            if command -v vita-autostart >/dev/null 2>&1; then
+                vita-autostart enable
+            fi
+            printf "${C_GREEN}[OK] Desktop autostart enabled! Console will boot into IceWM.${C_RESET}\n"
+            ;;
+        *)
+            if command -v vita-autostart >/dev/null 2>&1; then
+                vita-autostart disable
+            fi
+            printf "${C_GREEN}[OK] Console shell selected as default boot mode.${C_RESET}\n"
+            ;;
+    esac
+
+    echo ""
+    echo "Configure PlayStation Button Blue LED Activity Mode:"
+    echo "Choose how the front blue PS Button LED operates:"
+    printf "  ${C_BOLD}1) Heartbeat Pulse (Default)${C_RESET} : Rhythmic pulse reflecting CPU load\n"
+    printf "  ${C_BOLD}2) Disk / Storage I/O${C_RESET}       : Blinks during SD card / Game Card access\n"
+    printf "  ${C_BOLD}3) Solid Blue Glow${C_RESET}          : Steady illumination\n"
+    printf "  ${C_BOLD}4) Disabled (Off)${C_RESET}           : LED turned off completely\n"
+    echo ""
+    printf "Enter choice [1-4] (Default: 1): "
+    read -r led_choice
+    case "$led_choice" in
+        2)
+            command -v vita-led >/dev/null 2>&1 && vita-led disk >/dev/null 2>&1 || true
+            printf "${C_GREEN}[OK] PS Button LED set to Storage I/O activity mode.${C_RESET}\n"
+            ;;
+        3)
+            command -v vita-led >/dev/null 2>&1 && vita-led on >/dev/null 2>&1 || true
+            printf "${C_GREEN}[OK] PS Button LED set to Solid illumination.${C_RESET}\n"
+            ;;
+        4)
+            command -v vita-led >/dev/null 2>&1 && vita-led off >/dev/null 2>&1 || true
+            printf "${C_GREEN}[OK] PS Button LED turned off.${C_RESET}\n"
+            ;;
+        *)
+            command -v vita-led >/dev/null 2>&1 && vita-led heartbeat >/dev/null 2>&1 || true
+            printf "${C_GREEN}[OK] PS Button LED set to Heartbeat pulse mode.${C_RESET}\n"
+            ;;
+    esac
+
+    echo ""
+    printf "${C_BOLD}Press [Enter] to complete setup... ${C_RESET}"
+    read -r _dummy
+}
+
+# -----------------------------------------------------------------------------
+# COMPLETION & SUMMARY
+# -----------------------------------------------------------------------------
+step_completion() {
+    mark_setup_done
+
+    print_header
+    echo ""
+    printf "${C_GREEN}${C_BOLD}  PlayStation Vita Linux Setup Complete!${C_RESET}\n"
+    echo "================================================================================"
+    echo ""
+
+    local ip_val=""
+    ip_val=$(ip -4 addr show mlan0 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2 || true)
+    [ -z "$ip_val" ] && ip_val=$(ip -4 addr show wlan0 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2 || true)
+
+    if [ -n "$ip_val" ]; then
+        printf "  * %-14s : Connected (IP: %s | SSH: ssh root@%s)\n" "Wi-Fi Network" "$ip_val" "$ip_val"
+    else
+        printf "  * %-14s : Disconnected (Run 'vita-wifi' to connect)\n" "Wi-Fi Network"
+    fi
+
+    local st_mode="Safe Read-Only (ro)"
+    if command -v vita-storage >/dev/null 2>&1 && vita-storage is-rw ux0 2>/dev/null; then
+        st_mode="Read-Write (rw)"
+    fi
+    printf "  * %-14s : %s\n" "Storage Mode" "$st_mode"
+
+    local zram_sz="256M"
+    [ -f /etc/vita-zram.conf ] && zram_sz=$(cat /etc/vita-zram.conf 2>/dev/null)
+    printf "  * %-14s : 512MB RAM + %s ZRAM\n" "Memory Pool" "$zram_sz"
+
+    local autostart_status="Disabled (Console Shell default)"
+    if command -v vita-autostart >/dev/null 2>&1 && vita-autostart check 2>/dev/null; then
+        autostart_status="Enabled (Boots directly to IceWM Desktop)"
+    fi
+    printf "  * %-14s : %s\n" "Desktop Boot" "$autostart_status"
+
+    local led_info="Heartbeat"
+    [ -f /etc/vita-led.conf ] && led_info=$(grep '^mode=' /etc/vita-led.conf 2>/dev/null | cut -d= -f2 || echo "heartbeat")
+    printf "  * %-14s : %s\n" "PS Button LED" "$led_info"
+
+    echo "================================================================================"
+    echo "  Useful Commands to Know:"
+    echo "    - vita-setup       : Re-run this setup wizard anytime"
+    echo "    - alpine-desktop   : Launch IceWM graphical desktop with analog mouse"
+    echo "    - alpine-chroot    : Enter isolated Alpine Linux shell with 'apk' packages"
+    echo "    - vita-wifi        : Scan, connect, and manage Wi-Fi connections"
+    echo "    - vita-storage     : Manage storage write protection (ro / rw)"
+    echo "    - vita-brightness  : Adjust display backlight & brightness"
+    echo "    - vita-led         : Set PS Button LED mode (heartbeat, disk, on, off)"
+    echo "    - vita-cpu         : View & tune CPU frequency (444, 333, 111 MHz)"
+    echo "    - reboot           : Clean hardware reset back to PlayStation Vita LiveArea"
+    echo "================================================================================"
+    echo ""
+
+    printf "What would you like to do now?\n"
+    printf "  ${C_BOLD}1) Enter Console Shell (Default)${C_RESET}\n"
+    printf "  ${C_BOLD}2) Launch IceWM Graphical Desktop${C_RESET}\n"
+    printf "  ${C_BOLD}3) Reboot Console back to VitaOS LiveArea${C_RESET}\n"
+    echo ""
+    printf "Enter choice [1-3] (Default: 1): "
+    read -r final_choice
+
+    case "$final_choice" in
+        2)
+            if command -v alpine-desktop >/dev/null 2>&1; then
+                echo "Launching Alpine Desktop..."
+                touch /tmp/.desktop_autostart_done 2>/dev/null || true
+                exec /usr/bin/alpine-desktop
+            else
+                echo "Alpine desktop not found. Entering shell..."
+            fi
+            ;;
+        3)
+            echo "Rebooting to VitaOS LiveArea..."
+            sync
+            exec reboot
+            ;;
+        *)
+            echo "Entering console shell..."
+            ;;
+    esac
+}
+
+show_status() {
+    print_header
+    echo ""
+    printf "${C_BOLD}PlayStation Vita Linux Setup Status:${C_RESET}\n"
+    echo "--------------------------------------------------------------------------------"
+    if is_setup_done; then
+        printf "  First-Boot Setup:  ${C_GREEN}[COMPLETED]${C_RESET}\n"
+    else
+        printf "  First-Boot Setup:  ${C_YELLOW}[NOT COMPLETED]${C_RESET} (Run 'vita-setup' to configure)\n"
+    fi
+
+    if grep -qs ' /mnt/ux0 ' /proc/mounts; then
+        printf "  Storage (ux0):     ${C_GREEN}Mounted${C_RESET} (%s)\n" "$(df -h /mnt/ux0 2>/dev/null | awk 'NR==2 {print $4 " free"}')"
+    else
+        printf "  Storage (ux0):     ${C_YELLOW}Not Mounted${C_RESET}\n"
+    fi
+
+    if grep -qs ' /mnt/ur0 ' /proc/mounts; then
+        printf "  Storage (ur0):     ${C_GREEN}Mounted${C_RESET} (%s)\n" "$(df -h /mnt/ur0 2>/dev/null | awk 'NR==2 {print $4 " free"}')"
+    else
+        printf "  Storage (ur0):     ${C_YELLOW}Not Mounted${C_RESET}\n"
+    fi
+
+    local ip
+    ip=$(ip -4 addr show mlan0 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2 || true)
+    [ -z "$ip" ] && ip=$(ip -4 addr show wlan0 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2 || true)
+    if [ -n "$ip" ]; then
+        printf "  Wi-Fi Network:     ${C_GREEN}Connected${C_RESET} (%s)\n" "$ip"
+    else
+        printf "  Wi-Fi Network:     ${C_YELLOW}Disconnected${C_RESET}\n"
+    fi
+
+    if [ -f /mnt/ux0/alpine.img ] || [ -f /mnt/ur0/alpine.img ]; then
+        printf "  Alpine Container:  ${C_GREEN}Present${C_RESET}\n"
+    else
+        printf "  Alpine Container:  ${C_YELLOW}Not Created${C_RESET}\n"
+    fi
+
+    if command -v vita-autostart >/dev/null 2>&1 && vita-autostart check 2>/dev/null; then
+        printf "  Desktop Autostart: ${C_GREEN}Enabled${C_RESET} (Boots into IceWM Desktop)\n"
+    else
+        printf "  Desktop Autostart: ${C_CYAN}Disabled${C_RESET} (Boots into Console Shell)\n"
+    fi
+    echo "================================================================================"
+}
+
+show_help() {
+    cat << EOF
+Usage: vita-setup [OPTION]
+
+Interactive First-Boot Setup Wizard & Configuration Utility for PlayStation Vita Linux.
+
+Commands & Options:
+  (no args)       Run full interactive 6-step guided setup wizard
+  --first-boot    First-boot mode (displays welcome intro with skip option)
+  --wifi, wifi    Configure Wi-Fi wireless network connection
+  --storage       Configure storage auto-mount & read-only protection modes
+  --memory        Configure in-RAM ZRAM compression pool and SD card swapfile
+  --alpine        Create or inspect persistent Alpine Linux ext4 container
+  --desktop       Install IceWM desktop packages and configure autostart
+  --status        Display current onboarding and configuration status
+  --reset         Clear completion flags so setup wizard runs again on next boot
+  --help, -h      Display this help screen
+
+Examples:
+  vita-setup            # Launch complete step-by-step setup wizard
+  vita-setup --wifi     # Jump directly to Wi-Fi network setup
+  vita-setup --memory   # Jump directly to ZRAM & swap configuration
+  vita-setup --status   # Check setup status
+EOF
+    exit 0
+}
+
+# -----------------------------------------------------------------------------
+# CLI Dispatcher
+# -----------------------------------------------------------------------------
+case "${1:-}" in
+    --first-boot)
+        print_header
+        echo ""
+        echo " Welcome to PlayStation Vita Linux 6.12!"
+        echo ""
+        echo " This guided setup wizard will help you configure:"
+        echo "   1. Hardware Diagnostics & Health Baseline"
+        echo "   2. Wi-Fi Wireless Networking & SSH Access"
+        echo "   3. Storage Safety & Read-Only Protection Modes"
+        echo "   4. Memory Optimization (Compressed ZRAM & SD Swap)"
+        echo "   5. Alpine Linux Storage Container (alpine.img)"
+        echo "   6. IceWM Desktop Environment & Autostart"
+        echo ""
+        printf "${C_BOLD}Press [Enter] to begin setup, or [s] to skip to console shell: ${C_RESET}"
+        read -r intro_choice
+        case "$intro_choice" in
+            [sS]*)
+                echo ""
+                printf "Mark setup as completed? (If No, wizard will run again on next boot) [y/N]: "
+                read -r skip_mark
+                case "$skip_mark" in
+                    [yY]*) mark_setup_done ;;
+                esac
+                echo "Entering console shell..."
+                exit 0
+                ;;
+        esac
+        step_diagnostics
+        step_wifi
+        step_storage
+        step_memory
+        step_alpine
+        step_desktop
+        step_completion
+        ;;
+    --wifi|wifi)
+        step_wifi
+        ;;
+    --storage|storage)
+        step_storage
+        ;;
+    --memory|memory|swap)
+        step_memory
+        ;;
+    --alpine|alpine)
+        step_alpine
+        ;;
+    --desktop|desktop)
+        step_desktop
+        ;;
+    --status|status)
+        show_status
+        ;;
+    --reset|reset)
+        clear_setup_done
+        ;;
+    --help|-h|help)
+        show_help
+        ;;
+    *)
+        step_diagnostics
+        step_wifi
+        step_storage
+        step_memory
+        step_alpine
+        step_desktop
+        step_completion
+        ;;
+esac

@@ -80,6 +80,12 @@ if [ -d "${PORT_DIR}" ]; then
     "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_IP_NF_FILTER
     "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_IP_NF_NAT
     "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_IP_NF_TARGET_MASQUERADE
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_CPU_FREQ_GOV_PERFORMANCE
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_CPU_FREQ_GOV_POWERSAVE
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_CPU_FREQ_GOV_USERSPACE
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_CPU_FREQ_GOV_ONDEMAND
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_CPU_FREQ_GOV_CONSERVATIVE
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_ARM_VITA_CPUFREQ
     
     echo "Compiling zImage and DTBs..."
     make build CROSS_COMPILE="${CROSS_COMPILE}"
@@ -147,6 +153,12 @@ else
     ./scripts/config --file .config --enable CONFIG_IP_NF_FILTER
     ./scripts/config --file .config --enable CONFIG_IP_NF_NAT
     ./scripts/config --file .config --enable CONFIG_IP_NF_TARGET_MASQUERADE
+    ./scripts/config --file .config --enable CONFIG_CPU_FREQ_GOV_PERFORMANCE
+    ./scripts/config --file .config --enable CONFIG_CPU_FREQ_GOV_POWERSAVE
+    ./scripts/config --file .config --enable CONFIG_CPU_FREQ_GOV_USERSPACE
+    ./scripts/config --file .config --enable CONFIG_CPU_FREQ_GOV_ONDEMAND
+    ./scripts/config --file .config --enable CONFIG_CPU_FREQ_GOV_CONSERVATIVE
+    ./scripts/config --file .config --enable CONFIG_ARM_VITA_CPUFREQ
     make ARCH=arm CROSS_COMPILE="${CROSS_COMPILE}" -j"$(nproc)" zImage
     make ARCH=arm CROSS_COMPILE="${CROSS_COMPILE}" sony/vita1000.dtb sony/vita2000.dtb sony/pstv.dtb
     

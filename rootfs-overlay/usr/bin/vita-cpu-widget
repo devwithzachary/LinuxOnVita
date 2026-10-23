@@ -1,0 +1,85 @@
+#!/bin/sh
+# LinuxOnVita CPU Frequency & Power Taskbar Widget (vita-cpu-widget)
+#
+# Provides an interactive system tray notification widget in IceWM taskbar.
+# Displays live CPU frequency and allows 1-click / 1-tap switching between:
+#   * Max Performance (444 MHz)
+#   * Balanced Standard (333 MHz)
+#   * Dynamic Scaling (On-Demand)
+#   * Powersave (111 MHz)
+#
+# Licensed under the GNU General Public License v3.0 (GPL-3.0)
+
+# Check if running under X11
+if [ -z "$DISPLAY" ]; then
+    exit 0
+fi
+
+# Ensure single instance
+PIDFILE="/tmp/vita-cpu-widget.pid"
+if [ -f "$PIDFILE" ]; then
+    old_pid=$(cat "$PIDFILE" 2>/dev/null || echo "")
+    if [ -n "$old_pid" ] && kill -0 "$old_pid" 2>/dev/null; then
+        exit 0
+    fi
+fi
+echo "$$" > "$PIDFILE" 2>/dev/null || true
+
+# Clean up on exit
+trap 'rm -f "$PIDFILE" 2>/dev/null' EXIT INT TERM
+
+# If yad is not installed, exit quietly
+if ! command -v yad >/dev/null 2>&1; then
+    exit 0
+fi
+
+# Create named pipe for feeding real-time updates to yad tray notification
+PIPE="/tmp/vita-cpu-tray-$$.pipe"
+rm -f "$PIPE"
+mkfifo "$PIPE"
+trap 'rm -f "$PIPE" "$PIDFILE" 2>/dev/null' EXIT INT TERM
+
+# Launch yad notification reading from pipe
+yad --notification \
+    --listen \
+    --image="utilities-system-monitor" \
+    --text="LinuxOnVita CPU: Initializing..." \
+    --command="sh -c '/usr/bin/vita-cpu gui'" \
+    --menu="Max Performance (444 MHz)!sh -c '/usr/bin/vita-cpu max'|Balanced Standard (333 MHz)!sh -c '/usr/bin/vita-cpu balanced'|Dynamic On-Demand (111-444 MHz)!sh -c '/usr/bin/vita-cpu ondemand'|Powersave (111 MHz)!sh -c '/usr/bin/vita-cpu powersave'|CPU Profile Selector (GUI)!sh -c '/usr/bin/vita-cpu gui'" \
+    < "$PIPE" &
+YAD_PID=$!
+
+# Feeder loop: update tooltip and icon every 3 seconds
+(
+    exec 3> "$PIPE"
+    while kill -0 "$YAD_PID" 2>/dev/null; do
+        cur_khz=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>/dev/null || echo "0")
+        gov=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo "unknown")
+        
+        if [ "$cur_khz" -gt 0 ]; then
+            mhz=$((cur_khz / 1000))
+        else
+            mhz=$(awk -F': ' '/cpu MHz/ {print int($2); exit}' /proc/cpuinfo 2>/dev/null || echo "444")
+        fi
+
+        # Choose appropriate icon based on performance level
+        if [ "$mhz" -ge 400 ]; then
+            icon="utilities-system-monitor"
+        elif [ "$mhz" -ge 300 ]; then
+            icon="preferences-system-power"
+        else
+            icon="battery"
+        fi
+
+        printf "tooltip:PlayStation Vita CPU: %d MHz (%s)\nClick or tap to change performance profile\n" "$mhz" "$gov" >&3 2>/dev/null || break
+        printf "icon:%s\n" "$icon" >&3 2>/dev/null || break
+
+        sleep 3
+    done
+    exec 3>&-
+) &
+FEEDER_PID=$!
+
+wait "$YAD_PID" 2>/dev/null || true
+kill "$FEEDER_PID" 2>/dev/null || true
+rm -f "$PIPE" "$PIDFILE" 2>/dev/null || true

@@ -20,6 +20,10 @@ if [ -t 0 ]; then
         HN=$(hostname 2>/dev/null)
     fi
 
+    IP=$(ip -4 addr show mlan0 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2)
+    [ -z "$IP" ] && IP=$(ip -4 addr show wlan0 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2)
+
+
     echo "  ========================================================"
     echo "   Welcome to PlayStation Vita Linux 6.12!                "
     echo "  ========================================================"
@@ -28,8 +32,6 @@ if [ -t 0 ]; then
     echo "   * Kernel:     $(uname -r)                              "
     echo "   * Hostname:   $HN                                      "
 
-    IP=$(ip -4 addr show mlan0 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2)
-    [ -z "$IP" ] && IP=$(ip -4 addr show wlan0 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2)
     if [ -n "$IP" ]; then
         echo "   * Wi-Fi IP:   $IP (SSH: ssh root@$IP)                 "
     else
@@ -37,14 +39,17 @@ if [ -t 0 ]; then
     fi
     echo ""
     echo "   Useful Commands:"
+    echo "     - vita-setup       : Initial setup wizard (Wi-Fi, storage, memory, desktop)"
     echo "     - vita-wifi        : Scan, connect, and manage Wi-Fi networks"
     echo "     - vita-storage     : Manage storage write protection (ro / rw)"
+    echo "     - vita-cpu         : Power profiles & CPU clocks (444, 333, 111 MHz)"
     echo "     - vita-autostart   : Configure direct boot into desktop (on / off)"
     echo "     - vita-diagnostics : Gather logs & troubleshoot Wi-Fi / SD cards"
     echo "     - alpine-desktop   : Launch IceWM graphical desktop with mouse emulation"
     echo "     - alpine-chroot    : Enter Alpine Linux with 'apk' (isolated container)"
     echo "     - vita-doom        : Play DOOM under Linux Framebuffer (/dev/fb0)"
     echo "     - vita-brightness  : Control screen brightness / backlight"
+    echo "     - vita-led         : PlayStation Button LED mode (heartbeat, disk, on, off)"
     echo "     - vita-swap        : Manage compressed ZRAM memory & swapfiles"
     echo "     - reboot           : Clean hardware reset back to VitaOS"
     echo "  ========================================================"

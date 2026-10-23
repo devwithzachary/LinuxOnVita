@@ -51,9 +51,11 @@ if [ ! -d "vita-libbaremetal" ]; then
 fi
 cd vita-libbaremetal
 git checkout . 2>/dev/null || true
-if [ -f "${BUILD_DIR}/patches/vita-libbaremetal/0001-max-brightness.patch" ]; then
-    git apply "${BUILD_DIR}/patches/vita-libbaremetal/0001-max-brightness.patch" || true
-fi
+for patch in "${BUILD_DIR}/patches/vita-libbaremetal/"*.patch; do
+    if [ -f "$patch" ]; then
+        git apply "$patch" || true
+    fi
+done
 cd libbaremetal
 make clean || true
 make install

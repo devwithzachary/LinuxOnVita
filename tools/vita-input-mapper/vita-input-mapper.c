@@ -104,7 +104,8 @@ static int setup_uinput_device(int desktop_mode) {
   int keys[] = {KEY_UP,       KEY_DOWN,      KEY_LEFT,      KEY_RIGHT,
                 KEY_ENTER,    KEY_BACKSPACE, KEY_SPACE,     KEY_TAB,
                 KEY_LEFTCTRL, KEY_C,         KEY_PAGEUP,    KEY_PAGEDOWN,
-                KEY_ESC,      KEY_LEFTMETA,  KEY_LEFTSHIFT, KEY_LEFTALT};
+                KEY_ESC,      KEY_LEFTMETA,  KEY_LEFTSHIFT, KEY_LEFTALT,
+                KEY_VOLUMEUP, KEY_VOLUMEDOWN};
 
   for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
     ioctl(fd, UI_SET_KEYBIT, keys[i]);
@@ -167,6 +168,56 @@ static void emit_syn(int uinput_fd) {
 static void emit_key(int uinput_fd, int keycode, int value) {
   emit_event(uinput_fd, EV_KEY, keycode, value);
   emit_syn(uinput_fd);
+}
+
+static void spawn_command(const char *cmd) {
+  pid_t pid = fork();
+  if (pid == 0) {
+    int devnull = open("/dev/null", O_RDWR);
+    if (devnull >= 0) {
+      dup2(devnull, STDIN_FILENO);
+      dup2(devnull, STDOUT_FILENO);
+      dup2(devnull, STDERR_FILENO);
+      close(devnull);
+    }
+    execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
+    _exit(127);
+  }
+}
+
+static void toggle_fbkeyboard(void) {
+  // 1. Check if user specified a custom PS Button toggle command in /etc/vita-ps-button.conf
+  FILE *cf = fopen("/etc/vita-ps-button.conf", "r");
+  if (cf) {
+    char line[256];
+    while (fgets(line, sizeof(line), cf)) {
+      char *p = line;
+      while (*p == ' ' || *p == '\t') p++;
+      if (*p == '#' || *p == '\n' || *p == '\0') continue;
+      if (strncmp(p, "command=", 8) == 0) {
+        char *cmd = p + 8;
+        char *nl = strchr(cmd, '\n');
+        if (nl) *nl = '\0';
+        while (*cmd == ' ' || *cmd == '\t') cmd++;
+        if (strlen(cmd) > 0) {
+          spawn_command(cmd);
+          fclose(cf);
+          return;
+        }
+      }
+    }
+    fclose(cf);
+  }
+
+  // 2. Default: send SIGUSR1 to fbkeyboard daemon to toggle visibility
+  FILE *f = fopen("/var/run/fbkeyboard.pid", "r");
+  if (f) {
+    pid_t pid = 0;
+    if (fscanf(f, "%d", &pid) == 1 && pid > 0) {
+      kill(pid, SIGUSR1);
+    }
+    fclose(f);
+  }
 }
 
 static void drain_pending_events(int fd) {
@@ -273,6 +324,8 @@ int main(int argc, char **argv) {
   sigemptyset(&sa.sa_mask);
   sigaction(SIGUSR2, &sa, NULL);
 
+  signal(SIGCHLD, SIG_IGN);
+
   drain_pending_events(buttons_fd);
 
   // Make buttons_fd non-blocking so we can use poll()
@@ -367,6 +420,23 @@ int main(int argc, char **argv) {
             case BTN_SELECT: // Select -> Escape
               emit_key(uinput_fd, KEY_ESC, press);
               break;
+            case BTN_MODE: // PS Button -> Toggle fbkeyboard
+              if (press == 1) {
+                toggle_fbkeyboard();
+              }
+              break;
+            case KEY_VOLUMEUP: // Volume Up -> Step Display Brightness +10%
+              if (press == 1) {
+                spawn_command("/usr/bin/vita-brightness up >/dev/null 2>&1");
+              }
+              emit_key(uinput_fd, KEY_VOLUMEUP, press);
+              break;
+            case KEY_VOLUMEDOWN: // Volume Down -> Step Display Brightness -10%
+              if (press == 1) {
+                spawn_command("/usr/bin/vita-brightness down >/dev/null 2>&1");
+              }
+              emit_key(uinput_fd, KEY_VOLUMEDOWN, press);
+              break;
             case BTN_DPAD_UP:
               emit_key(uinput_fd, KEY_UP, press);
               break;
@@ -408,6 +478,26 @@ int main(int argc, char **argv) {
               break;
             case BTN_Y: // Triangle (△) -> Tab (auto-complete)
               emit_key(uinput_fd, KEY_TAB, press);
+              break;
+            case BTN_SELECT: // Select -> Escape
+              emit_key(uinput_fd, KEY_ESC, press);
+              break;
+            case BTN_MODE: // PS Button -> Toggle fbkeyboard
+              if (press == 1) {
+                toggle_fbkeyboard();
+              }
+              break;
+            case KEY_VOLUMEUP: // Volume Up -> Step Display Brightness +10%
+              if (press == 1) {
+                spawn_command("/usr/bin/vita-brightness up >/dev/null 2>&1");
+              }
+              emit_key(uinput_fd, KEY_VOLUMEUP, press);
+              break;
+            case KEY_VOLUMEDOWN: // Volume Down -> Step Display Brightness -10%
+              if (press == 1) {
+                spawn_command("/usr/bin/vita-brightness down >/dev/null 2>&1");
+              }
+              emit_key(uinput_fd, KEY_VOLUMEDOWN, press);
               break;
             case BTN_TL: // L Trigger -> Ctrl+C
               if (press == 1) {

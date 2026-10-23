@@ -452,6 +452,10 @@ static int install_linux_files_to_mount(const char *mount) {
     copy_file("app0:data/payload.bin", "ux0:linux/payload.bin", 1);
   }
 
+  /* Synchronize storage devices to flush all newly copied files and metadata */
+  sceIoSync("ux0:", 0);
+  sceIoSync("ur0:", 0);
+
   if (error_count > 0) {
     draw_progress_modal("INSTALLATION FINISHED WITH ERRORS", "Some required files failed to copy.", 1.0f, "Check SD card free space and try again.", "TAP SCREEN OR PRESS CROSS TO CONTINUE");
   } else {
@@ -506,6 +510,10 @@ static int copy_boot_files_to_mount(const char *mount) {
       copied_count++;
     }
   }
+
+  /* Synchronize storage devices to flush all newly copied files and metadata */
+  sceIoSync("ux0:", 0);
+  sceIoSync("ur0:", 0);
 
   char status_str[128];
   snprintf(status_str, sizeof(status_str), "Copied %d boot files to %slinux/ successfully!", copied_count, mount);
@@ -855,6 +863,14 @@ static void boot_linux(const char *mount, int debug_mode) {
   draw_progress_modal("LAUNCHING LINUX 6.12", "Handover in progress: Transitioning via Syscon...", 0.9f, "Screen will turn black as soft-reset transitions into Linux.", NULL);
   sceKernelDelayThread(400 * 1000);
 
+  /* Flush and close debug log before module launch */
+  debug_log_close();
+
+  /* Sync all storage devices so SD2Vita / Sony memory cards are fully committed */
+  sceIoSync("ux0:", 0);
+  sceIoSync("ur0:", 0);
+  sceKernelDelayThread(500 * 1000);
+
   /* Initiate loader module launch */
   tai_module_args_t argg;
   argg.size = sizeof(argg);
@@ -899,7 +915,7 @@ static void render_main_ui(const MountFileStatus *status, int installed, int has
 
   /* Header Bar */
   gui_draw_text(24, 16, "LinuxOnVita", GUI_COLOR_ACCENT_CYAN, 2);
-  gui_draw_badge(210, 18, "v1.4.0", GUI_COLOR_CARD_BG, GUI_COLOR_ACCENT_CYAN);
+  gui_draw_badge(210, 18, "v1.5.0", GUI_COLOR_CARD_BG, GUI_COLOR_ACCENT_CYAN);
   gui_draw_text(24, 38, "PlayStation Vita Linux Bootstrapper & Installer", GUI_COLOR_TEXT_MUTED, 1);
   gui_draw_action_button(r_exit, "EXIT", NULL, "START", GUI_COLOR_CARD_BG, pressed_btn == 5);
   gui_draw_rect(0, 58, SCREEN_W, 1, GUI_COLOR_CARD_BORDER);

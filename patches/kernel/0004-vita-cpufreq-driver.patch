@@ -1,0 +1,305 @@
+diff --git a/arch/arm/boot/dts/vita.dtsi b/arch/arm/boot/dts/vita.dtsi
+index 5f7b54647..83ff7c08c 100644
+--- a/arch/arm/boot/dts/vita.dtsi
++++ b/arch/arm/boot/dts/vita.dtsi
+@@ -32,7 +32,7 @@ cpu@0 {
+ 			compatible = "arm,cortex-a9";
+ 			reg = <0>;
+ 			clocks = <&cpu_clk>;
+-			clock-frequency = <333000000>;
++			clock-frequency = <444000000>;
+ 			operating-points-v2 = <&cpu_opp_table>;
+ 		};
+ 
+@@ -41,7 +41,7 @@ cpu@1 {
+ 			compatible = "arm,cortex-a9";
+ 			reg = <1>;
+ 			clocks = <&cpu_clk>;
+-			clock-frequency = <333000000>;
++			clock-frequency = <444000000>;
+ 			operating-points-v2 = <&cpu_opp_table>;
+ 		};
+ 
+@@ -50,7 +50,7 @@ cpu@2 {
+ 			compatible = "arm,cortex-a9";
+ 			reg = <2>;
+ 			clocks = <&cpu_clk>;
+-			clock-frequency = <333000000>;
++			clock-frequency = <444000000>;
+ 			operating-points-v2 = <&cpu_opp_table>;
+ 		};
+ 
+@@ -59,7 +59,7 @@ cpu@3 {
+ 			compatible = "arm,cortex-a9";
+ 			reg = <3>;
+ 			clocks = <&cpu_clk>;
+-			clock-frequency = <333000000>;
++			clock-frequency = <444000000>;
+ 			operating-points-v2 = <&cpu_opp_table>;
+ 		};
+ 	};
+@@ -88,7 +88,7 @@ gic: interrupt-controller@1a001000 {
+ 	cpu_clk: cpu-clock {
+ 		compatible = "fixed-clock";
+ 		#clock-cells = <0>;
+-		clock-frequency = <333000000>;
++		clock-frequency = <444000000>;
+ 		clock-output-names = "cpu_clk";
+ 	};
+ 
+@@ -96,9 +96,25 @@ cpu_opp_table: opp-table {
+ 		compatible = "operating-points-v2";
+ 		opp-shared;
+ 
++		opp-111000000 {
++			opp-hz = /bits/ 64 <111000000>;
++		};
++
++		opp-166000000 {
++			opp-hz = /bits/ 64 <166000000>;
++		};
++
++		opp-222000000 {
++			opp-hz = /bits/ 64 <222000000>;
++		};
++
+ 		opp-333000000 {
+ 			opp-hz = /bits/ 64 <333000000>;
+ 		};
++
++		opp-444000000 {
++			opp-hz = /bits/ 64 <444000000>;
++		};
+ 	};
+ 
+ 	refclk144mhz: refclk144mhz {
+@@ -170,6 +186,8 @@ sdif1: mmc@e0c00000 {
+ 			reg = <0xe0c00000 0x1000>;
+ 			vita,bus-index = <1>;
+ 			interrupts = <GIC_SPI 189 IRQ_TYPE_LEVEL_HIGH>;
++			broken-cd;
++			cap-sd-highspeed;
+ 			status = "disabled";
+ 		};
+ 
+diff --git a/drivers/cpufreq/Kconfig.arm b/drivers/cpufreq/Kconfig.arm
+index 5f7e13e60..1f42a3dd8 100644
+--- a/drivers/cpufreq/Kconfig.arm
++++ b/drivers/cpufreq/Kconfig.arm
+@@ -270,3 +270,13 @@ config ARM_PXA2xx_CPUFREQ
+ 	  This add the CPUFreq driver support for Intel PXA2xx SOCs.
+ 
+ 	  If in doubt, say N.
++
++config ARM_VITA_CPUFREQ
++	bool "PlayStation Vita CPUFreq support"
++	depends on ARCH_VITA || COMPILE_TEST
++	default y
++	help
++	  This adds the CPUFreq driver for the PlayStation Vita SoC.
++	  Supports dynamic frequency scaling across 111 MHz, 166 MHz,
++	  222 MHz, 333 MHz, and 444 MHz operating points via Pervasive
++	  hardware registers.
+diff --git a/drivers/cpufreq/Makefile b/drivers/cpufreq/Makefile
+index 0f184031d..030579aaa 100644
+--- a/drivers/cpufreq/Makefile
++++ b/drivers/cpufreq/Makefile
+@@ -85,6 +85,7 @@ obj-$(CONFIG_ARM_TEGRA186_CPUFREQ)	+= tegra186-cpufreq.o
+ obj-$(CONFIG_ARM_TEGRA194_CPUFREQ)	+= tegra194-cpufreq.o
+ obj-$(CONFIG_ARM_TI_CPUFREQ)		+= ti-cpufreq.o
+ obj-$(CONFIG_ARM_VEXPRESS_SPC_CPUFREQ)	+= vexpress-spc-cpufreq.o
++obj-$(CONFIG_ARM_VITA_CPUFREQ)		+= vita-cpufreq.o
+ 
+ 
+ ##################################################################################
+diff --git a/drivers/cpufreq/cpufreq-dt-platdev.c b/drivers/cpufreq/cpufreq-dt-platdev.c
+index 18942bfe9..2e5da4c15 100644
+--- a/drivers/cpufreq/cpufreq-dt-platdev.c
++++ b/drivers/cpufreq/cpufreq-dt-platdev.c
+@@ -194,6 +194,8 @@ static const struct of_device_id blocklist[] __initconst = {
+ 	{ .compatible = "qcom,msm8974", },
+ 	{ .compatible = "qcom,msm8960", },
+ 
++	{ .compatible = "vita,vita", },
++
+ 	{ }
+ };
+ 
+diff --git a/drivers/cpufreq/vita-cpufreq.c b/drivers/cpufreq/vita-cpufreq.c
+new file mode 100644
+index 000000000..a531b5c60
+--- /dev/null
++++ b/drivers/cpufreq/vita-cpufreq.c
+@@ -0,0 +1,162 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * PlayStation Vita SoC (CXD5441GG) CPUFreq Driver
++ *
++ * Provides dynamic CPU frequency scaling for ARM Cortex-A9 MPCore
++ * across operating points: 111 MHz, 166 MHz, 222 MHz, 333 MHz, 444 MHz
++ * using Pervasive BaseClk hardware registers (0xE3103000).
++ */
++
++#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
++
++#include <linux/cpufreq.h>
++#include <linux/init.h>
++#include <linux/io.h>
++#include <linux/module.h>
++#include <linux/of.h>
++
++#define VITA_PERVASIVE_BASECLK_PA	0xE3103000
++#define VITA_PERVASIVE_BASECLK_SIZE	0x1000
++
++/* Register offsets within BaseClk block */
++#define VITA_BASECLK_ARM_MULT_OFFSET	0x000
++#define VITA_BASECLK_ARM_DIV_OFFSET	0x004
++
++#define TRANSITION_LATENCY_NS		50000 /* 50 microseconds */
++
++static void __iomem *vita_baseclk_base;
++
++/*
++ * PS Vita BaseClk Core Multiplier Register (0xE3103000):
++ * The input is ~27.777778 MHz (250 MHz / 9).
++ * The register value is an index selecting the PLL multiplier:
++ *   Value 4: x4  -> 111.11 MHz (~111 MHz)
++ *   Value 5: x6  -> 166.66 MHz (~166 MHz)
++ *   Value 6: x8  -> 222.22 MHz (~222 MHz)
++ *   Value 7: x12 -> 333.33 MHz (~333 MHz, default baseline)
++ *   Value 8: x16 -> 444.44 MHz (~444 MHz, high-performance)
++ *
++ * Register 0xE3103004 is the clock divisor (set to 0 for divide by 1).
++ */
++static struct cpufreq_frequency_table vita_freq_table[] = {
++	{ .driver_data = 4, .frequency = 111000 },
++	{ .driver_data = 5, .frequency = 166000 },
++	{ .driver_data = 6, .frequency = 222000 },
++	{ .driver_data = 7, .frequency = 333000 },
++	{ .driver_data = 8, .frequency = 444000 },
++	{ .driver_data = 0, .frequency = CPUFREQ_TABLE_END },
++};
++
++static unsigned int vita_cpufreq_get(unsigned int cpu)
++{
++	u32 mult;
++
++	if (!vita_baseclk_base)
++		return 333000;
++
++	mult = readl(vita_baseclk_base + VITA_BASECLK_ARM_MULT_OFFSET) & 0x1F;
++	switch (mult) {
++	case 4:
++		return 111000;
++	case 5:
++		return 166000;
++	case 6:
++		return 222000;
++	case 7:
++	case 10:
++		return 333000;
++	case 8:
++	case 14:
++		return 444000;
++	case 9:
++		return 500000;
++	default:
++		return 333000;
++	}
++}
++
++static int vita_cpufreq_target_index(struct cpufreq_policy *policy,
++				     unsigned int index)
++{
++	u32 mult = vita_freq_table[index].driver_data;
++
++	if (!vita_baseclk_base)
++		return -ENODEV;
++
++	/* Write multiplier to Pervasive BaseClk register */
++	writel(mult, vita_baseclk_base + VITA_BASECLK_ARM_MULT_OFFSET);
++
++	/* Ensure divisor is set to 0 (divide by 1) */
++	writeb(0, vita_baseclk_base + VITA_BASECLK_ARM_DIV_OFFSET);
++
++	/* Flush write buffer */
++	readl(vita_baseclk_base + VITA_BASECLK_ARM_MULT_OFFSET);
++
++	return 0;
++}
++
++static int vita_cpufreq_init(struct cpufreq_policy *policy)
++{
++	/* All 4 Cortex-A9 cores share the same clock domain */
++	cpumask_setall(policy->cpus);
++
++	policy->cpuinfo.transition_latency = TRANSITION_LATENCY_NS;
++
++	cpufreq_generic_init(policy, vita_freq_table, TRANSITION_LATENCY_NS);
++
++	policy->cur = vita_cpufreq_get(policy->cpu);
++
++	pr_info("CPU%u initialized at %u MHz\n", policy->cpu, policy->cur / 1000);
++	return 0;
++}
++
++static void vita_cpufreq_exit(struct cpufreq_policy *policy)
++{
++}
++
++static struct cpufreq_driver vita_cpufreq_driver = {
++	.flags		= CPUFREQ_NEED_INITIAL_FREQ_CHECK,
++	.verify		= cpufreq_generic_frequency_table_verify,
++	.target_index	= vita_cpufreq_target_index,
++	.get		= vita_cpufreq_get,
++	.init		= vita_cpufreq_init,
++	.exit		= vita_cpufreq_exit,
++	.attr		= cpufreq_generic_attr,
++	.name		= "vita-cpufreq",
++};
++
++static int __init vita_cpufreq_driver_init(void)
++{
++	int ret;
++
++	if (!of_machine_is_compatible("vita,vita"))
++		return -ENODEV;
++
++	vita_baseclk_base = ioremap(VITA_PERVASIVE_BASECLK_PA, VITA_PERVASIVE_BASECLK_SIZE);
++	if (!vita_baseclk_base) {
++		pr_err("Failed to map Pervasive BaseClk registers at 0x%08X\n",
++		       VITA_PERVASIVE_BASECLK_PA);
++		return -ENOMEM;
++	}
++
++	/* Initialize hardware clock directly to 444 MHz high-performance mode (value 8 = x16) */
++	writel(8, vita_baseclk_base + VITA_BASECLK_ARM_MULT_OFFSET);
++	writeb(0, vita_baseclk_base + VITA_BASECLK_ARM_DIV_OFFSET);
++	readl(vita_baseclk_base + VITA_BASECLK_ARM_MULT_OFFSET);
++
++	ret = cpufreq_register_driver(&vita_cpufreq_driver);
++	if (ret) {
++		pr_err("Failed to register cpufreq driver: %d\n", ret);
++		iounmap(vita_baseclk_base);
++		vita_baseclk_base = NULL;
++		return ret;
++	}
++
++	pr_info("PlayStation Vita CPUFreq driver registered (111-444 MHz)\n");
++	return 0;
++}
++module_init(vita_cpufreq_driver_init);
++
++static void __exit vita_cpufreq_driver_exit(void)
++{
++	cpufreq_unregister_driver(&vita_cpufreq_driver);
++	if (vita_baseclk_base) {
++		iounmap(vita_baseclk_base);
++		vita_baseclk_base = NULL;
++	}
++}
++module_exit(vita_cpufreq_driver_exit);
++
++MODULE_AUTHOR("DevWithZachary");
++MODULE_DESCRIPTION("PlayStation Vita CPUFreq Driver");
++MODULE_LICENSE("GPL");

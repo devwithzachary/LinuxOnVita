@@ -3,7 +3,95 @@
 All notable changes to LinuxOnVita are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) conventions.
 
-## [v1.4.0] - In Development
+## [v1.5.0] - 2026-10-23
+
+### Hardware & Kernel Architecture
+- **PS Vita 2000 (Slim) Hardware Model Detection & LCD Display Initialization:**
+  - Resolved boot failure on retail PS Vita 2000 Slim consoles (specifically USS-1002 motherboard revisions such as PCH-2016, with `hardware_info = 0x00822238` / `hw_mask = 0x820000`).
+  - Fixed DTB model selection in `baremetal-loader.skprx` and `sysroot_model_is_vita2k()` in `libbaremetal`: previously only checked for `hw_mask == 0x800000` (USS-1001 launch models), causing USS-1002 models to fall back to `vita1000.dtb` and call `display_init(DISPLAY_TYPE_OLED)`.
+  - Resolved unlit LCD panel on reboot: `oled_init()` executed SPI commands on nonexistent OLED hardware and never activated LCD backlight power (GPIO 1, pin 7 and I2C backlight controller `0xC8`), leaving the screen dark and controls unresponsive.
+  - Updated `baremetal-loader.skprx` DTB selection and `sysroot_model_is_vita2k()` to detect `0x800000`, `0x820000`, microUSB hardware flag (`sysroot->hw_info & 0x08`), and internal memory emulation flag (`sysroot->hw_info & 0x10`).
+  - Added loop timeout safety guards to `lcd_spi_read()` in `libbaremetal` to prevent infinite loops during LCD DDB panel identification queries.
+  - Ensured PS Vita 2000 Slim consoles correctly select `vita2000.dtb`, initialize the LCD panel and backlight at full brightness, and boot cleanly into Linux.
+- **PS Vita 2000 Slim LCD DSI Timings & Screen Glitch Elimination:**
+  - Resolved the combed line artifact along the right bezel and persistent top-edge scanline duplication / ghosting on PS Vita 2000 Slim LCD panels.
+  - Corrected Video Identification Code (VIC) in `libbaremetal`: `display_init_lcd()` previously called `dsi_start_master()` and `dsi_start_display()` with `vic = 0` (Samsung OLED panel timings: `htotal = 1050`, `HSW = 66`, `vtotal = 594`, `VBP = 42`).
+  - Corrected `vic` to `0x20` (Sony / JDI LCD panel timings: `htotal = 1375`, `HSW = 391`, `vtotal = 567`, `VBP = 15`) in `display_init_lcd()`, matching the exact horizontal sync pulse width and line blanking periods required by the PS Vita 2000 Slim LCD timing controller.
+  - Restored correct Vertical Sync Width (`packet[6] = VSW - 2`) and Vertical Back Porch (`packet[15] = VBP - 3`) packet ordering in `dsi_start_master()`, ensuring the full 15 lines of vertical blanking and eliminating top-edge scanline duplication.
+  - Initialized the entire 1280x720 CDRAM display buffer (`0x20000000`) to solid black (`0xFF000000`) immediately after enabling CDRAM in `vita-baremetal-linux-loader` to erase leftover graphical data and frame buffer remnants from the LiveArea installer application.
+  - Updated virtual console initialization in `S40input` to execute a full screen clear before establishing VT100 top and bottom scrolling margins (`\033[2J\033[1;24r\033[1;1H`), preventing character cell artifacts and stale frame buffer scanlines outside the active scrolling region.
+- **SD2Vita Storage Mounting & Power Sequencing Reliability:**
+  - Resolved SD2Vita microSD cards failing to mount (`mmc2: error -110 whilst initialising SD card`, `Card stuck being busy!`, and ADMA timeout errors during boot).
+  - Powered on the physical Game Card slot (`syscon_short_command_write(0x888, 1, 2)`) early during baremetal loader execution (`vita-baremetal-linux-loader/src/main.c`), ensuring 3.3V VCC is fully stabilized and microSD card internal microcontrollers are ready before the Linux kernel starts.
+  - Added a 20ms hardware settling delay and full controller re-initialization (`sdhci_vita_reinit_host(1)`) in `vita-syscon.c` before triggering card detection rescan on SDIF1.
+  - Updated `sdhci_vita_reinit_host()` in `sdhci-vita.c` to properly configure Pervasive I/O pad voltage register (`0xE3100124`) to 3.3V for bus 1 (Game Card / SD2Vita) and bus 3 (microSD).
+- **Hardware Power & Dynamic CPU Frequency Scaling (`vita-cpufreq`):**
+  - Implemented a dedicated native Linux kernel CPU frequency driver (`drivers/cpufreq/vita-cpufreq.c`) for the PlayStation Vita SoC (CXD5441GG).
+  - Enabled dynamic frequency scaling across 5 hardware operating points: 111 MHz, 166 MHz, 222 MHz, 333 MHz, and 444 MHz via Pervasive BaseClk registers (`0xE3103000`).
+  - Updated Device Tree OPP tables (`arch/arm/boot/dts/vita.dtsi`) with complete 111-444 MHz operating points and 444 MHz baseline frequency.
+  - Added blocklist entry to `cpufreq-dt-platdev.c` allowing `vita-cpufreq` to seamlessly drive `/sys/devices/system/cpu/cpu0/cpufreq/` across all 4 Cortex-A9 cores without conflicts.
+  - Enabled all standard kernel cpufreq governors: `performance`, `powersave`, `userspace`, `ondemand`, and `conservative` in `vita_defconfig`.
+    - Configured Linux `vita-cpufreq` driver to initialize hardware BaseClk registers directly to 444 MHz on baremetal boot, safely bypassing VitaOS power hooks.
+
+- **Display Sleep, Auto-Dimming & Power Management Daemon (`vita-powerd`):**
+  - Implemented a dedicated native background power daemon (`tools/vita-powerd/vita-powerd.c` -> `/usr/bin/vita-powerd`) started on boot via `/etc/init.d/S42powerd`.
+  - **OLED & LCD Burn-In Prevention:** Monitors `/dev/input/event*` devices (touchscreen digitizers, physical buttons, analog sticks, and virtual uinput controllers) with intelligent deadzone filtering to detect genuine user activity without keeping the system awake due to analog potentiometer drift.
+  - **Automated Inactivity Timeouts:**
+    - Inactivity for 3 minutes (180s): Automatically dims display brightness to 20% PWM.
+    - Inactivity for 5 minutes (300s): Blanks display completely into sleep mode (`vita-brightness set 0`, `/sys/class/graphics/fb0/blank`, and X11 DPMS standby) while keeping all background tasks, SSH terminals, downloads, and audio playback running.
+    - Touching the screen or pressing any button immediately wakes the display and restores the previous active brightness level.
+  - **Power Button Integration (`KEY_POWER`):**
+    - Short press (< 3s): Instantly toggles display sleep / wake on demand.
+    - Long press (>= 3s): Initiates a clean, graceful system shutdown (`poweroff`), flashing the blue PS button LED, flushing storage caches, and safely halting hardware via Syscon.
+  - **Unified CLI & State Management:** Supports `vita-powerd [status | sleep | wake | dim | reload]`, with companion integration in `vita-power` (`vita-power sleep`, `vita-power wake`, `vita-power dim`, `vita-power daemon`) and configurable settings in `/etc/vita-powerd.conf`.
+  - **OLED Display Blanking in `vita-brightness`:** Enhanced `/usr/bin/vita-brightness` to support `set 0` on PS Vita 1000 OLED consoles by blanking virtual console and X11 framebuffers (pure black mode with emissive OLED diodes completely off).
+- **CPU Power & Frequency Control CLI (`vita-cpu` / `vita-power`):**
+  - Created a turnkey command-line utility `/usr/bin/vita-cpu` (with symlink `/usr/bin/vita-power`) supporting subcommands `status`, `max`, `balanced`, `powersave`, `ondemand`, `set <mhz>`, and `gui`.
+  - Supported 1-touch profile switching: `max` locks to 444 MHz performance mode, `balanced` sets 333 MHz standard baseline, `powersave` sets 111 MHz energy saving, and `ondemand` enables dynamic load-based scaling.
+  - Built an interactive touch GUI profile selector powered by `yad` under X11 and interactive TUI fallback for the console.
+  - Created an IceWM desktop taskbar widget applet (`/usr/bin/vita-cpu-widget`) docking into the system tray with live tooltip frequency telemetry and 1-click profile switching.
+  - Integrated CPU frequency controls directly into IceWM Start Menu (`CPU Power & Frequency`) and added desktop launcher shortcuts to `/root/Desktop` and `/usr/share/applications`.
+  - Added CPU frequency and active governor reporting to `vita-diagnostics` system telemetry reports.
+- **Touchscreen Keyboard (`fbkeyboard`) Margin Alignment:**
+  - Corrected key width calculation in `init_key_layout()` for the rightmost keys across all rows (`Bksp`, `Enter`, `/`, `Hide`, etc.) so they stretch precisely to the right screen boundary (`screen_w - 4`), eliminating the 1-2 pixel truncation gap on the right margin.
+  - Switched keyboard hide clear buffer color to solid black (`0xFF000000`) for seamless console presentation.
+- **Clean Boot Diagnostics & Read-Only Storage Safety (`S99bootlog`):**
+  - Fixed spurious "Read-only file system" error spam across the console during boot: replaced POSIX `[ -w /mnt/ux0 ]` inode mode checks with mount status inspection (`/proc/mounts`) to accurately detect read-only mounted filesystems.
+  - Protected persistent storage by writing diagnostic logs to SD2Vita (`ux0:linux/boot.log`) or internal memory (`ur0:boot.log`) only when partitions are explicitly mounted read-write.
+  - Redirected the 35-second asynchronous boot logging daemon to `/tmp/bootlog-daemon.log` to prevent background messages and shell redirection errors from leaking onto `/dev/tty1` and corrupting the interactive terminal prompt.
+- **Interactive First-Boot Setup Wizard (`vita-setup`):**
+  - Implemented an interactive 6-step onboarding wizard (`/usr/bin/vita-setup`) that launches automatically on first boot on `/dev/tty1` and can be re-run at any time from the command line.
+  - **Hardware Diagnostics & Health Baseline:** Verifies 4 active ARMv7 CPU cores, frequency operating points, detected display panel (OLED PCH-1000 vs LCD PCH-2000 vs PSTV), storage partition mounts (`ux0:` / `ur0:`), total RAM, active ZRAM compression pool, and Wi-Fi radio status.
+  - **Wi-Fi Wireless Networking:** Integrates on-device network scanning and connection prompts, testing DHCP lease acquisition and verifying SSH remote login connectivity (`ssh root@<IP>`).
+  - **Storage Protection Modes:** Allows users to configure default boot protection between Safe Read-Only (recommended: protects VitaOS database from power interruptions) and Read-Write (direct access), persisting preferences cleanly via `vita-storage set-default <ro|rw>` to `/mnt/ux0/linux/storage.conf` (or `ur0:`).
+  - **Memory Optimization:** Guides selection between 256 MB and 512 MB compressed ZRAM pools in RAM, and optionally formats and mounts a persistent 512 MB or 1 GB SD card swapfile (`/mnt/ux0/swapfile`) tailored to available storage.
+  - **Permanent Alpine Storage Container:** Guided creation of persistent ext4 `alpine.img` containers on SD2Vita (`/mnt/ux0`) or internal memory (`/mnt/ur0`) with automatic free storage validation, ext4 formatting, and mini-rootfs extraction.
+  - **IceWM Graphical Desktop & Boot Autostart:** Automatically checks for desktop package installation, prompts to download packages over Wi-Fi via `alpine-desktop --setup`, and configures whether the system boots directly into the IceWM graphical desktop or into the fast text console shell.
+  - **Completion State & Status Reporting:** Sets persistent `.setup_done` flags on storage, provides a summary card of all configured subsystems, and supports focused subcommands (`vita-setup --wifi`, `--storage`, `--memory`, `--alpine`, `--desktop`, `--status`, `--reset`).
+- **Gamepad Input Mapping & Keyboard Polish:**
+  - **Key Repeat on Long-Press:** Holding down Backspace, Spacebar, or Arrow keys in `fbkeyboard` repeats after a 400ms delay at fast 80ms intervals, with single-tap protection to prevent accidental duplicate keystrokes.
+  - **Caps Lock Toggle:** Double-tapping Shift in `fbkeyboard` (within 350ms) locks uppercase mode with an illuminated amber `[CAPS]` indicator on the key, automatically unlocked by tapping Shift once again.
+  - **Select Button Escape Mapping (`BTN_SELECT` -> `KEY_ESC`):** Mapped physical Select button to `KEY_ESC` in `vita-input-mapper` across both terminal and desktop modes, providing instant exit and mode switching in `vi`, `nano`, command shells, and ncurses menus.
+  - **Hardware Volume Buttons Display Brightness Stepping:** Mapped physical Volume Up and Volume Down buttons in `vita-input-mapper` to step screen backlight brightness up or down by 10% on the fly via `vita-brightness up` and `vita-brightness down`.
+  - **PlayStation Button Keyboard Visibility Toggle (`BTN_MODE`):** Configured physical PS button in `vita-input-mapper` to toggle `fbkeyboard` visibility on demand via `SIGUSR1`, automatically restoring full-screen terminal scrolling geometry when hidden.
+  - **PlayStation Blue LED Control Utility (`vita-led`):** Created turnkey `/usr/bin/vita-led` utility to control the front blue PS Button LED (`gpio-led-ps-button-blue`), supporting `heartbeat` pulse, `disk` (MMC storage I/O activity), `activity` (instant CPU load modulation), solid `on`, and `off`.
+  - **LED Persistence & Onboarding Integration:** Persisted LED preferences across boots in `/mnt/ux0/linux/led.conf` and `/etc/vita-led.conf` via `/etc/init.d/S40input`, added LED telemetry to `vita-diagnostics`, and integrated LED mode selection directly into Step 6 of `vita-setup`.
+- **Virtual Terminal Boundaries & Keyboard Damage Auto-Healing (`fbkeyboard`):**
+  - Integrated kernel-level virtual terminal size clamping (`ioctl(VT_RESIZE)`) in `fbkeyboard` to restrict console scrolling to rows 1-24 (pixel range y=0 to y=384), reserving a guaranteed 10-pixel buffer above the 150px touch keyboard (y=394 to y=544) so terminal output never collides with on-screen keys.
+  - Integrated real-time damage detection into the `fbkeyboard` event loop, sampling probe pixels along the top border line at 100ms intervals to automatically heal and redraw the keyboard if rogue output overwrites the lower display.
+
+### Bootstrapper & Installer App (VPK)
+- **Application Version Bump:**
+  - Bumped application version to `v1.5.0` (`01.50`).
+- **Storage Synchronization & MicroSD FTL Quiescence Protection:**
+  - Hardened file I/O operations in `LinuxOnVita.vpk` and `baremetal-loader.skprx` to prevent sudden power loss and reset corruption on SD2Vita microSD cards.
+  - Implemented device-level filesystem synchronization (`sceIoSync("ux0:", 0)` and `sceIoSync("ur0:", 0)`) in `app/main.c` immediately after copying boot assets and before handing off to the kernel loader.
+  - Added synchronous device flush (`ksceIoSync`) across all mounted storage partitions (`ux0:`, `ur0:`, `uma0:`, `imc0:`, `xmc0:`) in `baremetal-loader.skprx` before requesting Syscon standby.
+  - Disabled kernel-level disk logging to `boot_debug.log` prior to standby and Syscon reset, ensuring no pending writes exist on the Game Card or SD2Vita bus during soft reset.
+  - Introduced a mandatory 500ms hardware settling delay (`ksceKernelDelayThread`) before Syscon standby/reset to allow the microSD card's internal Flash Translation Layer (FTL) to finish write/erase cycles and transition into a safe idle state.
+  - Added prominent warnings in `README.md` and `USER_GUIDE.md` urging users to back up their SD2Vita microSD cards prior to testing baremetal Linux.
+
+## [v1.4.0] - 2026-10-21
 
 ### Hardware & Kernel Architecture
 - **Full Quad-Core SMP Enablement (4 Cores Active):**

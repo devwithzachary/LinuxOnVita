@@ -16,63 +16,92 @@ start)
             vita-storage mount all >/dev/null 2>&1 || true
         fi
 
+        # Helper to check if a partition is mounted read-write
+        is_rw_mount() {
+            target="$1"
+            grep -qs " ${target} " /proc/mounts || return 1
+            if grep -E -q " ${target} [^ ]+ (ro|.*,ro)( |$|,)" /proc/mounts 2>/dev/null; then
+                return 1
+            fi
+            return 0
+        }
+
+        # Helper to safely test target file writeability without leaking shell errors to stderr
+        can_write_target() {
+            target_path="$1"
+            target_dir=$(dirname "$target_path")
+            [ -d "$target_dir" ] || return 1
+            ( : >> "$target_path" ) >/dev/null 2>&1
+        }
+
+        wrote_persistent=0
+
         # Loop for 35 seconds (7 iterations x 5s) to record late-boot events (Wi-Fi DHCP, SSH)
         for iter in 1 2 3 4 5 6 7; do
             LOG_TARGETS="/tmp/boot.log"
 
             # Only append persistent logs to storage if explicitly mounted read-write
-            if [ -w /mnt/ux0 ]; then
+            if is_rw_mount /mnt/ux0; then
                 mkdir -p /mnt/ux0/linux 2>/dev/null || true
                 [ -d /mnt/ux0/linux ] && LOG_TARGETS="${LOG_TARGETS} /mnt/ux0/linux/boot.log"
             fi
-            if [ -w /mnt/ur0 ]; then
+            if is_rw_mount /mnt/ur0; then
                 LOG_TARGETS="${LOG_TARGETS} /mnt/ur0/boot.log"
             fi
 
             for target in $LOG_TARGETS; do
-                {
-                    echo "========================================================"
-                    echo " PlayStation Vita Linux Boot Diagnostic Log"
-                    echo " Iteration: $iter / 7  |  Timestamp: $(date 2>/dev/null || echo 'N/A')"
-                    echo " Uptime: $(uptime 2>/dev/null || echo 'N/A')"
-                    echo "========================================================"
-                    echo ""
-                    echo "--- Kernel Messages (dmesg) ---"
-                    dmesg
-                    echo ""
-                    echo "--- Input Devices (/proc/bus/input/devices & /dev/input) ---"
-                    cat /proc/bus/input/devices 2>/dev/null || true
-                    ls -la /dev/input 2>/dev/null || true
-                    echo ""
-                    echo "--- Storage Block Devices and Mounts ---"
-                    ls -l /dev/mmcblk* /dev/vita/* 2>/dev/null || true
-                    echo ""
-                    mount 2>/dev/null || true
-                    echo ""
-                    echo "--- Network Interfaces & IP Addresses ---"
-                    ip addr show 2>/dev/null || ifconfig 2>/dev/null || true
-                    echo ""
-                    echo "--- Running Processes ---"
-                    ps -ef 2>/dev/null || ps 2>/dev/null || true
-                    echo ""
-                    echo "--- Input Mapper Log (/tmp/vita-input-mapper.log) ---"
-                    [ -f /tmp/vita-input-mapper.log ] && cat /tmp/vita-input-mapper.log
-                    echo ""
-                    echo "--- Framebuffer Keyboard Log (/tmp/fbkeyboard.log) ---"
-                    [ -f /tmp/fbkeyboard.log ] && cat /tmp/fbkeyboard.log
-                    echo ""
-                    echo "--- Wi-Fi Log (/tmp/wifi.log) ---"
-                    [ -f /tmp/wifi.log ] && cat /tmp/wifi.log
-                    echo ""
-                } > "$target" 2>/dev/null || true
+                if can_write_target "$target"; then
+                    {
+                        echo "========================================================"
+                        echo " PlayStation Vita Linux Boot Diagnostic Log"
+                        echo " Iteration: $iter / 7  |  Timestamp: $(date 2>/dev/null || echo 'N/A')"
+                        echo " Uptime: $(uptime 2>/dev/null || echo 'N/A')"
+                        echo "========================================================"
+                        echo ""
+                        echo "--- Kernel Messages (dmesg) ---"
+                        dmesg
+                        echo ""
+                        echo "--- Input Devices (/proc/bus/input/devices & /dev/input) ---"
+                        cat /proc/bus/input/devices 2>/dev/null || true
+                        ls -la /dev/input 2>/dev/null || true
+                        echo ""
+                        echo "--- Storage Block Devices and Mounts ---"
+                        ls -l /dev/mmcblk* /dev/vita/* 2>/dev/null || true
+                        echo ""
+                        echo "--- Storage Block Devices and Mounts ---"
+                        mount 2>/dev/null || true
+                        echo ""
+                        echo "--- Network Interfaces & IP Addresses ---"
+                        ip addr show 2>/dev/null || ifconfig 2>/dev/null || true
+                        echo ""
+                        echo "--- Running Processes ---"
+                        ps -ef 2>/dev/null || ps 2>/dev/null || true
+                        echo ""
+                        echo "--- Input Mapper Log (/tmp/vita-input-mapper.log) ---"
+                        [ -f /tmp/vita-input-mapper.log ] && cat /tmp/vita-input-mapper.log
+                        echo ""
+                        echo "--- Framebuffer Keyboard Log (/tmp/fbkeyboard.log) ---"
+                        [ -f /tmp/fbkeyboard.log ] && cat /tmp/fbkeyboard.log
+                        echo ""
+                        echo "--- Wi-Fi Log (/tmp/wifi.log) ---"
+                        [ -f /tmp/wifi.log ] && cat /tmp/wifi.log
+                        echo ""
+                    } > "$target" 2>/dev/null || true
+
+                    if [ "$target" = "/mnt/ux0/linux/boot.log" ] || [ "$target" = "/mnt/ur0/boot.log" ]; then
+                        wrote_persistent=1
+                    fi
+                fi
             done
 
             sync
             sleep 5
         done
         rm -f /var/run/bootlog.pid 2>/dev/null || true
-        echo "[BootLog] Diagnostic snapshot successfully written to SD card."
-    ) &
+        if [ "$wrote_persistent" = "1" ]; then
+            echo "[BootLog] Diagnostic snapshot successfully written to storage." >> /tmp/boot.log 2>&1
+        fi
+    ) >/tmp/bootlog-daemon.log 2>&1 &
     ;;
 stop)
     if [ -f /var/run/bootlog.pid ]; then

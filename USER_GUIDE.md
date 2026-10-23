@@ -12,14 +12,18 @@ Welcome to the comprehensive user guide for **LinuxOnVita**. This guide is desig
    - [On-Screen Touch Keyboard](#on-screen-touch-keyboard-fbkeyboard)
    - [Physical Gamepad Navigation](#physical-gamepad-navigation-vita-input-mapper)
 4. [Built-In Applications & Tools](#4-built-in-applications--tools)
-   - [On-Device Wi-Fi Manager (`vita-wifi`)](#1-on-device-wi-fi-manager-vita-wifi)
-   - [Screen Brightness Control (`vita-brightness`)](#2-screen-brightness-control-vita-brightness)
-   - [Memory Expansion & Swap (`vita-swap`)](#3-memory-expansion--swap-vita-swap)
-   - [Framebuffer DOOM (`vita-doom`)](#4-framebuffer-doom-vita-doom)
-   - [Hardware & System Diagnostics (`vita-diagnostics`)](#5-hardware--system-diagnostics-vita-diagnostics--vita-diag)
-   - [Remote SSH & Wireless Terminal](#6-remote-ssh--wireless-terminal)
-   - [Rebooting & Powering Down](#7-rebooting--powering-down)
-   - [Virtual Network Tunnels & Mesh VPNs (`CONFIG_TUN` & `vita-tun`)](#8-virtual-network-tunnels--mesh-vpns-config_tun-wireguard--vita-tun)
+   - [Interactive First-Boot Setup Wizard (`vita-setup`)](#1-interactive-first-boot-setup-wizard-vita-setup)
+   - [On-Device Wi-Fi Manager (`vita-wifi`)](#2-on-device-wi-fi-manager-vita-wifi)
+   - [Screen Brightness Control (`vita-brightness`)](#3-screen-brightness-control-vita-brightness)
+   - [Memory Expansion & Swap (`vita-swap`)](#4-memory-expansion--swap-vita-swap)
+   - [Framebuffer DOOM (`vita-doom`)](#5-framebuffer-doom-vita-doom)
+   - [Hardware & System Diagnostics (`vita-diagnostics`)](#6-hardware--system-diagnostics-vita-diagnostics--vita-diag)
+   - [Remote SSH & Wireless Terminal](#7-remote-ssh--wireless-terminal)
+   - [Rebooting & Powering Down](#8-rebooting--powering-down)
+   - [Virtual Network Tunnels & Mesh VPNs (`CONFIG_TUN` & `vita-tun`)](#9-virtual-network-tunnels--mesh-vpns-config_tun-wireguard--vita-tun)
+   - [Hardware Power & CPU Frequency Control (`vita-cpu` / `vita-power`)](#10-hardware-power--cpu-frequency-control-vita-cpu--vita-power)
+   - [Display Sleep, Auto-Dimming & Power Management (`vita-powerd`)](#11-display-sleep-auto-dimming--power-management-vita-powerd)
+   - [PlayStation Button LED Control (`vita-led`)](#12-playstation-button-led-control-vita-led)
 5. [Alpine Linux Package Ecosystem (`alpine-chroot`)](#5-alpine-linux-package-ecosystem-alpine-chroot)
    - [Understanding the Isolated Environment](#understanding-the-isolated-environment)
    - [Entering & Exiting Alpine](#entering--exiting-alpine)
@@ -64,6 +68,15 @@ Before getting started, make sure your PlayStation Vita meets these requirements
 > **Why does this happen?** The baremetal loader reconfigures the MSIF memory card controller and USB subsystem at a hardware level during Linux boot. On the cold reboot back to VitaOS, these kernel plugins can encounter unexpected hardware state and crash, causing a boot loop.
 >
 > **If you experience a boot loop after using LinuxOnVita**, see the [recovery procedure](#boot-loop-recovery-after-returning-to-vitaos) in the Troubleshooting section below.
+
+> [!WARNING]
+> **Important MicroSD Card Backup Notice for SD2Vita Users**
+>
+> **Always back up your SD2Vita microSD card before testing baremetal Linux or experimental homebrew.**
+>
+> Baremetal OS execution takes direct low-level control of the PS Vita SoC, bypassing VitaOS storage drivers and power safeguards. If an experimental kernel boot hangs and forces a 30-second hard power-off (holding the Power button), lower-end or budget microSD cards (particularly budget cards lacking power-loss protection capacitors) can suffer FTL (Flash Translation Layer) controller lockups where the internal controller panics and all sectors return `0xFF`.
+>
+> LinuxOnVita minimizes storage risk by mounting partitions **read-only by default**, executing synchronous device-level filesystem flushes (`sceIoSync` / `ksceIoSync`) and hardware settling delays prior to Syscon soft-reset, and pre-staging boot files directly in DRAM. However, hardware hangs can happen with early software. Always maintain a full backup of your microSD card image or vital data.
 
 ---
 
@@ -128,12 +141,15 @@ If Linux fails to boot, freezes, or the screen goes dark without reaching the sh
 LinuxOnVita transforms your handheld console into a self-contained computer without requiring any external cables or keyboards.
 
 ### On-Screen Touch Keyboard (`fbkeyboard`)
-* **Show / Hide:** Tap **[Hide]** in the bottom-right corner to dismiss the keyboard for an unobstructed view of your terminal. When hidden, a prominent, high-contrast **[KEYBOARD]** button remains pinned at the bottom-right corner; tap it at any time to instantly restore the on-screen keyboard. Terminal text is constrained to 32 rows (`120x32`), ensuring scrolling output never overwrites or erases the reshow button.
+* **Show / Hide:** Tap **[Hide]** in the bottom-right corner to dismiss the keyboard for an unobstructed view of your terminal. When hidden, a prominent, high-contrast **[KEYBOARD]** button remains pinned at the bottom-right corner; tap it at any time to instantly restore the on-screen keyboard. Terminal text is constrained to rows 1-24 (`120x24`), ensuring scrolling output never overwrites or erases the keyboard or reshow button.
+* **Hardware PS Button Toggle:** Press the physical PlayStation button on the console to toggle keyboard visibility on and off instantly.
+* **Caps Lock Toggle:** Double-tap the **Shift** key to engage Caps Lock mode. When active, the key illuminates in high-visibility amber with a **[CAPS]** label. Tap Shift once again to return to standard typing.
+* **Key Repeat on Long-Press:** Holding down **Backspace**, **Spacebar**, or any **Arrow key** automatically repeats after a 400ms delay at fast 80ms intervals.
 * **Letter / Number Switching:** Tap **[?123]** to access numbers and symbols, or **[ABC]** to return to letters.
-* **Special Keys:** Includes dedicated buttons for **Tab**, **Esc**, **Ctrl**, and **Enter**.
+* **Special Keys:** Includes dedicated buttons for **Tab**, **Esc**, **Ctrl**, **Enter**, and **Ctrl+C**.
 
 ### Physical Gamepad Navigation (`vita-input-mapper`)
-You can control the terminal shell entirely with the Vita's physical gamepad buttons:
+You can control the terminal shell and desktop entirely with the Vita's physical gamepad buttons:
 
 | Button | Action | Shell Equivalent |
 | :--- | :--- | :--- |
@@ -143,8 +159,13 @@ You can control the terminal shell entirely with the Vita's physical gamepad but
 | **Circle (○)** | Delete character | `Backspace` |
 | **Square (□)** | Insert space | `Spacebar` |
 | **Triangle (△)** | Auto-complete path/command | `Tab` |
+| **Select** | Escape / exit edit mode / cancel | `Escape` (`KEY_ESC` for `vi`, `nano`, menus) |
+| **Start** | Execute command / Super key | `Enter` (Terminal) / `Super` (Desktop) |
 | **L-Trigger** | Cancel command / process | `Ctrl + C` (`SIGINT`) |
 | **R-Trigger** | Scroll terminal buffer | `Page Up` |
+| **PS Button** | Toggle touch keyboard | Toggles `fbkeyboard` visibility on / off |
+| **Volume Up (+)** | Step display brightness up | Increases brightness by +10% |
+| **Volume Down (-)** | Step display brightness down | Decreases brightness by -10% |
 
 ---
 
@@ -152,7 +173,34 @@ You can control the terminal shell entirely with the Vita's physical gamepad but
 
 LinuxOnVita comes pre-installed with dedicated console management utilities tailored specifically for the PS Vita hardware.
 
-### 1. On-Device Wi-Fi Manager (`vita-wifi`)
+### 1. Interactive First-Boot Setup Wizard (`vita-setup`)
+The first time you boot LinuxOnVita, the interactive **First-Boot Setup Wizard** automatically welcomes you directly on the console screen (`/dev/tty1`). It guides you through a seamless 6-step initial configuration so your console is immediately online and optimized for your storage:
+
+```bash
+vita-setup               # Launch full 6-step setup wizard anytime
+vita-setup --wifi        # Quick access to Wi-Fi setup
+vita-setup --storage     # Quick access to storage auto-mount protection
+vita-setup --memory      # Quick access to ZRAM & swapfile configuration
+vita-setup --alpine      # Create or manage Alpine Linux container (alpine.img)
+vita-setup --desktop     # Install IceWM desktop packages & set boot autostart
+vita-setup --status      # Check current onboarding and subsystem status
+vita-setup --reset       # Reset completion flag to re-run on next boot
+```
+
+#### What the Wizard Configures:
+1. **Hardware Diagnostics & Health Baseline:** Verifies 4 active ARMv7 CPU cores, frequency operating points, detected display panel (OLED PCH-1000 vs LCD PCH-2000 vs PSTV), storage partition mounts (`ux0:` / `ur0:`), total RAM, active ZRAM compression pool, and Wi-Fi radio status.
+2. **Wi-Fi Wireless Networking:** Scans nearby wireless networks, connects with password entry, tests DHCP lease acquisition, and displays your active SSH remote login IP (`ssh root@<IP>`).
+3. **Storage Protection Modes:** Choose whether storage partitions mount in Safe Read-Only mode (`ro` - recommended to safeguard VitaOS filesystem data) or Read-Write mode (`rw` - direct access).
+4. **Memory Optimization:** Select between 256 MB or 512 MB in-RAM compressed ZRAM pools, and optionally create a 512 MB or 1 GB SD card swapfile (`/mnt/ux0/swapfile`) to eliminate Out-Of-Memory (OOM) crashes.
+5. **Alpine Linux Storage Container:** Guided creation of your persistent ext4 `alpine.img` container on SD2Vita (`/mnt/ux0`) or internal storage (`/mnt/ur0`) with automatic free space verification.
+6. **Graphical Desktop, Boot Mode & LED Preferences:** Check for IceWM desktop packages, prompt to download and install packages over Wi-Fi, configure whether the console boots directly to the IceWM desktop or to the fast text console shell, and choose the front blue PlayStation Button LED mode (heartbeat, disk activity, solid on, off).
+
+> [!TIP]
+> You can safely exit or skip the wizard at any time by pressing **s**. You can re-run `vita-setup` whenever you want to reconfigure your console.
+
+---
+
+### 2. On-Device Wi-Fi Manager (`vita-wifi`)
 Connect to wireless networks directly on your console without manually creating configuration files on a PC.
 
 #### Interactive Menu:
@@ -187,7 +235,7 @@ vita-wifi on     # Turn the radio back on and reconnect
 
 ---
 
-### 2. Screen Brightness Control (`vita-brightness`)
+### 3. Screen Brightness Control (`vita-brightness`)
 Displays automatically boot to 100% full brightness across all models.
 
 ```bash
@@ -203,7 +251,7 @@ vita-brightness max        # Jump directly to 100% full brightness
 
 ---
 
-### 3. Memory Expansion & Swap (`vita-swap`)
+### 4. Memory Expansion & Swap (`vita-swap`)
 The PlayStation Vita hardware has 512 MB of physical RAM. While sufficient for basic tasks, running modern software, compiling C programs, installing large packages, or running Python scripts can exhaust memory and trigger the Linux Out-Of-Memory (OOM) killer.
 
 To solve this, LinuxOnVita incorporates two layers of virtual memory management:
@@ -242,7 +290,7 @@ vita-swap remove    # Deactivate and delete swapfile to free disk space
 
 ---
 
-### 4. Framebuffer DOOM (`vita-doom`)
+### 5. Framebuffer DOOM (`vita-doom`)
 LinuxOnVita includes a native, pure-C implementation of classic DOOM running directly on the Linux framebuffer device (`/dev/fb0`).
 
 #### Setup:
@@ -282,7 +330,7 @@ By default, `vita-doom` automatically scales to fill 100% of the PlayStation Vit
 
 ---
 
-### 5. Hardware & System Diagnostics (`vita-diagnostics` / `vita-diag`)
+### 6. Hardware & System Diagnostics (`vita-diagnostics` / `vita-diag`)
 When encountering issues like Wi-Fi failing to connect or an SD card not mounting, `vita-diagnostics` automates the entire debugging and log collection process. It probes hardware devices, verifies drivers and firmware, tests partition filesystems, queries Wi-Fi association state, redacts sensitive passwords for privacy, and saves a comprehensive report to accessible storage.
 
 #### Running Diagnostics:
@@ -330,7 +378,7 @@ vita-diagnostics --view    # View the most recent report on the terminal
 
 ---
 
-### 6. Remote SSH & Wireless Terminal
+### 7. Remote SSH & Wireless Terminal
 Once connected to Wi-Fi, LinuxOnVita automatically starts an OpenSSH server and broadcasts mDNS hostname `vita.local`.
 
 From any computer, tablet, or phone on the same Wi-Fi network:
@@ -343,7 +391,7 @@ Logging in via SSH gives you a full-sized desktop terminal, making it comfortabl
 
 ---
 
-### 7. Rebooting & Powering Down
+### 8. Rebooting & Powering Down
 * **Reboot straight to Sony VitaOS:**
   ```bash
   reboot
@@ -357,7 +405,7 @@ Logging in via SSH gives you a full-sized desktop terminal, making it comfortabl
 
 ---
 
-### 8. Virtual Network Tunnels & Mesh VPNs (`CONFIG_TUN`, WireGuard & `vita-tun`)
+### 9. Virtual Network Tunnels & Mesh VPNs (`CONFIG_TUN`, WireGuard & `vita-tun`)
 
 LinuxOnVita includes built-in kernel support for virtual network tunnels and VPN protocols without requiring external out-of-tree kernel modules.
 
@@ -401,6 +449,121 @@ Inside the Alpine container (`alpine-chroot`), you can install and run modern me
   ```bash
   alpine-chroot apk add wireguard-tools
   ```
+
+---
+
+### 10. Hardware Power & CPU Frequency Control (`vita-cpu` / `vita-power`)
+LinuxOnVita includes hardware power management and dynamic CPU frequency scaling for the PlayStation Vita's quad-core ARM Cortex-A9 MPCore processor. You can switch between maximum performance for compilation and desktop responsiveness, balanced standard operation, dynamic load-based scaling, or deep powersave mode for background tasks and long battery life.
+
+#### Hardware Operating Points:
+* **444 MHz (Max Performance):** Locks all cores to peak frequency. Ideal for code compilation, web browsing in Badwolf, desktop responsiveness, and software emulation.
+* **333 MHz (Balanced Standard):** Standard baseline balancing compute throughput and battery longevity.
+* **222 MHz (Intermediate):** Moderate power-efficient baseline.
+* **166 MHz (Moderate Powersave):** Reduced energy profile for low-intensity workflows.
+* **111 MHz (Deep Powersave):** Minimum clock frequency. Conserves maximum battery during background file downloads, music playback, or long terminal reading sessions.
+
+#### Command-Line Usage:
+```bash
+# View active CPU frequency, active governor, and supported operating points:
+vita-cpu status
+# or using the power alias:
+vita-power status
+
+# Switch to 444 MHz maximum performance mode:
+vita-cpu max
+
+# Switch to 333 MHz standard balanced profile:
+vita-cpu balanced
+
+# Enable dynamic load-based frequency scaling (111 - 444 MHz):
+vita-cpu ondemand
+
+# Switch to 111 MHz deep powersave mode:
+vita-cpu powersave
+
+# Set an explicit operating point in MHz (111, 166, 222, 333, 444):
+vita-cpu set 222
+
+# Launch the interactive touch GUI dialog:
+vita-cpu gui
+```
+
+#### IceWM Desktop Taskbar Widget & GUI:
+When running the graphical desktop (`alpine-desktop`):
+* **Taskbar Tray Applet (`vita-cpu-widget`):** A live notification widget docks into the IceWM taskbar system tray. Hovering over the icon displays the live frequency and active governor tooltip.
+* **1-Tap Profile Switching:** Left-clicking or tapping the tray widget opens the graphical touch profile selector (`vita-cpu gui`). Right-clicking brings up a direct profile selection menu.
+* **Start Menu Integration:** Fast profile shortcuts are accessible directly under **Start Menu -> CPU Power & Frequency**.
+* **Desktop Shortcut:** Double-click or tap the **CPU Power** icon on the desktop.
+
+---
+
+### 11. Display Sleep, Auto-Dimming & Power Management (`vita-powerd`)
+To protect OLED and LCD panels against image retention, preserve battery longevity, and provide standard handheld power button behavior, LinuxOnVita features a native background power management daemon: `vita-powerd`.
+
+#### Automated Inactivity Timers:
+* **3-Minute Auto-Dim (180s):** If no buttons, touchscreen events, or analog stick movements occur for 3 minutes, the screen brightness automatically dims to 20% PWM.
+* **5-Minute Auto-Sleep (300s):** If inactivity continues for 5 minutes, the screen blanks completely into sleep mode (`vita-brightness set 0` and console blanking). Background daemons, SSH sessions, downloads, and audio playback continue running without interruption.
+* **Instant Wake-Up:** Touching the front screen, pressing any button (D-Pad, Cross, Circle, Square, Triangle, Triggers, Select, Start), or moving an analog stick instantly restores the previous active brightness level.
+
+#### Hardware Power Button Shortcuts:
+* **Short Press (< 3 seconds):** Immediately toggles display sleep / wake on demand. Pressing Power puts the screen to sleep instantly; pressing it again wakes it back up.
+* **Long Press (Hold for >= 3 seconds):** Initiates a safe, graceful system shutdown (`poweroff`). The system flashes the blue PS button LED, flushes all write buffers, syncs filesystems, and powers down via Syscon.
+
+#### Command-Line Controls:
+```bash
+# View active daemon status, idle time, and display state:
+vita-powerd status
+
+# Immediately blank display and put screen to sleep:
+vita-powerd sleep
+# or via vita-power:
+vita-power sleep
+
+# Immediately wake display and restore active brightness:
+vita-powerd wake
+# or via vita-power:
+vita-power wake
+
+# Dim display to 20%:
+vita-powerd dim
+
+# Reload daemon configuration:
+vita-powerd reload
+```
+
+#### Customizing Timeouts (`/etc/vita-powerd.conf`):
+You can customize timeouts and brightness thresholds in `/etc/vita-powerd.conf`:
+```ini
+DIM_TIMEOUT=180        # Seconds before dimming (0 = disabled)
+SLEEP_TIMEOUT=300      # Seconds before sleeping (0 = disabled)
+DIM_BRIGHTNESS=20      # Brightness percentage when dimmed
+POWER_HOLD_SECS=3      # Seconds to hold Power button for shutdown
+```
+
+---
+
+### 12. PlayStation Button LED Control (`vita-led`)
+LinuxOnVita gives you complete control over the front blue PlayStation Home button LED via the Linux kernel LED class and trigger subsystem:
+
+```bash
+vita-led                 # Display current LED trigger status, brightness, and device node
+vita-led heartbeat       # Set subtle rhythmic pulse reflecting CPU load
+vita-led disk            # Blink on SD card and Game Card storage read/write activity (mmc0)
+vita-led activity        # Modulate LED brightness with instantaneous CPU activity
+vita-led on              # Turn blue LED on with steady, solid illumination
+vita-led off             # Turn blue LED off completely
+vita-led set <trigger>   # Set an arbitrary kernel trigger (timer, oneshot, etc.)
+vita-led apply           # Reapply saved LED preferences from configuration file
+```
+
+#### Activity Trigger Modes:
+* **`heartbeat`:** A smooth double-flash cardiac pulse whose tempo scales dynamically with system load average.
+* **`disk` (or `storage`):** Blinks in real-time on hardware MMC read/write operations, functioning as an authentic disk activity indicator.
+* **`activity` (or `cpu`):** Dynamically scales LED intensity based on instantaneous CPU core utilization.
+* **`on` / `off`:** Static illumination control for night-time or low-distraction use.
+
+#### Automatic Persistence:
+LED preferences are saved to `/etc/vita-led.conf` and `/mnt/ux0/linux/led.conf`, restoring automatically across system boots via `/etc/init.d/S40input`.
 
 ---
 

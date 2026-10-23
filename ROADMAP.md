@@ -12,8 +12,8 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
 | Version | Milestone Theme | Primary User Value |
 | :--- | :--- | :--- |
 | **[v1.4.0]** | **Core Architecture, Storage Independence & Quad-Core SMP** | 4-Core SMP performance, Sony card independence, persistent read-only storage safety, `CONFIG_TUN` mesh networking, and CLI keyboard reshow button. |
-| **[v1.5.0]** | **Handheld Ergonomics, Screen Protection & First-Boot Setup** | First-boot onboarding wizard (`vita-setup`), display sleep and auto-dimming (`vita-powerd`), readable console fonts (`vita-font`), handheld TUI control center (`vita-config`), and gamepad input mapping. |
-| **[v1.6.0]** | **Wireless Freedom, Web Management & Performance Controls** | Web-based wireless file transfer portal (`http://vita.local:8080`), CPU overclocking/underclocking (`vita-cpu`: 111-444 MHz), Bluetooth peripheral pairing (`bluez`), and in-app GitHub update checker. |
+| **[v1.5.0]** | **Handheld Ergonomics, Screen Protection & Performance Controls** | Hardware CPU frequency scaling (`vita-cpu`: 111-444 MHz), first-boot onboarding wizard (`vita-setup`), display sleep and auto-dimming (`vita-powerd`), readable console fonts (`vita-font`), handheld TUI control center (`vita-config`), and gamepad input mapping. |
+| **[v1.6.0]** | **Wireless Freedom, Web Management & Peripheral Controls** | Web-based wireless file transfer portal (`http://vita.local:8080`), Bluetooth peripheral pairing (`bluez`), desktop Wi-Fi GUI manager, and in-app GitHub update checker. |
 | **[v1.7.0]** | **Pocket Sysadmin & Handheld Developer Workstation** | Network Swiss Army knife (`vita-nettools` with Tailscale / ZeroTier / nmap), developer environment (`vita-dev` with Python/C/Git), and remote desktop (VNC/RDP). |
 | **[v1.8.0]** | **Direct Framebuffer Gaming & Fantasy Consoles** | TIC-80 and Pico-8 (Fake-08) fantasy consoles, lightweight SDL framebuffer emulators, ScummVM adventure gaming, and x86 user-mode emulation. |
 | **[v1.9.0+]** | **Advanced Hardware Research & Kernel Power States** | Suspend-to-RAM deep sleep states, DSP hardware video decoding, and SGX543 3D acceleration research. |
@@ -22,7 +22,7 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
 
 ## Detailed Milestone Specifications
 
-### [v1.4.0] - Core Bootloader Architecture, Storage Independence & SMP Performance (Current)
+### [v1.4.0] - Core Bootloader Architecture, Storage Independence & SMP Performance (Released)
 
 **Focus Areas:** Full Quad-Core SMP enablement, Sony memory card independence, storage protection, and virtual network tunneling.
 
@@ -49,10 +49,20 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
 
 ---
 
-### [v1.5.0] - Handheld Ergonomics, Screen Protection & First-Boot Setup
+### [v1.5.0] - Handheld Ergonomics, Screen Protection & First-Boot Setup (Current)
 
 **Priority:** CRITICAL (Highest)
-**Focus Areas:** Battery life preservation, OLED burn-in protection, readable console fonts, guided onboarding, and gamepad ergonomics.
+**Focus Areas:** Battery life preservation, OLED burn-in protection, guided onboarding, and gamepad ergonomics.
+
+* **Hardware Power & CPU Frequency Control (`vita-cpu` / `vita-power`):**
+  * Dynamic CPU frequency scaling across hardware operating points:
+    * **444 MHz:** High-performance mode for code compilation, desktop responsiveness, and software emulation.
+    * **333 MHz:** Standard baseline balancing speed and battery longevity.
+    * **111 MHz / 166 MHz:** Powersave mode for background downloads, music playback, or long terminal reading sessions.
+  * Native kernel cpufreq driver (`vita-cpufreq`) and Device Tree OPP table (111, 166, 222, 333, 444 MHz).
+  * Baremetal loader primes SoC PLLs and voltage regulators to 444 MHz peak performance prior to standby.
+  * Turnkey CLI utility (`vita-cpu [status | max | powersave | ondemand | set <mhz> | gui]`) and symlink `vita-power`.
+  * Interactive touch GUI dialog and IceWM desktop taskbar widget applet with live tooltip telemetry.
 
 * **Display Sleep, Auto-Dimming & Power Management (`vita-powerd`):**
   * **OLED & LCD Burn-In Prevention:** Background event monitor tracking `/dev/input/event*` for touch, stick, and button activity.
@@ -63,7 +73,6 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
   * **Power Button Integration (`KEY_POWER`):**
     * Short press: Immediately toggles display sleep/wake.
     * Long press (3 seconds): Initiates a clean, graceful system shutdown (`poweroff`).
-  * **Battery Health Monitoring:** Background monitor blinks the blue PlayStation LED when battery drops below 15% and performs a safe emergency shutdown when reaching critical levels.
 
 * **Interactive First-Boot Setup Wizard (`vita-setup`):**
   * Launches automatically on initial boot (and re-runnable at any time from CLI).
@@ -75,29 +84,13 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
   * **Memory Optimization:** Automatic configuration of ZRAM RAM compression and swapfile sizing tailored to the available storage.
   * **Diagnostic Baseline:** Automated hardware verification confirming screen, network, and storage health.
 
-* **Handheld Control Center TUI (`vita-config`):**
-  * Unified interactive console menu utility (inspired by `raspi-config` on Raspberry Pi):
-    * **Network:** Scan and connect to Wi-Fi networks.
-    * **Display:** Adjust brightness slider and set screen blanking timeouts.
-    * **Audio:** Adjust volume levels and toggle speaker mute.
-    * **Bluetooth:** Scan, pair, and manage Bluetooth peripherals.
-    * **Input:** Switch gamepad mapper modes (Console Keypad vs Analog Mouse vs Custom).
-    * **Storage:** View partition free space, check disk health, and resize Alpine container image.
-    * **Console:** Change console font size on the fly.
-    * **Power:** Reboot directly to VitaOS LiveArea or perform full shutdown.
-
-* **High-DPI Console Font Switcher (`vita-font`):**
-  * Resolves the tiny 8x16 font (120x34) issue on the 5-inch 960x544 display.
-  * Bundle clean bitmap fonts into rootfs (Terminus 12x24 and 16x32).
-  * Simple CLI tool: `vita-font [small | medium | large]` allowing instant switching between high density (120x34) and comfortable handheld reading (80x22 or 60x17).
-
 * **Gamepad Input Mapping & Keyboard Polish:**
-  * **Key Repeat on Long-Press:** Holding Backspace, Space, or Arrow keys in `fbkeyboard` repeats after 400ms at 80ms intervals.
-  * **Caps Lock Toggle:** Double-tapping Shift in `fbkeyboard` locks uppercase mode with an illuminated indicator.
-  * **Select Button (`BTN_SELECT`):** Mapped to `KEY_ESC` in `vita-input-mapper` (essential for `vi`, `nano`, command cancellation, and curses menus).
-  * **Volume Buttons (`KEY_VOLUMEUP` / `KEY_VOLUMEDOWN`):** Step display brightness up or down by 10% (or control ALSA audio volume).
-  * **PS Button (`BTN_MODE`):** Configurable to toggle `fbkeyboard` visibility or launch the quick overlay menu.
-  * **PlayStation LED Daemon (`vita-led`):** Configurable activity triggers for the blue PS button LED (disk I/O activity, heartbeat pulse, or low battery warning).
+  * **Key Repeat on Long-Press:** Holding Backspace, Space, or Arrow keys in `fbkeyboard` repeats after 400ms at 80ms intervals, with single-tap protection to prevent duplicate keystrokes.
+  * **Caps Lock Toggle:** Double-tapping Shift in `fbkeyboard` locks uppercase mode with an illuminated amber `[CAPS]` indicator on the key, unlocked by tapping Shift once again.
+  * **Select Button (`BTN_SELECT`):** Mapped to `KEY_ESC` in `vita-input-mapper` across both terminal and desktop modes (essential for `vi`, `nano`, command cancellation, and ncurses menus).
+  * **Volume Buttons (`KEY_VOLUMEUP` / `KEY_VOLUMEDOWN`):** Step display brightness up or down by 10% on the fly via `vita-brightness up` and `vita-brightness down`.
+  * **PS Button (`BTN_MODE`):** Configured to toggle `fbkeyboard` visibility on demand via `SIGUSR1`, automatically restoring full-screen terminal scrolling when hidden.
+  * **PlayStation LED Control Utility (`vita-led`):** Configurable activity triggers for the blue PS button LED (`gpio-led-ps-button-blue`) supporting heartbeat pulse, disk / storage I/O, CPU activity, solid on, and off, persisted across boots via `S40input` and integrated into `vita-setup`.
 
 ---
 
@@ -109,21 +102,25 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
 * **Web-Based Management Portal & Wireless File Transfer (`vita-webui`):**
   * Lightweight local web server running on port 80/8080 accessible via `http://vita.local:8080` or `http://<VITA_IP>:8080`.
   * **Drag-and-Drop Web File Manager:** Upload and download files, ROMs, scripts, wallpapers, and documents between any phone, tablet, or PC and the Vita storage (`/mnt/ux0/`).
-  * **Live System Telemetry Dashboard:** Real-time visual monitoring of CPU frequency, per-core load, battery percentage, RAM/ZRAM usage, and Wi-Fi signal.
+  * **Live System Telemetry Dashboard:** Real-time visual monitoring of CPU frequency, per-core load, RAM/ZRAM usage, and Wi-Fi signal.
   * **In-Browser Web Terminal (`ttyd`):** Access the Vita command prompt from a laptop or tablet browser without needing SSH keys configured.
   * **Zero-Conf Discovery:** Automatic local network discovery via mDNS / Bonjour.
-
-* **Hardware Power & CPU Frequency Control (`vita-cpu` / `vita-power`):**
-  * Dynamic CPU frequency scaling across hardware operating points:
-    * **444 MHz:** High-performance mode for code compilation, desktop responsiveness, and software emulation.
-    * **333 MHz:** Standard baseline balancing speed and battery longevity.
-    * **111 MHz / 166 MHz:** Powersave mode for background downloads, music playback, or long terminal reading sessions.
-  * CLI utility (`vita-cpu [status | max | powersave | ondemand]`) and IceWM desktop taskbar widget.
 
 * **Bluetooth Subsystem & Peripheral Pairing (`bluez` / `vita-bluetooth`):**
   * Kernel Bluetooth driver bringup with userspace `bluez` stack.
   * Interactive CLI and GUI pairing utilities for external Bluetooth keyboards, mice, and wireless gamepads.
   * Audio profile support for Bluetooth headphones and portable speakers.
+
+* **Handheld Control Center TUI (`vita-config`):**
+  * Unified interactive console menu utility (inspired by `raspi-config` on Raspberry Pi):
+    * **Network:** Scan and connect to Wi-Fi networks.
+    * **Display:** Adjust brightness slider and set screen blanking timeouts.
+    * **Audio:** Adjust volume levels and toggle speaker mute.
+    * **Bluetooth:** Scan, pair, and manage Bluetooth peripherals.
+    * **Input:** Switch gamepad mapper modes (Console Keypad vs Analog Mouse vs Custom).
+    * **Storage:** View partition free space, check disk health, and resize Alpine container image.
+    * **Console:** Change console font size on the fly.
+    * **Power:** Reboot directly to VitaOS LiveArea or perform full shutdown.
 
 * **Desktop Wi-Fi Manager (GUI):**
   * Intuitive network manager applet for the IceWM desktop system tray.
@@ -164,6 +161,12 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
 * **Remote Desktop & Pocket Terminal Client (VNC / RDP / SSH Kiosk):**
   * **Handheld Remote Monitor:** Connect to remote desktops, home PCs, or headless Raspberry Pis via `remmina` or lightweight VNC/RDP client.
   * **Desktop Streaming Server (`x11vnc`):** Stream the Vita's IceWM desktop to a laptop or tablet monitor for easy configuration on a full-size display.
+
+* **High-DPI Console Font Switcher (`vita-font`) & Dynamic Keyboard Sizing (`vita-keyboard`):**
+  * Resolves the tiny 8x16 font (120x34) issue on the 5-inch 960x544 display.
+  * Bundle clean bitmap fonts into rootfs (Terminus 12x24 and 16x32).
+  * Turnkey CLI tool: `vita-font [small | medium | large]` allowing instant switching between high density (120x34) and comfortable handheld reading (80x22 or 60x17).
+  * Dynamic on-screen touch keyboard sizing with height presets (compact, medium, large) and coordinated terminal geometry.
 
 ---
 

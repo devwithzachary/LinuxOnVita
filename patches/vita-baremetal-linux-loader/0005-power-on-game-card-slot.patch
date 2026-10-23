@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: DevWithZachary <devwithzachary@pm.me>
+Date: Fri, 23 Oct 2026 12:15:00 +0100
+Subject: [PATCH] Power on Game Card slot early for SD2Vita adapter stability
+
+---
+ src/main.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/main.c b/src/main.c
+index c7962ee..73b0602 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -214,6 +214,10 @@ int main(struct sysroot_buffer *sysroot)
+ 	i2c_init_bus(1);
+ 	syscon_init();
+ 
++	/* Power on Game Card slot (cmd 0x888) so SD2Vita adapters receive
++	 * 3.3V VCC early and allow SD cards to stabilize before Linux boots */
++	syscon_short_command_write(0x888, 1, 2);
++
+ 	if (sysroot_model_is_dolce())
+ 		display_init(DISPLAY_TYPE_HDMI);
+ 	else if (sysroot_model_is_vita2k())
+-- 

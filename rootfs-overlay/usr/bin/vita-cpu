@@ -1,0 +1,426 @@
+#!/bin/sh
+# LinuxOnVita CPU Frequency & Power Control Utility (vita-cpu / vita-power)
+#
+# Provides dynamic frequency management across PlayStation Vita operating points:
+#   - 444 MHz: High-performance mode for desktop, compilation, and emulation
+#   - 333 MHz: Balanced standard baseline balancing speed and battery longevity
+#   - 111 MHz / 166 MHz: Powersave mode for downloads, audio, or long reading
+#
+# Licensed under the GNU General Public License v3.0 (GPL-3.0)
+
+set -e
+
+CPU_SYS_DIR="/sys/devices/system/cpu/cpu0/cpufreq"
+PERVASIVE_BASECLK_REG="0xE3103000"
+
+# Colors for terminal output
+if [ -t 1 ]; then
+    ESC=$(printf '\033')
+    C_RESET="${ESC}[0m"
+    C_BOLD="${ESC}[1m"
+    C_GREEN="${ESC}[32m"
+    C_YELLOW="${ESC}[33m"
+    C_CYAN="${ESC}[36m"
+    C_RED="${ESC}[31m"
+else
+    C_RESET=""
+    C_BOLD=""
+    C_GREEN=""
+    C_YELLOW=""
+    C_CYAN=""
+    C_RED=""
+fi
+
+# Get current CPU frequency in MHz
+get_cur_freq_mhz() {
+    if [ -f "$CPU_SYS_DIR/scaling_cur_freq" ]; then
+        cur_khz=$(cat "$CPU_SYS_DIR/scaling_cur_freq" 2>/dev/null || echo "0")
+        echo $((cur_khz / 1000))
+    elif [ -f "$CPU_SYS_DIR/cpuinfo_cur_freq" ]; then
+        cur_khz=$(cat "$CPU_SYS_DIR/cpuinfo_cur_freq" 2>/dev/null || echo "0")
+        echo $((cur_khz / 1000))
+    else
+        # Fallback reading /proc/cpuinfo or default
+        freq=$(awk -F': ' '/cpu MHz/ {print int($2); exit}' /proc/cpuinfo 2>/dev/null || echo "")
+        if [ -n "$freq" ] && [ "$freq" -gt 0 ]; then
+            echo "$freq"
+        else
+            echo "444"
+        fi
+    fi
+}
+
+# Get current governor
+get_cur_governor() {
+    if [ -f "$CPU_SYS_DIR/scaling_governor" ]; then
+        cat "$CPU_SYS_DIR/scaling_governor" 2>/dev/null || echo "unknown"
+    else
+        echo "hardware (fixed)"
+    fi
+}
+
+# Get available frequencies
+get_avail_freqs() {
+    if [ -f "$CPU_SYS_DIR/scaling_available_frequencies" ]; then
+        cat "$CPU_SYS_DIR/scaling_available_frequencies" 2>/dev/null || echo "111000 166000 222000 333000 444000"
+    else
+        echo "111000 166000 222000 333000 444000"
+    fi
+}
+
+# Get available governors
+get_avail_governors() {
+    if [ -f "$CPU_SYS_DIR/scaling_available_governors" ]; then
+        cat "$CPU_SYS_DIR/scaling_available_governors" 2>/dev/null || echo "performance powersave userspace ondemand conservative"
+    else
+        echo "performance powersave userspace ondemand conservative"
+    fi
+}
+
+# Check root permissions
+check_root() {
+    if [ "$(id -u)" -ne 0 ]; then
+        echo "${C_RED}[!] Error: Root privileges required to change CPU frequency.${C_RESET}" >&2
+        echo "    Please run with 'doas $0 $*' or as root." >&2
+        exit 1
+    fi
+}
+
+# Set governor across all CPU cores
+set_governor() {
+    target_gov="$1"
+    check_root
+
+    success=0
+    for cpu in /sys/devices/system/cpu/cpu*/cpufreq; do
+        if [ -d "$cpu" ] && [ -w "$cpu/scaling_governor" ]; then
+            echo "$target_gov" > "$cpu/scaling_governor" 2>/dev/null && success=1 || true
+        fi
+    done
+
+    if [ $success -eq 0 ] && [ ! -d "$CPU_SYS_DIR" ]; then
+        # Direct register fallback via devmem if kernel cpufreq is absent
+        echo "[Notice] Kernel cpufreq node not active, setting clock via hardware."
+    fi
+}
+
+# Set exact frequency in kHz across all CPU cores
+set_frequency_khz() {
+    target_khz="$1"
+    check_root
+
+    # Ensure userspace governor is selected so frequency can be explicitly set
+    set_governor "userspace"
+
+    for cpu in /sys/devices/system/cpu/cpu*/cpufreq; do
+        if [ -d "$cpu" ]; then
+            if [ -w "$cpu/scaling_setspeed" ]; then
+                echo "$target_khz" > "$cpu/scaling_setspeed" 2>/dev/null || true
+            fi
+            if [ -w "$cpu/scaling_max_freq" ]; then
+                echo "$target_khz" > "$cpu/scaling_max_freq" 2>/dev/null || true
+            fi
+            if [ -w "$cpu/scaling_min_freq" ]; then
+                echo "$target_khz" > "$cpu/scaling_min_freq" 2>/dev/null || true
+            fi
+        fi
+    done
+}
+
+# Subcommand: status
+cmd_status() {
+    cur_mhz=$(get_cur_freq_mhz)
+    gov=$(get_cur_governor)
+    avail_f=$(get_avail_freqs)
+    avail_g=$(get_avail_governors)
+    num_cpus=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null || echo "4")
+
+    echo "${C_CYAN}================================================================${C_RESET}"
+    echo "${C_BOLD}   PlayStation Vita Hardware CPU & Power Status                ${C_RESET}"
+    echo "${C_CYAN}================================================================${C_RESET}"
+    echo "  ${C_BOLD}Active Frequency:${C_RESET}     ${C_GREEN}${cur_mhz} MHz${C_RESET} ($((cur_mhz / 1000)).$(( (cur_mhz % 1000) / 100 )) GHz)"
+    echo "  ${C_BOLD}Active Governor:${C_RESET}      ${C_YELLOW}${gov}${C_RESET}"
+    echo "  ${C_BOLD}Online CPU Cores:${C_RESET}     ${num_cpus} (ARM Cortex-A9 MPCore)"
+
+    # Format available frequencies
+    echo ""
+    echo "  ${C_BOLD}Supported Operating Points:${C_RESET}"
+    for f in $avail_f; do
+        m=$((f / 1000))
+        label=""
+        case "$m" in
+            444) label="(Max Performance, High Speed)" ;;
+            333) label="(Standard Balanced Baseline)" ;;
+            222) label="(Intermediate Clock)" ;;
+            166) label="(Moderate Powersave)" ;;
+            111) label="(Deep Powersave, Minimum Battery Drain)" ;;
+        esac
+        if [ "$m" -eq "$cur_mhz" ]; then
+            printf "    * %3d MHz %-40s %b[ACTIVE]%b\n" "$m" "$label" "$C_GREEN" "$C_RESET"
+        else
+            printf "    - %3d MHz %s\n" "$m" "$label"
+        fi
+    done
+
+    echo ""
+    echo "  ${C_BOLD}Available Governors:${C_RESET}  ${avail_g}"
+
+    if [ -f "$CPU_SYS_DIR/scaling_min_freq" ] && [ -f "$CPU_SYS_DIR/scaling_max_freq" ]; then
+        min_mhz=$(($(cat "$CPU_SYS_DIR/scaling_min_freq") / 1000))
+        max_mhz=$(($(cat "$CPU_SYS_DIR/scaling_max_freq") / 1000))
+        echo "  ${C_BOLD}Policy Limits:${C_RESET}        Min: ${min_mhz} MHz | Max: ${max_mhz} MHz"
+    fi
+
+    echo "${C_CYAN}================================================================${C_RESET}"
+}
+
+# Subcommand: max (444 MHz performance)
+cmd_max() {
+    check_root
+    echo "[+] Switching CPU to MAX Performance (444 MHz)..."
+    
+    # First try performance governor
+    if grep -q "performance" "$CPU_SYS_DIR/scaling_available_governors" 2>/dev/null; then
+        set_governor "performance"
+    else
+        set_frequency_khz 444000
+    fi
+
+    # Ensure max/min limits allow 444 MHz
+    for cpu in /sys/devices/system/cpu/cpu*/cpufreq; do
+        [ -w "$cpu/scaling_max_freq" ] && echo 444000 > "$cpu/scaling_max_freq" 2>/dev/null || true
+    done
+
+    new_mhz=$(get_cur_freq_mhz)
+    echo "${C_GREEN}[OK] CPU set to MAX performance (${new_mhz} MHz, $(get_cur_governor)).${C_RESET}"
+}
+
+# Subcommand: balanced (333 MHz)
+cmd_balanced() {
+    check_root
+    echo "[+] Switching CPU to BALANCED standard profile (333 MHz)..."
+    
+    if grep -q "userspace" "$CPU_SYS_DIR/scaling_available_governors" 2>/dev/null; then
+        set_frequency_khz 333000
+    elif grep -q "ondemand" "$CPU_SYS_DIR/scaling_available_governors" 2>/dev/null; then
+        set_governor "ondemand"
+        for cpu in /sys/devices/system/cpu/cpu*/cpufreq; do
+            [ -w "$cpu/scaling_max_freq" ] && echo 333000 > "$cpu/scaling_max_freq" 2>/dev/null || true
+        done
+    else
+        set_governor "powersave"
+    fi
+
+    new_mhz=$(get_cur_freq_mhz)
+    echo "${C_GREEN}[OK] CPU set to BALANCED profile (${new_mhz} MHz, $(get_cur_governor)).${C_RESET}"
+}
+
+# Subcommand: powersave (111 MHz)
+cmd_powersave() {
+    check_root
+    echo "[+] Switching CPU to POWERSAVE profile (111 MHz)..."
+    
+    if grep -q "powersave" "$CPU_SYS_DIR/scaling_available_governors" 2>/dev/null; then
+        set_governor "powersave"
+    else
+        set_frequency_khz 111000
+    fi
+
+    new_mhz=$(get_cur_freq_mhz)
+    echo "${C_GREEN}[OK] CPU set to POWERSAVE profile (${new_mhz} MHz, $(get_cur_governor)).${C_RESET}"
+}
+
+# Subcommand: ondemand (Dynamic scaling 111-444 MHz)
+cmd_ondemand() {
+    check_root
+    echo "[+] Switching CPU to ONDEMAND dynamic governor (111 - 444 MHz)..."
+    
+    if grep -q "ondemand" "$CPU_SYS_DIR/scaling_available_governors" 2>/dev/null; then
+        # Reset policy limits to full range
+        for cpu in /sys/devices/system/cpu/cpu*/cpufreq; do
+            [ -w "$cpu/scaling_min_freq" ] && echo 111000 > "$cpu/scaling_min_freq" 2>/dev/null || true
+            [ -w "$cpu/scaling_max_freq" ] && echo 444000 > "$cpu/scaling_max_freq" 2>/dev/null || true
+        done
+        set_governor "ondemand"
+        echo "${C_GREEN}[OK] CPU set to ONDEMAND dynamic scaling (111 - 444 MHz).${C_RESET}"
+    else
+        echo "${C_YELLOW}[!] Notice: ondemand governor not available, defaulting to balanced 333 MHz.${C_RESET}"
+        cmd_balanced
+    fi
+}
+
+# Subcommand: set <mhz>
+cmd_set() {
+    target="$1"
+    if [ -z "$target" ]; then
+        echo "${C_RED}[!] Error: Target frequency in MHz required (111, 166, 222, 333, 444).${C_RESET}" >&2
+        exit 1
+    fi
+
+    check_root
+
+    case "$target" in
+        111|111000)  set_frequency_khz 111000 ;;
+        166|166000)  set_frequency_khz 166000 ;;
+        222|222000)  set_frequency_khz 222000 ;;
+        333|333000)  set_frequency_khz 333000 ;;
+        444|444000)  set_frequency_khz 444000 ;;
+        *)
+            echo "${C_RED}[!] Unsupported frequency: ${target} MHz.${C_RESET}" >&2
+            echo "    Supported hardware operating points: 111, 166, 222, 333, 444 MHz." >&2
+            exit 1
+            ;;
+    esac
+
+    echo "${C_GREEN}[OK] CPU frequency set to ${target} MHz.${C_RESET}"
+}
+
+# Graphical Touch Dialog (YAD) or TUI Dialog
+cmd_gui() {
+    cur_mhz=$(get_cur_freq_mhz)
+    gov=$(get_cur_governor)
+
+    if [ -n "$DISPLAY" ] && command -v yad >/dev/null 2>&1; then
+        choice=$(yad --title="PlayStation Vita CPU Frequency" \
+                     --window-icon="utilities-system-monitor" \
+                     --width=420 --height=320 --center \
+                     --text="<b>Current CPU Speed:</b> <span color='#00aa00' font='14'><b>${cur_mhz} MHz</b></span> (${gov})\nSelect a performance profile for your PlayStation Vita:" \
+                     --list --radiolist \
+                     --column="Select" --column="Profile" --column="Frequency" --column="Description" \
+                     "$([ "$gov" = "performance" ] || [ "$cur_mhz" -eq 444 ] && echo "TRUE" || echo "FALSE")" "Max Performance" "444 MHz" "Compilation, emulation, fluid desktop" \
+                     "$([ "$cur_mhz" -eq 333 ] && echo "TRUE" || echo "FALSE")" "Balanced" "333 MHz" "Standard baseline balancing speed & battery" \
+                     "$([ "$gov" = "ondemand" ] && echo "TRUE" || echo "FALSE")" "Dynamic On-Demand" "111-444 MHz" "Auto-scales based on system load" \
+                     "$([ "$gov" = "powersave" ] || [ "$cur_mhz" -le 166 ] && echo "TRUE" || echo "FALSE")" "Powersave" "111 MHz" "Downloads, music, reading, max battery" \
+                     --button="Apply Profile:0" \
+                     --button="Close:1" 2>/dev/null || true)
+
+        [ -z "$choice" ] && exit 0
+
+        # Parse selected profile
+        selected_prof=$(echo "$choice" | awk -F'|' '{print $2}')
+        case "$selected_prof" in
+            "Max Performance")  cmd_max ;;
+            "Balanced")         cmd_balanced ;;
+            "Dynamic On-Demand") cmd_ondemand ;;
+            "Powersave")        cmd_powersave ;;
+        esac
+    else
+        # Terminal Interactive Menu
+        echo ""
+        echo "${C_BOLD}Select PlayStation Vita CPU Profile:${C_RESET}"
+        echo "  1) Max Performance (444 MHz) - Peak responsiveness"
+        echo "  2) Balanced Standard (333 MHz) - Standard operating point"
+        echo "  3) Dynamic Scaling (On-Demand) - Scales 111 - 444 MHz"
+        echo "  4) Powersave (111 MHz) - Maximum battery life"
+        echo "  5) Cancel"
+        printf "Enter choice [1-5]: "
+        read -r ans
+        case "$ans" in
+            1) cmd_max ;;
+            2) cmd_balanced ;;
+            3) cmd_ondemand ;;
+            4) cmd_powersave ;;
+            *) echo "Cancelled." ;;
+        esac
+    fi
+}
+
+show_help() {
+    cat << EOF
+PlayStation Vita CPU & Hardware Power Utility (vita-cpu / vita-power)
+
+Usage:
+  vita-cpu [command]
+  vita-power [command]
+
+Commands:
+  status               Display active CPU frequency, governor, and powerd state
+  max                  Set CPU to maximum performance profile (444 MHz)
+  balanced             Set CPU to balanced standard profile (333 MHz)
+  powersave            Set CPU to minimum power consumption profile (111 MHz)
+  ondemand             Enable dynamic on-demand frequency scaling (111 - 444 MHz)
+  set <MHz>            Set explicit operating point (111, 166, 222, 333, 444)
+  sleep                Immediately blank display and put screen to sleep
+  wake                 Wake display and restore active brightness level
+  dim                  Dim display to configured dim level (20%)
+  daemon <cmd>         Manage vita-powerd daemon [start|stop|restart|status]
+  gui                  Open interactive touch graphical control dialog (under X11)
+  help, -h, --help     Show this usage reference
+
+Operating Points:
+  * 444 MHz: High-performance mode for desktop apps, code compilation, emulation
+  * 333 MHz: Standard Sony Vita baseline balancing speed and battery longevity
+  * 222 MHz: Intermediate balanced frequency
+  * 166 MHz: Moderate energy saving mode
+  * 111 MHz: Maximum powersave mode for background tasks, downloads, and audio
+EOF
+}
+
+# Main entry point
+ACTION="${1:-status}"
+
+case "$ACTION" in
+    status|info|show)
+        cmd_status
+        ;;
+    max|performance|turbo|high)
+        cmd_max
+        ;;
+    balanced|normal|default|mid)
+        cmd_balanced
+        ;;
+    powersave|power-save|min|low|battery)
+        cmd_powersave
+        ;;
+    ondemand|dynamic|auto)
+        cmd_ondemand
+        ;;
+    set)
+        cmd_set "$2"
+        ;;
+    sleep)
+        if command -v vita-powerd >/dev/null 2>&1; then
+            vita-powerd sleep
+        else
+            /usr/bin/vita-brightness set 0
+        fi
+        ;;
+    wake)
+        if command -v vita-powerd >/dev/null 2>&1; then
+            vita-powerd wake
+        else
+            /usr/bin/vita-brightness max
+        fi
+        ;;
+    dim)
+        if command -v vita-powerd >/dev/null 2>&1; then
+            vita-powerd dim
+        else
+            /usr/bin/vita-brightness set 20
+        fi
+        ;;
+    daemon)
+        if [ -x /etc/init.d/S42powerd ]; then
+            /etc/init.d/S42powerd "${2:-status}"
+        elif command -v vita-powerd >/dev/null 2>&1; then
+            vita-powerd "${2:-status}"
+        else
+            echo "vita-powerd daemon is not installed."
+        fi
+        ;;
+    gui|menu|dialog)
+        cmd_gui
+        ;;
+    help|-h|--help)
+        show_help
+        ;;
+    [0-9]*)
+        # Direct numeric frequency passed
+        cmd_set "$ACTION"
+        ;;
+    *)
+        echo "${C_RED}[!] Unknown command: '$ACTION'${C_RESET}" >&2
+        show_help
+        exit 1
+        ;;
+esac
