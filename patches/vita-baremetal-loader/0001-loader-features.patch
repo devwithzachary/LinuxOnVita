@@ -7,16 +7,18 @@ index e823b0a..c768aa0 100644
 +#define PAYLOAD_PATH	"ux0:linux/payload.bin"
  #define PAYLOAD_PADDR	0x40300000
 diff --git a/main.c b/main.c
-index ffa2a2c..ca685eb 100644
+index ffa2a2c..3b42237 100644
 --- a/main.c
 +++ b/main.c
-@@ -14,11 +14,30 @@
+@@ -14,11 +14,32 @@
  #include <taihen.h>
  #include "config.h"
  
++static int g_disk_logging_enabled = 1;
++
 +static void log_to_file(const char *msg)
 +{
-+	if (!msg)
++	if (!msg || !g_disk_logging_enabled)
 +		return;
 +	SceUID fd = ksceIoOpen("ux0:data/LinuxOnVita/boot_debug.log",
 +	                       SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0777);
@@ -41,7 +43,7 @@ index ffa2a2c..ca685eb 100644
  	} while (0)
  
  void _start() __attribute__ ((weak, alias ("module_start")));
-@@ -76,6 +95,11 @@ uintptr_t payload_load_paddr;
+@@ -76,6 +97,11 @@ uintptr_t payload_load_paddr;
  unsigned int payload_size;
  uintptr_t kbl_param_paddr;
  void *lvl1_pt_va;
@@ -53,7 +55,7 @@ index ffa2a2c..ca685eb 100644
  
  static void setup_payload(void)
  {
-@@ -111,10 +135,15 @@ static int ksceSysconResetDevice_hook_func(int type, int mode)
+@@ -111,10 +137,15 @@ static int ksceSysconResetDevice_hook_func(int type, int mode)
  	LOG("ksceSysconResetDevice(0x%08X, 0x%08X)\n", type, mode);
  
  	/*
@@ -71,7 +73,18 @@ index ffa2a2c..ca685eb 100644
  		setup_payload();
  		type = SCE_SYSCON_RESET_TYPE_SOFT_RESET;
  	}
-@@ -179,9 +208,31 @@ int module_start(SceSize argc, const void *args)
+@@ -125,6 +156,10 @@ static int ksceSysconResetDevice_hook_func(int type, int mode)
+ 	ksceKernelL1DcacheCleanInvalidateAll();
+ 	ksceKernelL1IcacheInvalidateEntireAllCore();
+ 
++	/* Final safety sync and bus settling delay before Syscon executes reset */
++	ksceIoSync("ux0:", 0);
++	ksceKernelDelayThread(100 * 1000);
++
+ 	return TAI_CONTINUE(int, SceSyscon_ksceSysconResetDevice_ref, type, mode);
+ }
+ 
+@@ -179,9 +214,31 @@ int module_start(SceSize argc, const void *args)
  	/*
  	 * Load the baremetal payload to physically contiguous memory.
  	 */
@@ -105,7 +118,7 @@ index ffa2a2c..ca685eb 100644
  		return SCE_KERNEL_START_FAILED;
  	}
  
-@@ -215,6 +266,154 @@ int module_start(SceSize argc, const void *args)
+@@ -215,6 +272,154 @@ int module_start(SceSize argc, const void *args)
  	LOG("KBL param size: 0x%08X\n", kbl_param->size);
  	LOG("\n");
  
@@ -260,17 +273,41 @@ index ffa2a2c..ca685eb 100644
  	SceSyscon_ksceSysconResetDevice_hook_uid = taiHookFunctionExportForKernel(KERNEL_PID,
  		&SceSyscon_ksceSysconResetDevice_ref, "SceSyscon", 0x60A35F64,
  		0x8A95D35C, ksceSysconResetDevice_hook_func);
-@@ -236,6 +435,9 @@ int module_start(SceSize argc, const void *args)
+@@ -236,6 +441,33 @@ int module_start(SceSize argc, const void *args)
  	ksceKernelGetPaddr(&resume_ctx, &resume_ctx_paddr);
  	LOG("Resume context pa: 0x%08X\n", resume_ctx_paddr);
  
 +	/* Set display to 100% full brightness */
 +	kscePowerSetDisplayBrightness(65535);
 +
++	LOG("Syncing storage partitions and settling FTL before standby...\n");
++
++	/*
++	 * Synchronize all storage partitions at the device level so pending
++	 * buffers are flushed to physical media.
++	 */
++	ksceIoSync("ux0:", 0);
++	ksceIoSync("ur0:", 0);
++	ksceIoSync("uma0:", 0);
++	ksceIoSync("imc0:", 0);
++	ksceIoSync("xmc0:", 0);
++
++	/*
++	 * Disable further disk logging so SD2Vita / Game Card bus remains quiescent.
++	 * Any subsequent LOG calls will output strictly via UART0 without touching flash.
++	 */
++	g_disk_logging_enabled = 0;
++
++	/*
++	 * Allow 500ms settling time for microSD FTL (Flash Translation Layer)
++	 * internal write buffers and wear-leveling cycles to complete and idle.
++	 */
++	ksceKernelDelayThread(500 * 1000);
++
  	LOG("Requesting standby...\n");
  
  	kscePowerRequestStandby();
-@@ -298,31 +500,38 @@ int find_paddr(uint32_t paddr, const void *vaddr_start, unsigned int range, void
+@@ -298,31 +530,38 @@ int find_paddr(uint32_t paddr, const void *vaddr_start, unsigned int range, void
  
  int alloc_phycont(unsigned int size, unsigned int alignment, SceUID *uid, void **addr)
  {
@@ -325,7 +362,7 @@ index ffa2a2c..ca685eb 100644
  }
  
  int load_file_phycont(const char *path, SceUID *uid, void **addr, unsigned int *size)
-@@ -348,13 +557,27 @@ int load_file_phycont(const char *path, SceUID *uid, void **addr, unsigned int *
+@@ -348,13 +587,27 @@ int load_file_phycont(const char *path, SceUID *uid, void **addr, unsigned int *
  	}
  
  	ksceIoLseek(fd, 0, SCE_SEEK_SET);

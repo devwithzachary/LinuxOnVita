@@ -452,6 +452,10 @@ static int install_linux_files_to_mount(const char *mount) {
     copy_file("app0:data/payload.bin", "ux0:linux/payload.bin", 1);
   }
 
+  /* Synchronize storage devices to flush all newly copied files and metadata */
+  sceIoSync("ux0:", 0);
+  sceIoSync("ur0:", 0);
+
   if (error_count > 0) {
     draw_progress_modal("INSTALLATION FINISHED WITH ERRORS", "Some required files failed to copy.", 1.0f, "Check SD card free space and try again.", "TAP SCREEN OR PRESS CROSS TO CONTINUE");
   } else {
@@ -506,6 +510,10 @@ static int copy_boot_files_to_mount(const char *mount) {
       copied_count++;
     }
   }
+
+  /* Synchronize storage devices to flush all newly copied files and metadata */
+  sceIoSync("ux0:", 0);
+  sceIoSync("ur0:", 0);
 
   char status_str[128];
   snprintf(status_str, sizeof(status_str), "Copied %d boot files to %slinux/ successfully!", copied_count, mount);
@@ -854,6 +862,14 @@ static void boot_linux(const char *mount, int debug_mode) {
   /* Modal launch announcement */
   draw_progress_modal("LAUNCHING LINUX 6.12", "Handover in progress: Transitioning via Syscon...", 0.9f, "Screen will turn black as soft-reset transitions into Linux.", NULL);
   sceKernelDelayThread(400 * 1000);
+
+  /* Flush and close debug log before module launch */
+  debug_log_close();
+
+  /* Sync all storage devices so SD2Vita / Sony memory cards are fully committed */
+  sceIoSync("ux0:", 0);
+  sceIoSync("ur0:", 0);
+  sceKernelDelayThread(500 * 1000);
 
   /* Initiate loader module launch */
   tai_module_args_t argg;

@@ -66,6 +66,15 @@ Before getting started, make sure your PlayStation Vita meets these requirements
 >
 > **If you experience a boot loop after using LinuxOnVita**, see the [recovery procedure](#boot-loop-recovery-after-returning-to-vitaos) in the Troubleshooting section below.
 
+> [!WARNING]
+> **Important MicroSD Card Backup Notice for SD2Vita Users**
+>
+> **Always back up your SD2Vita microSD card before testing baremetal Linux or experimental homebrew.**
+>
+> Baremetal OS execution takes direct low-level control of the PS Vita SoC, bypassing VitaOS storage drivers and power safeguards. If an experimental kernel boot hangs and forces a 30-second hard power-off (holding the Power button), lower-end or budget microSD cards (particularly budget cards lacking power-loss protection capacitors) can suffer FTL (Flash Translation Layer) controller lockups where the internal controller panics and all sectors return `0xFF`.
+>
+> LinuxOnVita minimizes storage risk by mounting partitions **read-only by default**, executing synchronous device-level filesystem flushes (`sceIoSync` / `ksceIoSync`) and hardware settling delays prior to Syscon soft-reset, and pre-staging boot files directly in DRAM. However, hardware hangs can happen with early software. Always maintain a full backup of your microSD card image or vital data.
+
 ---
 
 ## 2. Quick Installation & First Boot

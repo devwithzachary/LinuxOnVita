@@ -100,6 +100,15 @@ While original proof-of-concept projects proved that modern Linux can boot on th
 >
 > If you are running a heavily modded Vita with multiple kernel plugins, consider testing LinuxOnVita on a cleaner setup first.
 
+> [!WARNING]
+> **MicroSD Card Backup Notice for SD2Vita Users**
+>
+> **Always back up your SD2Vita microSD card before testing baremetal Linux or experimental homebrew.**
+>
+> Baremetal OS execution bypasses VitaOS storage drivers and low-level power safeguards. If an experimental kernel boot hangs and requires a 30-second hard power-off (holding the Power button), lower-end or budget microSD cards (particularly cards lacking power-loss protection capacitors) can suffer FTL (Flash Translation Layer) controller lockups where the internal controller panics and all sectors return `0xFF`.
+>
+> LinuxOnVita minimizes storage risk by mounting partitions **read-only by default**, executing synchronous device-level filesystem flushes (`sceIoSync` / `ksceIoSync`) and hardware settling delays prior to Syscon soft-reset, and pre-staging boot files directly in DRAM. However, hardware hangs can happen with early software. Always maintain a full backup of your microSD card image or vital data.
+
 > [!TIP]
 > **Storage & SD Card Safety Protection**
 > LinuxOnVita automatically mounts your SD2Vita (`ux0:`) and internal eMMC (`ur0:`) partitions in **read-only mode by default**. This ensures VitaOS database files and exFAT/FAT volumes are never marked dirty or exposed to write interruptions during reboots or crashes. To temporarily enable write access, run `vita-storage rw ux0`, and always reboot cleanly using `vita-reboot`.

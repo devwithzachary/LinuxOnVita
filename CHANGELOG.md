@@ -46,6 +46,13 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
 ### Bootstrapper & Installer App (VPK)
 - **Application Version Bump:**
   - Bumped application version to `v1.5.0` (`01.50`).
+- **Storage Synchronization & MicroSD FTL Quiescence Protection:**
+  - Hardened file I/O operations in `LinuxOnVita.vpk` and `baremetal-loader.skprx` to prevent sudden power loss and reset corruption on SD2Vita microSD cards.
+  - Implemented device-level filesystem synchronization (`sceIoSync("ux0:", 0)` and `sceIoSync("ur0:", 0)`) in `app/main.c` immediately after copying boot assets and before handing off to the kernel loader.
+  - Added synchronous device flush (`ksceIoSync`) across all mounted storage partitions (`ux0:`, `ur0:`, `uma0:`, `imc0:`, `xmc0:`) in `baremetal-loader.skprx` before requesting Syscon standby.
+  - Disabled kernel-level disk logging to `boot_debug.log` prior to standby and Syscon reset, ensuring no pending writes exist on the Game Card or SD2Vita bus during soft reset.
+  - Introduced a mandatory 500ms hardware settling delay (`ksceKernelDelayThread`) before Syscon standby/reset to allow the microSD card's internal Flash Translation Layer (FTL) to finish write/erase cycles and transition into a safe idle state.
+  - Added prominent warnings in `README.md` and `USER_GUIDE.md` urging users to back up their SD2Vita microSD cards prior to testing baremetal Linux.
 
 ## [v1.4.0] - 2026-10-21
 
