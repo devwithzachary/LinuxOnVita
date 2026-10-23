@@ -73,7 +73,6 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
   * **Power Button Integration (`KEY_POWER`):**
     * Short press: Immediately toggles display sleep/wake.
     * Long press (3 seconds): Initiates a clean, graceful system shutdown (`poweroff`).
-  * **Battery Health Monitoring:** Background monitor blinks the blue PlayStation LED when battery drops below 15% and performs a safe emergency shutdown when reaching critical levels.
 
 * **Interactive First-Boot Setup Wizard (`vita-setup`):**
   * Launches automatically on initial boot (and re-runnable at any time from CLI).
@@ -107,7 +106,7 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
   * **Select Button (`BTN_SELECT`):** Mapped to `KEY_ESC` in `vita-input-mapper` (essential for `vi`, `nano`, command cancellation, and curses menus).
   * **Volume Buttons (`KEY_VOLUMEUP` / `KEY_VOLUMEDOWN`):** Step display brightness up or down by 10% (or control ALSA audio volume).
   * **PS Button (`BTN_MODE`):** Configurable to toggle `fbkeyboard` visibility or launch the quick overlay menu.
-  * **PlayStation LED Daemon (`vita-led`):** Configurable activity triggers for the blue PS button LED (disk I/O activity, heartbeat pulse, or low battery warning).
+  * **PlayStation LED Daemon (`vita-led`):** Configurable activity triggers for the blue PS button LED (disk I/O activity or heartbeat pulse).
 
 ---
 

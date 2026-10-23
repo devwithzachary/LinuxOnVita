@@ -28,7 +28,18 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Enabled all standard kernel cpufreq governors: `performance`, `powersave`, `userspace`, `ondemand`, and `conservative` in `vita_defconfig`.
     - Configured Linux `vita-cpufreq` driver to initialize hardware BaseClk registers directly to 444 MHz on baremetal boot, safely bypassing VitaOS power hooks.
 
-### Handheld User Experience & RootFS
+- **Display Sleep, Auto-Dimming & Power Management Daemon (`vita-powerd`):**
+  - Implemented a dedicated native background power daemon (`tools/vita-powerd/vita-powerd.c` -> `/usr/bin/vita-powerd`) started on boot via `/etc/init.d/S42powerd`.
+  - **OLED & LCD Burn-In Prevention:** Monitors `/dev/input/event*` devices (touchscreen digitizers, physical buttons, analog sticks, and virtual uinput controllers) with intelligent deadzone filtering to detect genuine user activity without keeping the system awake due to analog potentiometer drift.
+  - **Automated Inactivity Timeouts:**
+    - Inactivity for 3 minutes (180s): Automatically dims display brightness to 20% PWM.
+    - Inactivity for 5 minutes (300s): Blanks display completely into sleep mode (`vita-brightness set 0`, `/sys/class/graphics/fb0/blank`, and X11 DPMS standby) while keeping all background tasks, SSH terminals, downloads, and audio playback running.
+    - Touching the screen or pressing any button immediately wakes the display and restores the previous active brightness level.
+  - **Power Button Integration (`KEY_POWER`):**
+    - Short press (< 3s): Instantly toggles display sleep / wake on demand.
+    - Long press (>= 3s): Initiates a clean, graceful system shutdown (`poweroff`), flashing the blue PS button LED, flushing storage caches, and safely halting hardware via Syscon.
+  - **Unified CLI & State Management:** Supports `vita-powerd [status | sleep | wake | dim | reload]`, with companion integration in `vita-power` (`vita-power sleep`, `vita-power wake`, `vita-power dim`, `vita-power daemon`) and configurable settings in `/etc/vita-powerd.conf`.
+  - **OLED Display Blanking in `vita-brightness`:** Enhanced `/usr/bin/vita-brightness` to support `set 0` on PS Vita 1000 OLED consoles by blanking virtual console and X11 framebuffers (pure black mode with emissive OLED diodes completely off).
 - **CPU Power & Frequency Control CLI (`vita-cpu` / `vita-power`):**
   - Created a turnkey command-line utility `/usr/bin/vita-cpu` (with symlink `/usr/bin/vita-power`) supporting subcommands `status`, `max`, `balanced`, `powersave`, `ondemand`, `set <mhz>`, and `gui`.
   - Supported 1-touch profile switching: `max` locks to 444 MHz performance mode, `balanced` sets 333 MHz standard baseline, `powersave` sets 111 MHz energy saving, and `ondemand` enables dynamic load-based scaling.

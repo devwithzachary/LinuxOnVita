@@ -63,17 +63,23 @@ get_brightness() {
     HW=$(detect_hardware)
 
     if [ "$HW" = "oled" ]; then
+        CURR=100
+        [ -f "${STATE_FILE}" ] && CURR=$(cat "${STATE_FILE}")
         echo "=================================================="
         echo " PlayStation Vita Display Status"
         echo "=================================================="
         echo " Model:        PS Vita 1000 (Fat / OLED)"
         echo " Panel Type:   Emissive OLED (Samsung AMS387VB01)"
-        echo " Brightness:   100% (Hardware Level 15 Gamma)"
+        if [ "$CURR" -eq 0 ]; then
+            echo " Brightness:   0% (Display Blanked / Sleep Mode)"
+        else
+            echo " Brightness:   100% (Hardware Level 15 Gamma)"
+        fi
         echo " Backlight:    N/A (Emissive panel, fixed at boot)"
         echo "=================================================="
         echo " Note: PS Vita 1000 OLED displays do not use an"
-        echo " adjustable LCD backlight. The display is fixed at"
-        echo " 100% maximum brightness during bootloader init."
+        echo " adjustable LCD backlight. Blanking is supported"
+        echo " for display sleep and burn-in prevention."
         echo "=================================================="
         return 0
     fi
@@ -117,17 +123,19 @@ set_brightness() {
     HW=$(detect_hardware)
 
     if [ "$HW" = "oled" ]; then
-        echo "=================================================="
-        echo " PlayStation Vita 1000 (OLED) Display Notice"
-        echo "=================================================="
-        echo " PS Vita 1000 features an emissive OLED display"
-        echo " without a traditional LCD backlight."
-        echo ""
-        echo " Brightness is hardware-configured at 100% maximum"
-        echo " (Level 15 Gamma) during bootloader initialization."
-        echo " Runtime dimming via I2C is not supported on OLED."
-        echo "=================================================="
-        exit 0
+        if [ "$PCT" -eq 0 ]; then
+            echo 1 > /sys/class/graphics/fb0/blank 2>/dev/null || true
+            xset dpms force off 2>/dev/null || true
+            echo "0" > "${STATE_FILE}" 2>/dev/null || true
+            echo "Brightness set to 0% (OLED Display Blanked / Black Mode)"
+            return 0
+        else
+            echo 0 > /sys/class/graphics/fb0/blank 2>/dev/null || true
+            xset dpms force on 2>/dev/null || true
+            echo "100" > "${STATE_FILE}" 2>/dev/null || true
+            echo "Brightness set to 100% (OLED Emissive Display Active)"
+            return 0
+        fi
     fi
 
     if [ "$HW" = "pstv" ]; then
@@ -149,11 +157,13 @@ set_brightness() {
     fi
 
     if [ "$PCT" -eq 0 ]; then
-        # Turn off backlight
+        # Turn off backlight and blank screen
+        echo 1 > /sys/class/graphics/fb0/blank 2>/dev/null || true
+        xset dpms force off 2>/dev/null || true
         if i2cset -y ${I2C_BUS} ${I2C_ADDR} ${I2C_REG_PWM} 0x00 >/dev/null 2>&1 && \
            i2cset -y ${I2C_BUS} ${I2C_ADDR} ${I2C_REG_ENABLE} 0x00 >/dev/null 2>&1; then
             echo "$PCT" > "${STATE_FILE}" 2>/dev/null || true
-            echo "Brightness set to 0% (Backlight Off)"
+            echo "Brightness set to 0% (Backlight Off / Screen Blanked)"
             return 0
         else
             echo "Error: Failed to write to backlight IC at 0x64 on I2C bus ${I2C_BUS}."
@@ -162,6 +172,8 @@ set_brightness() {
     fi
 
     # Scale 1-100% to hardware PWM range 0x1F (31) - 0xFF (255)
+    echo 0 > /sys/class/graphics/fb0/blank 2>/dev/null || true
+    xset dpms force on 2>/dev/null || true
     PWM=$(( 31 + (PCT * (255 - 31)) / 100 ))
     HEX_PWM=$(printf "0x%02x" $PWM)
 

@@ -21,6 +21,7 @@ Welcome to the comprehensive user guide for **LinuxOnVita**. This guide is desig
    - [Rebooting & Powering Down](#7-rebooting--powering-down)
    - [Virtual Network Tunnels & Mesh VPNs (`CONFIG_TUN` & `vita-tun`)](#8-virtual-network-tunnels--mesh-vpns-config_tun-wireguard--vita-tun)
    - [Hardware Power & CPU Frequency Control (`vita-cpu` / `vita-power`)](#9-hardware-power--cpu-frequency-control-vita-cpu--vita-power)
+   - [Display Sleep, Auto-Dimming & Power Management (`vita-powerd`)](#10-display-sleep-auto-dimming--power-management-vita-powerd)
 5. [Alpine Linux Package Ecosystem (`alpine-chroot`)](#5-alpine-linux-package-ecosystem-alpine-chroot)
    - [Understanding the Isolated Environment](#understanding-the-isolated-environment)
    - [Entering & Exiting Alpine](#entering--exiting-alpine)
@@ -456,6 +457,51 @@ When running the graphical desktop (`alpine-desktop`):
 * **1-Tap Profile Switching:** Left-clicking or tapping the tray widget opens the graphical touch profile selector (`vita-cpu gui`). Right-clicking brings up a direct profile selection menu.
 * **Start Menu Integration:** Fast profile shortcuts are accessible directly under **Start Menu -> CPU Power & Frequency**.
 * **Desktop Shortcut:** Double-click or tap the **CPU Power** icon on the desktop.
+
+---
+
+### 10. Display Sleep, Auto-Dimming & Power Management (`vita-powerd`)
+To protect OLED and LCD panels against image retention, preserve battery longevity, and provide standard handheld power button behavior, LinuxOnVita features a native background power management daemon: `vita-powerd`.
+
+#### Automated Inactivity Timers:
+* **3-Minute Auto-Dim (180s):** If no buttons, touchscreen events, or analog stick movements occur for 3 minutes, the screen brightness automatically dims to 20% PWM.
+* **5-Minute Auto-Sleep (300s):** If inactivity continues for 5 minutes, the screen blanks completely into sleep mode (`vita-brightness set 0` and console blanking). Background daemons, SSH sessions, downloads, and audio playback continue running without interruption.
+* **Instant Wake-Up:** Touching the front screen, pressing any button (D-Pad, Cross, Circle, Square, Triangle, Triggers, Select, Start), or moving an analog stick instantly restores the previous active brightness level.
+
+#### Hardware Power Button Shortcuts:
+* **Short Press (< 3 seconds):** Immediately toggles display sleep / wake on demand. Pressing Power puts the screen to sleep instantly; pressing it again wakes it back up.
+* **Long Press (Hold for >= 3 seconds):** Initiates a safe, graceful system shutdown (`poweroff`). The system flashes the blue PS button LED, flushes all write buffers, syncs filesystems, and powers down via Syscon.
+
+#### Command-Line Controls:
+```bash
+# View active daemon status, idle time, and display state:
+vita-powerd status
+
+# Immediately blank display and put screen to sleep:
+vita-powerd sleep
+# or via vita-power:
+vita-power sleep
+
+# Immediately wake display and restore active brightness:
+vita-powerd wake
+# or via vita-power:
+vita-power wake
+
+# Dim display to 20%:
+vita-powerd dim
+
+# Reload daemon configuration:
+vita-powerd reload
+```
+
+#### Customizing Timeouts (`/etc/vita-powerd.conf`):
+You can customize timeouts and brightness thresholds in `/etc/vita-powerd.conf`:
+```ini
+DIM_TIMEOUT=180        # Seconds before dimming (0 = disabled)
+SLEEP_TIMEOUT=300      # Seconds before sleeping (0 = disabled)
+DIM_BRIGHTNESS=20      # Brightness percentage when dimmed
+POWER_HOLD_SECS=3      # Seconds to hold Power button for shutdown
+```
 
 ---
 

@@ -334,12 +334,16 @@ Usage:
   vita-power [command]
 
 Commands:
-  status               Display active CPU frequency, governor, and supported operating points
+  status               Display active CPU frequency, governor, and powerd state
   max                  Set CPU to maximum performance profile (444 MHz)
   balanced             Set CPU to balanced standard profile (333 MHz)
   powersave            Set CPU to minimum power consumption profile (111 MHz)
   ondemand             Enable dynamic on-demand frequency scaling (111 - 444 MHz)
   set <MHz>            Set explicit operating point (111, 166, 222, 333, 444)
+  sleep                Immediately blank display and put screen to sleep
+  wake                 Wake display and restore active brightness level
+  dim                  Dim display to configured dim level (20%)
+  daemon <cmd>         Manage vita-powerd daemon [start|stop|restart|status]
   gui                  Open interactive touch graphical control dialog (under X11)
   help, -h, --help     Show this usage reference
 
@@ -373,6 +377,36 @@ case "$ACTION" in
         ;;
     set)
         cmd_set "$2"
+        ;;
+    sleep)
+        if command -v vita-powerd >/dev/null 2>&1; then
+            vita-powerd sleep
+        else
+            /usr/bin/vita-brightness set 0
+        fi
+        ;;
+    wake)
+        if command -v vita-powerd >/dev/null 2>&1; then
+            vita-powerd wake
+        else
+            /usr/bin/vita-brightness max
+        fi
+        ;;
+    dim)
+        if command -v vita-powerd >/dev/null 2>&1; then
+            vita-powerd dim
+        else
+            /usr/bin/vita-brightness set 20
+        fi
+        ;;
+    daemon)
+        if [ -x /etc/init.d/S42powerd ]; then
+            /etc/init.d/S42powerd "${2:-status}"
+        elif command -v vita-powerd >/dev/null 2>&1; then
+            vita-powerd "${2:-status}"
+        else
+            echo "vita-powerd daemon is not installed."
+        fi
         ;;
     gui|menu|dialog)
         cmd_gui
