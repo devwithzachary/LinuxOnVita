@@ -1,11 +1,12 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: DevWithZachary <devwithzachary@pm.me>
 Date: Thu, 22 Oct 2026 17:15:00 +0100
-Subject: [PATCH] Fix LCD DSI timing by setting VIC to 0x20 for Vita 2000 Slim
+Subject: [PATCH] Fix LCD DSI timing and VBP/VSW packet ordering for Vita 2000 Slim
 
 ---
  libbaremetal/src/display.c | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
+ libbaremetal/src/dsi.c     | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
 
 diff --git a/libbaremetal/src/display.c b/libbaremetal/src/display.c
 index 282c0f2..b154cb1 100644
@@ -20,4 +21,23 @@ index 282c0f2..b154cb1 100644
  	uint32_t pixelclock;
  
  	dsi_get_pixelclock_for_vic(vic, 24, &pixelclock);
+diff --git a/libbaremetal/src/dsi.c b/libbaremetal/src/dsi.c
+index d8b3f1a..32e9e7d 100644
+--- a/libbaremetal/src/dsi.c
++++ b/libbaremetal/src/dsi.c
+@@ -486,12 +486,12 @@ void dsi_start_master(enum dsi_bus bus, uint32_t vic)
+ 		}
+ 
+ 		packet[4] = packet[18];
+-		packet[6] = ((VSW - 2) & 0xffff) | 0x4030000;
++		packet[6] = (uVar6 & 0xffff) | 0x4030000;
+ 		packet[7] = 0x28000001;
+ 		packet[9] = packet[18];
+ 		packet[11] = 0x28000008;
+ 		packet[13] = packet[18];
+-		packet[15] = (uVar6 & 0xffff) | 0x4030000;
++		packet[15] = ((VSW - 2) & 0xffff) | 0x4030000;
+ 		packet[16] = 0x28000001;
+ 		packet_length = packet_length >> 2;
+ 		if (packet_length > 0)
 -- 
