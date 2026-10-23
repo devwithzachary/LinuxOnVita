@@ -48,6 +48,70 @@ get_device() {
     awk -v m="$target" '$2 == m { print $1 }' /proc/mounts
 }
 
+get_default_mode() {
+    target="$1"
+    for conf in "/mnt/ux0/linux/storage.conf" "/mnt/ur0/linux/storage.conf" "/etc/vita-storage.conf"; do
+        if [ -f "$conf" ]; then
+            val=$(grep -E "^${target}_mode=" "$conf" 2>/dev/null | cut -d= -f2 | tr -d ' "')
+            [ -z "$val" ] && val=$(grep -E "^default_mode=" "$conf" 2>/dev/null | cut -d= -f2 | tr -d ' "')
+            if [ "$val" = "rw" ]; then
+                echo "rw"
+                return 0
+            fi
+        fi
+    done
+    echo "ro"
+}
+
+set_default_mode() {
+    mode="$1"
+    case "$mode" in
+        ro|rw) ;;
+        *)
+            echo "Error: Invalid mode '$mode' (use 'ro' or 'rw')" >&2
+            return 1
+            ;;
+    esac
+
+    saved=0
+    for dir in /mnt/ux0 /mnt/ur0; do
+        if is_mounted "$dir"; then
+            m_label="${dir##/mnt/}"
+            was_ro=0
+            if is_ro "$m_label"; then
+                remount_rw "$m_label" >/dev/null 2>&1 && was_ro=1
+            fi
+
+            mkdir -p "${dir}/linux" 2>/dev/null
+            cat << EOF > "${dir}/linux/storage.conf"
+# LinuxOnVita Storage Protection Configuration
+default_mode=${mode}
+ux0_mode=${mode}
+ur0_mode=${mode}
+EOF
+            sync
+            if [ $was_ro -eq 1 ]; then
+                remount_ro "$m_label" >/dev/null 2>&1 || true
+            fi
+            saved=1
+        fi
+    done
+
+    mkdir -p /etc 2>/dev/null
+    cat << EOF > /etc/vita-storage.conf
+# LinuxOnVita Storage Protection Configuration
+default_mode=${mode}
+ux0_mode=${mode}
+ur0_mode=${mode}
+EOF
+
+    if [ "$saved" -eq 1 ]; then
+        [ "$QUIET" != "1" ] && echo "Default boot mount mode set to: [${mode}] (saved to storage)"
+    else
+        [ "$QUIET" != "1" ] && echo "Default boot mount mode set to: [${mode}] (session RAM only)"
+    fi
+}
+
 mount_partition() {
     target="$1"
     case "$target" in
@@ -61,13 +125,14 @@ mount_partition() {
             if is_mounted /mnt/ux0; then
                 return 0
             fi
+            mode=$(get_default_mode ux0)
             for dev in /dev/vita/ux0 /dev/mmcblk1p1 /dev/mmcblk1 /dev/mmcblk2p1 /dev/mmcblk2; do
                 if [ -b "$dev" ]; then
                     [ -L /dev/vita/ux0 ] || ln -sf "$dev" /dev/vita/ux0 2>/dev/null || true
-                    mount -t exfat -o ro "$dev" /mnt/ux0 2>/dev/null || \
-                    mount -t vfat -o ro "$dev" /mnt/ux0 2>/dev/null || \
-                    mount -t ext4 -o ro "$dev" /mnt/ux0 2>/dev/null || \
-                    mount -o ro "$dev" /mnt/ux0 2>/dev/null || true
+                    mount -t exfat -o "$mode" "$dev" /mnt/ux0 2>/dev/null || \
+                    mount -t vfat -o "$mode" "$dev" /mnt/ux0 2>/dev/null || \
+                    mount -t ext4 -o "$mode" "$dev" /mnt/ux0 2>/dev/null || \
+                    mount -o "$mode" "$dev" /mnt/ux0 2>/dev/null || true
                     break
                 fi
             done
@@ -79,13 +144,14 @@ mount_partition() {
             if is_mounted /mnt/ur0; then
                 return 0
             fi
+            mode=$(get_default_mode ur0)
             for dev in /dev/vita/ur0 /dev/mmcblk0p12; do
                 if [ -b "$dev" ]; then
                     [ -L /dev/vita/ur0 ] || ln -sf "$dev" /dev/vita/ur0 2>/dev/null || true
-                    mount -t exfat -o ro "$dev" /mnt/ur0 2>/dev/null || \
-                    mount -t vfat -o ro "$dev" /mnt/ur0 2>/dev/null || \
-                    mount -t ext4 -o ro "$dev" /mnt/ur0 2>/dev/null || \
-                    mount -o ro "$dev" /mnt/ur0 2>/dev/null || true
+                    mount -t exfat -o "$mode" "$dev" /mnt/ur0 2>/dev/null || \
+                    mount -t vfat -o "$mode" "$dev" /mnt/ur0 2>/dev/null || \
+                    mount -t ext4 -o "$mode" "$dev" /mnt/ur0 2>/dev/null || \
+                    mount -o "$mode" "$dev" /mnt/ur0 2>/dev/null || true
                     break
                 fi
             done
@@ -123,6 +189,13 @@ show_status() {
         fi
         echo ""
     done
+    def_mode=$(get_default_mode ux0)
+    if [ "$def_mode" = "rw" ]; then
+        echo "Default Boot Mode:  [UNPROTECTED - READ-WRITE]"
+    else
+        echo "Default Boot Mode:  [PROTECTED - SAFE READ-ONLY]"
+    fi
+    echo ""
     echo "Safety Note: Storage volumes are mounted read-only by default"
     echo "to protect VitaOS database and filesystem integrity from power loss."
     echo "================================================================"
@@ -217,6 +290,7 @@ Commands:
   is-ro [ux0|ur0]      Check if partition is mounted read-only (exit 0=yes, 1=no)
   is-rw [ux0|ur0]      Check if partition is mounted read-write (exit 0=yes, 1=no)
   is-mounted [ux0|ur0] Check if partition is mounted (exit 0=yes, 1=no)
+  set-default [ro|rw]  Set default boot mount protection mode (saved to storage)
   sync                 Flush all disk caches to physical storage
   help                 Display this help screen
 
@@ -226,8 +300,9 @@ Options:
 Examples:
   vita-storage status
   vita-storage mount all
-  vita-storage rw ux0     # Temporarily allow writes to SD2Vita
-  vita-storage ro ux0     # Lock SD2Vita back down to read-only
+  vita-storage rw ux0          # Temporarily allow writes to SD2Vita
+  vita-storage ro ux0          # Lock SD2Vita back down to read-only
+  vita-storage set-default ro  # Ensure partitions boot read-only (Safe)
 EOF
 }
 
@@ -266,6 +341,9 @@ case "$ACTION" in
         ;;
     rw)
         remount_rw "$TARGET_ARG"
+        ;;
+    set-default|default|mode)
+        set_default_mode "$TARGET_ARG"
         ;;
     is-ro)
         is_ro "$TARGET_ARG"

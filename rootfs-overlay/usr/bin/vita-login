@@ -6,6 +6,20 @@
 if [ "$(tty 2>/dev/null)" = "/dev/tty1" ]; then
     clear 2>/dev/null || printf '\033[2J\033[H'
 
+    # Check for first-boot onboarding wizard (runs once until completed or dismissed)
+    if [ ! -f /tmp/.setup_checked ]; then
+        touch /tmp/.setup_checked
+        SETUP_DONE=0
+        if [ -f /mnt/ux0/linux/.setup_done ] || [ -f /mnt/ur0/linux/.setup_done ] || [ -f /etc/vita-setup.done ]; then
+            SETUP_DONE=1
+        fi
+
+        if [ $SETUP_DONE -eq 0 ] && command -v vita-setup >/dev/null 2>&1; then
+            /usr/bin/vita-setup --first-boot
+            clear 2>/dev/null || printf '\033[2J\033[H'
+        fi
+    fi
+
     # Check if desktop autostart is configured (runs once per boot)
     if [ ! -f /tmp/.desktop_autostart_done ]; then
         AUTOSTART=0

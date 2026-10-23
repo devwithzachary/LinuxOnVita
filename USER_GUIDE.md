@@ -12,16 +12,17 @@ Welcome to the comprehensive user guide for **LinuxOnVita**. This guide is desig
    - [On-Screen Touch Keyboard](#on-screen-touch-keyboard-fbkeyboard)
    - [Physical Gamepad Navigation](#physical-gamepad-navigation-vita-input-mapper)
 4. [Built-In Applications & Tools](#4-built-in-applications--tools)
-   - [On-Device Wi-Fi Manager (`vita-wifi`)](#1-on-device-wi-fi-manager-vita-wifi)
-   - [Screen Brightness Control (`vita-brightness`)](#2-screen-brightness-control-vita-brightness)
-   - [Memory Expansion & Swap (`vita-swap`)](#3-memory-expansion--swap-vita-swap)
-   - [Framebuffer DOOM (`vita-doom`)](#4-framebuffer-doom-vita-doom)
-   - [Hardware & System Diagnostics (`vita-diagnostics`)](#5-hardware--system-diagnostics-vita-diagnostics--vita-diag)
-   - [Remote SSH & Wireless Terminal](#6-remote-ssh--wireless-terminal)
-   - [Rebooting & Powering Down](#7-rebooting--powering-down)
-   - [Virtual Network Tunnels & Mesh VPNs (`CONFIG_TUN` & `vita-tun`)](#8-virtual-network-tunnels--mesh-vpns-config_tun-wireguard--vita-tun)
-   - [Hardware Power & CPU Frequency Control (`vita-cpu` / `vita-power`)](#9-hardware-power--cpu-frequency-control-vita-cpu--vita-power)
-   - [Display Sleep, Auto-Dimming & Power Management (`vita-powerd`)](#10-display-sleep-auto-dimming--power-management-vita-powerd)
+   - [Interactive First-Boot Setup Wizard (`vita-setup`)](#1-interactive-first-boot-setup-wizard-vita-setup)
+   - [On-Device Wi-Fi Manager (`vita-wifi`)](#2-on-device-wi-fi-manager-vita-wifi)
+   - [Screen Brightness Control (`vita-brightness`)](#3-screen-brightness-control-vita-brightness)
+   - [Memory Expansion & Swap (`vita-swap`)](#4-memory-expansion--swap-vita-swap)
+   - [Framebuffer DOOM (`vita-doom`)](#5-framebuffer-doom-vita-doom)
+   - [Hardware & System Diagnostics (`vita-diagnostics`)](#6-hardware--system-diagnostics-vita-diagnostics--vita-diag)
+   - [Remote SSH & Wireless Terminal](#7-remote-ssh--wireless-terminal)
+   - [Rebooting & Powering Down](#8-rebooting--powering-down)
+   - [Virtual Network Tunnels & Mesh VPNs (`CONFIG_TUN` & `vita-tun`)](#9-virtual-network-tunnels--mesh-vpns-config_tun-wireguard--vita-tun)
+   - [Hardware Power & CPU Frequency Control (`vita-cpu` / `vita-power`)](#10-hardware-power--cpu-frequency-control-vita-cpu--vita-power)
+   - [Display Sleep, Auto-Dimming & Power Management (`vita-powerd`)](#11-display-sleep-auto-dimming--power-management-vita-powerd)
 5. [Alpine Linux Package Ecosystem (`alpine-chroot`)](#5-alpine-linux-package-ecosystem-alpine-chroot)
    - [Understanding the Isolated Environment](#understanding-the-isolated-environment)
    - [Entering & Exiting Alpine](#entering--exiting-alpine)
@@ -163,7 +164,34 @@ You can control the terminal shell entirely with the Vita's physical gamepad but
 
 LinuxOnVita comes pre-installed with dedicated console management utilities tailored specifically for the PS Vita hardware.
 
-### 1. On-Device Wi-Fi Manager (`vita-wifi`)
+### 1. Interactive First-Boot Setup Wizard (`vita-setup`)
+The first time you boot LinuxOnVita, the interactive **First-Boot Setup Wizard** automatically welcomes you directly on the console screen (`/dev/tty1`). It guides you through a seamless 6-step initial configuration so your console is immediately online and optimized for your storage:
+
+```bash
+vita-setup               # Launch full 6-step setup wizard anytime
+vita-setup --wifi        # Quick access to Wi-Fi setup
+vita-setup --storage     # Quick access to storage auto-mount protection
+vita-setup --memory      # Quick access to ZRAM & swapfile configuration
+vita-setup --alpine      # Create or manage Alpine Linux container (alpine.img)
+vita-setup --desktop     # Install IceWM desktop packages & set boot autostart
+vita-setup --status      # Check current onboarding and subsystem status
+vita-setup --reset       # Reset completion flag to re-run on next boot
+```
+
+#### What the Wizard Configures:
+1. **Hardware Diagnostics & Health Baseline:** Verifies 4 active ARMv7 CPU cores, frequency operating points, detected display panel (OLED PCH-1000 vs LCD PCH-2000 vs PSTV), storage partition mounts (`ux0:` / `ur0:`), total RAM, active ZRAM compression pool, and Wi-Fi radio status.
+2. **Wi-Fi Wireless Networking:** Scans nearby wireless networks, connects with password entry, tests DHCP lease acquisition, and displays your active SSH remote login IP (`ssh root@<IP>`).
+3. **Storage Protection Modes:** Choose whether storage partitions mount in Safe Read-Only mode (`ro` - recommended to safeguard VitaOS filesystem data) or Read-Write mode (`rw` - direct access).
+4. **Memory Optimization:** Select between 256 MB or 512 MB in-RAM compressed ZRAM pools, and optionally create a 512 MB or 1 GB SD card swapfile (`/mnt/ux0/swapfile`) to eliminate Out-Of-Memory (OOM) crashes.
+5. **Alpine Linux Storage Container:** Guided creation of your persistent ext4 `alpine.img` container on SD2Vita (`/mnt/ux0`) or internal storage (`/mnt/ur0`) with automatic free space verification.
+6. **Graphical Desktop & Boot Preferences:** Check for IceWM desktop packages, prompt to download and install packages over Wi-Fi, and configure whether the console boots directly to the IceWM desktop or to the fast text console shell.
+
+> [!TIP]
+> You can safely exit or skip the wizard at any time by pressing **s**. You can re-run `vita-setup` whenever you want to reconfigure your console.
+
+---
+
+### 2. On-Device Wi-Fi Manager (`vita-wifi`)
 Connect to wireless networks directly on your console without manually creating configuration files on a PC.
 
 #### Interactive Menu:
@@ -198,7 +226,7 @@ vita-wifi on     # Turn the radio back on and reconnect
 
 ---
 
-### 2. Screen Brightness Control (`vita-brightness`)
+### 3. Screen Brightness Control (`vita-brightness`)
 Displays automatically boot to 100% full brightness across all models.
 
 ```bash
@@ -214,7 +242,7 @@ vita-brightness max        # Jump directly to 100% full brightness
 
 ---
 
-### 3. Memory Expansion & Swap (`vita-swap`)
+### 4. Memory Expansion & Swap (`vita-swap`)
 The PlayStation Vita hardware has 512 MB of physical RAM. While sufficient for basic tasks, running modern software, compiling C programs, installing large packages, or running Python scripts can exhaust memory and trigger the Linux Out-Of-Memory (OOM) killer.
 
 To solve this, LinuxOnVita incorporates two layers of virtual memory management:
@@ -253,7 +281,7 @@ vita-swap remove    # Deactivate and delete swapfile to free disk space
 
 ---
 
-### 4. Framebuffer DOOM (`vita-doom`)
+### 5. Framebuffer DOOM (`vita-doom`)
 LinuxOnVita includes a native, pure-C implementation of classic DOOM running directly on the Linux framebuffer device (`/dev/fb0`).
 
 #### Setup:
@@ -293,7 +321,7 @@ By default, `vita-doom` automatically scales to fill 100% of the PlayStation Vit
 
 ---
 
-### 5. Hardware & System Diagnostics (`vita-diagnostics` / `vita-diag`)
+### 6. Hardware & System Diagnostics (`vita-diagnostics` / `vita-diag`)
 When encountering issues like Wi-Fi failing to connect or an SD card not mounting, `vita-diagnostics` automates the entire debugging and log collection process. It probes hardware devices, verifies drivers and firmware, tests partition filesystems, queries Wi-Fi association state, redacts sensitive passwords for privacy, and saves a comprehensive report to accessible storage.
 
 #### Running Diagnostics:
@@ -341,7 +369,7 @@ vita-diagnostics --view    # View the most recent report on the terminal
 
 ---
 
-### 6. Remote SSH & Wireless Terminal
+### 7. Remote SSH & Wireless Terminal
 Once connected to Wi-Fi, LinuxOnVita automatically starts an OpenSSH server and broadcasts mDNS hostname `vita.local`.
 
 From any computer, tablet, or phone on the same Wi-Fi network:
@@ -354,7 +382,7 @@ Logging in via SSH gives you a full-sized desktop terminal, making it comfortabl
 
 ---
 
-### 7. Rebooting & Powering Down
+### 8. Rebooting & Powering Down
 * **Reboot straight to Sony VitaOS:**
   ```bash
   reboot
@@ -368,7 +396,7 @@ Logging in via SSH gives you a full-sized desktop terminal, making it comfortabl
 
 ---
 
-### 8. Virtual Network Tunnels & Mesh VPNs (`CONFIG_TUN`, WireGuard & `vita-tun`)
+### 9. Virtual Network Tunnels & Mesh VPNs (`CONFIG_TUN`, WireGuard & `vita-tun`)
 
 LinuxOnVita includes built-in kernel support for virtual network tunnels and VPN protocols without requiring external out-of-tree kernel modules.
 
@@ -415,7 +443,7 @@ Inside the Alpine container (`alpine-chroot`), you can install and run modern me
 
 ---
 
-### 9. Hardware Power & CPU Frequency Control (`vita-cpu` / `vita-power`)
+### 10. Hardware Power & CPU Frequency Control (`vita-cpu` / `vita-power`)
 LinuxOnVita includes hardware power management and dynamic CPU frequency scaling for the PlayStation Vita's quad-core ARM Cortex-A9 MPCore processor. You can switch between maximum performance for compilation and desktop responsiveness, balanced standard operation, dynamic load-based scaling, or deep powersave mode for background tasks and long battery life.
 
 #### Hardware Operating Points:
@@ -460,7 +488,7 @@ When running the graphical desktop (`alpine-desktop`):
 
 ---
 
-### 10. Display Sleep, Auto-Dimming & Power Management (`vita-powerd`)
+### 11. Display Sleep, Auto-Dimming & Power Management (`vita-powerd`)
 To protect OLED and LCD panels against image retention, preserve battery longevity, and provide standard handheld power button behavior, LinuxOnVita features a native background power management daemon: `vita-powerd`.
 
 #### Automated Inactivity Timers:

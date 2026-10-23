@@ -37,8 +37,10 @@ if [ -t 0 ]; then
     fi
     echo ""
     echo "   Useful Commands:"
+    echo "     - vita-setup       : Initial setup wizard (Wi-Fi, storage, memory, desktop)"
     echo "     - vita-wifi        : Scan, connect, and manage Wi-Fi networks"
     echo "     - vita-storage     : Manage storage write protection (ro / rw)"
+    echo "     - vita-cpu         : Power profiles & CPU clocks (444, 333, 111 MHz)"
     echo "     - vita-autostart   : Configure direct boot into desktop (on / off)"
     echo "     - vita-diagnostics : Gather logs & troubleshoot Wi-Fi / SD cards"
     echo "     - alpine-desktop   : Launch IceWM graphical desktop with mouse emulation"

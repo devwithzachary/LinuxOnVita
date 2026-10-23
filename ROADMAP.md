@@ -84,17 +84,6 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
   * **Memory Optimization:** Automatic configuration of ZRAM RAM compression and swapfile sizing tailored to the available storage.
   * **Diagnostic Baseline:** Automated hardware verification confirming screen, network, and storage health.
 
-* **Handheld Control Center TUI (`vita-config`):**
-  * Unified interactive console menu utility (inspired by `raspi-config` on Raspberry Pi):
-    * **Network:** Scan and connect to Wi-Fi networks.
-    * **Display:** Adjust brightness slider and set screen blanking timeouts.
-    * **Audio:** Adjust volume levels and toggle speaker mute.
-    * **Bluetooth:** Scan, pair, and manage Bluetooth peripherals.
-    * **Input:** Switch gamepad mapper modes (Console Keypad vs Analog Mouse vs Custom).
-    * **Storage:** View partition free space, check disk health, and resize Alpine container image.
-    * **Console:** Change console font size on the fly.
-    * **Power:** Reboot directly to VitaOS LiveArea or perform full shutdown.
-
 * **High-DPI Console Font Switcher (`vita-font`):**
   * Resolves the tiny 8x16 font (120x34) issue on the 5-inch 960x544 display.
   * Bundle clean bitmap fonts into rootfs (Terminus 12x24 and 16x32).
@@ -118,7 +107,7 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
 * **Web-Based Management Portal & Wireless File Transfer (`vita-webui`):**
   * Lightweight local web server running on port 80/8080 accessible via `http://vita.local:8080` or `http://<VITA_IP>:8080`.
   * **Drag-and-Drop Web File Manager:** Upload and download files, ROMs, scripts, wallpapers, and documents between any phone, tablet, or PC and the Vita storage (`/mnt/ux0/`).
-  * **Live System Telemetry Dashboard:** Real-time visual monitoring of CPU frequency, per-core load, battery percentage, RAM/ZRAM usage, and Wi-Fi signal.
+  * **Live System Telemetry Dashboard:** Real-time visual monitoring of CPU frequency, per-core load, RAM/ZRAM usage, and Wi-Fi signal.
   * **In-Browser Web Terminal (`ttyd`):** Access the Vita command prompt from a laptop or tablet browser without needing SSH keys configured.
   * **Zero-Conf Discovery:** Automatic local network discovery via mDNS / Bonjour.
 
@@ -126,6 +115,17 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
   * Kernel Bluetooth driver bringup with userspace `bluez` stack.
   * Interactive CLI and GUI pairing utilities for external Bluetooth keyboards, mice, and wireless gamepads.
   * Audio profile support for Bluetooth headphones and portable speakers.
+
+* **Handheld Control Center TUI (`vita-config`):**
+  * Unified interactive console menu utility (inspired by `raspi-config` on Raspberry Pi):
+    * **Network:** Scan and connect to Wi-Fi networks.
+    * **Display:** Adjust brightness slider and set screen blanking timeouts.
+    * **Audio:** Adjust volume levels and toggle speaker mute.
+    * **Bluetooth:** Scan, pair, and manage Bluetooth peripherals.
+    * **Input:** Switch gamepad mapper modes (Console Keypad vs Analog Mouse vs Custom).
+    * **Storage:** View partition free space, check disk health, and resize Alpine container image.
+    * **Console:** Change console font size on the fly.
+    * **Power:** Reboot directly to VitaOS LiveArea or perform full shutdown.
 
 * **Desktop Wi-Fi Manager (GUI):**
   * Intuitive network manager applet for the IceWM desktop system tray.

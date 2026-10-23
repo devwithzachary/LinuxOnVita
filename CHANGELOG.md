@@ -54,6 +54,15 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Fixed spurious "Read-only file system" error spam across the console during boot: replaced POSIX `[ -w /mnt/ux0 ]` inode mode checks with mount status inspection (`/proc/mounts`) to accurately detect read-only mounted filesystems.
   - Protected persistent storage by writing diagnostic logs to SD2Vita (`ux0:linux/boot.log`) or internal memory (`ur0:boot.log`) only when partitions are explicitly mounted read-write.
   - Redirected the 35-second asynchronous boot logging daemon to `/tmp/bootlog-daemon.log` to prevent background messages and shell redirection errors from leaking onto `/dev/tty1` and corrupting the interactive terminal prompt.
+- **Interactive First-Boot Setup Wizard (`vita-setup`):**
+  - Implemented an interactive 6-step onboarding wizard (`/usr/bin/vita-setup`) that launches automatically on first boot on `/dev/tty1` and can be re-run at any time from the command line.
+  - **Hardware Diagnostics & Health Baseline:** Verifies 4 active ARMv7 CPU cores, frequency operating points, detected display panel (OLED PCH-1000 vs LCD PCH-2000 vs PSTV), storage partition mounts (`ux0:` / `ur0:`), total RAM, active ZRAM compression pool, and Wi-Fi radio status.
+  - **Wi-Fi Wireless Networking:** Integrates on-device network scanning and connection prompts, testing DHCP lease acquisition and verifying SSH remote login connectivity (`ssh root@<IP>`).
+  - **Storage Protection Modes:** Allows users to configure default boot protection between Safe Read-Only (recommended: protects VitaOS database from power interruptions) and Read-Write (direct access), persisting preferences cleanly via `vita-storage set-default <ro|rw>` to `/mnt/ux0/linux/storage.conf` (or `ur0:`).
+  - **Memory Optimization:** Guides selection between 256 MB and 512 MB compressed ZRAM pools in RAM, and optionally formats and mounts a persistent 512 MB or 1 GB SD card swapfile (`/mnt/ux0/swapfile`) tailored to available storage.
+  - **Permanent Alpine Storage Container:** Guided creation of persistent ext4 `alpine.img` containers on SD2Vita (`/mnt/ux0`) or internal memory (`/mnt/ur0`) with automatic free storage validation, ext4 formatting, and mini-rootfs extraction.
+  - **IceWM Graphical Desktop & Boot Autostart:** Automatically checks for desktop package installation, prompts to download packages over Wi-Fi via `alpine-desktop --setup`, and configures whether the system boots directly into the IceWM graphical desktop or into the fast text console shell.
+  - **Completion State & Status Reporting:** Sets persistent `.setup_done` flags on storage, provides a summary card of all configured subsystems, and supports focused subcommands (`vita-setup --wifi`, `--storage`, `--memory`, `--alpine`, `--desktop`, `--status`, `--reset`).
 
 ### Bootstrapper & Installer App (VPK)
 - **Application Version Bump:**
