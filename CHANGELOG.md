@@ -19,6 +19,13 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Integrated with the graphical desktop (`alpine-desktop` IceWM menu and desktop settings) with touch dialog support (`vita-bluetooth gui`).
   - Added comprehensive Bluetooth controller, daemon, and kernel log diagnostics into `/usr/bin/vita-diagnostics` and first-boot baseline checks into `/usr/bin/vita-setup`.
 
+### 🧭 Shell UX & Dedicated Command Reference (`vita-help`)
+- **Streamlined Login Banner & Dedicated Help Utility:**
+  - Condensed the interactive login welcome banner (`/etc/profile.d/welcome.sh`) to a minimal 11-line card, preserving terminal viewport space on the 544p display above virtual keyboards (`fbkeyboard`).
+  - Introduced the dedicated `/usr/bin/vita-help` reference utility (symlinked to `/usr/bin/help` with shell builtin fallback) providing a comprehensive, colorized breakdown of all 14 built-in Vita Linux utilities and topic queries (e.g. `help wifi`, `help bluetooth`, `help desktop`).
+  - Added clear hardware documentation and live scan warnings explaining the Marvell 88W8787 Bluetooth 2.1/3.0 Classic architecture to clarify modern BLE-only peripheral limitations.
+
+
 ## [v1.5.0] - 2026-10-23
 
 ### Hardware & Kernel Architecture

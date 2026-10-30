@@ -172,7 +172,7 @@ You can control the terminal shell and desktop entirely with the Vita's physical
 
 ## 4. Built-In Applications & Tools
 
-LinuxOnVita comes pre-installed with dedicated console management utilities tailored specifically for the PS Vita hardware.
+LinuxOnVita comes pre-installed with dedicated console management utilities tailored specifically for the PS Vita hardware. Type `help` (or `help <command>`) in any shell to view the full categorized command reference directly on your console or via SSH.
 
 ### 1. Interactive First-Boot Setup Wizard (`vita-setup`)
 The first time you boot LinuxOnVita, the interactive **First-Boot Setup Wizard** automatically welcomes you directly on the console screen (`/dev/tty1`). It guides you through a seamless 6-step initial configuration so your console is immediately online and optimized for your storage:
