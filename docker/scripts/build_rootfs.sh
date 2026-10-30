@@ -15,6 +15,36 @@ PORT_DIR="${SRC_DIR}/vita-linux-port"
 
 mkdir -p "${SRC_DIR}" "${OUTPUT_DIR}/ux0/linux" "${ROOTFS_OVERLAY}/usr/bin"
 
+# Convert any macOS APFS / SMB XSym text files to real Unix symlinks
+if command -v python3 >/dev/null 2>&1; then
+    python3 -c '
+import os
+converted = 0
+for search_dir in ["/build/sources"]:
+    if os.path.exists(search_dir):
+        for root, dirs, files in os.walk(search_dir):
+            for f in files:
+                path = os.path.join(root, f)
+                if not os.path.islink(path):
+                    try:
+                        with open(path, "rb") as fp:
+                            header = fp.read(5)
+                        if header == b"XSym\n":
+                            with open(path, "rb") as fp:
+                                data = fp.read()
+                            lines = data.split(b"\n")
+                            target_len = int(lines[1].strip())
+                            target = lines[3][:target_len].decode("utf-8")
+                            os.remove(path)
+                            os.symlink(target, path)
+                            converted += 1
+                    except Exception:
+                        pass
+if converted > 0:
+    print(f"Restored {converted} macOS XSym text files to Unix symlinks.")
+' 2>/dev/null || true
+fi
+
 # 1. Compile native input tools (fbkeyboard & vita-input-mapper)
 echo "=== Compiling native input tools for ARMv7 ==="
 if [ -d "${TOOLS_DIR}" ]; then

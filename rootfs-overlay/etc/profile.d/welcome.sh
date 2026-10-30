@@ -41,6 +41,7 @@ if [ -t 0 ]; then
     echo "   Useful Commands:"
     echo "     - vita-setup       : Initial setup wizard (Wi-Fi, storage, memory, desktop)"
     echo "     - vita-wifi        : Scan, connect, and manage Wi-Fi networks"
+    echo "     - vita-bluetooth   : Pair & manage Bluetooth keyboards, mice, audio"
     echo "     - vita-storage     : Manage storage write protection (ro / rw)"
     echo "     - vita-cpu         : Power profiles & CPU clocks (444, 333, 111 MHz)"
     echo "     - vita-autostart   : Configure direct boot into desktop (on / off)"

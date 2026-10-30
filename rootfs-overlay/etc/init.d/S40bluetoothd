@@ -1,0 +1,133 @@
+#!/bin/sh
+# S40bluetoothd: PS Vita Bluetooth Daemon & Controller Bringup
+# Starts BlueZ 5 bluetoothd, unblocks radio, and initializes hci0
+
+DAEMON="bluetoothd"
+EXEC_PATH="/usr/libexec/bluetooth/$DAEMON"
+PIDFILE="/var/run/$DAEMON.pid"
+BLUETOOTHD_ARGS="-n -f /etc/bluetooth/main.conf -C -E"
+
+# Check for custom overrides
+[ -r "/etc/default/$DAEMON" ] && . "/etc/default/$DAEMON"
+
+start() {
+    printf "Starting %s: " "$DAEMON"
+
+    if [ ! -x "$EXEC_PATH" ]; then
+        if [ -x "/usr/lib/bluetooth/$DAEMON" ]; then
+            EXEC_PATH="/usr/lib/bluetooth/$DAEMON"
+        elif command -v "$DAEMON" >/dev/null 2>&1; then
+            EXEC_PATH=$(command -v "$DAEMON")
+        else
+            echo "FAIL (binary not found)"
+            return 1
+        fi
+    fi
+
+    # Ensure D-Bus system bus socket is available (wait up to 3 seconds)
+    for i in 1 2 3 4 5 6; do
+        [ -S "/var/run/dbus/system_bus_socket" ] && break
+        sleep 0.5
+    done
+
+    # Unblock RFKILL for Bluetooth subsystem if present
+    if command -v rfkill >/dev/null 2>&1; then
+        rfkill unblock bluetooth >/dev/null 2>&1 || true
+    fi
+    for rfk in /sys/class/rfkill/rfkill*; do
+        if [ -d "$rfk" ] && [ -f "$rfk/type" ]; then
+            if [ "$(cat "$rfk/type" 2>/dev/null)" = "bluetooth" ]; then
+                echo 0 > "$rfk/soft" 2>/dev/null || true
+            fi
+        fi
+    done
+
+    # Start bluetoothd daemon
+    start-stop-daemon --start --background --make-pidfile \
+        --pidfile "$PIDFILE" --exec "$EXEC_PATH" \
+        -- $BLUETOOTHD_ARGS
+    status=$?
+
+    if [ "$status" -eq 0 ]; then
+        echo "OK"
+        # Asynchronously wait for hci0 controller to appear and power on
+        (
+            for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+                if [ -d "/sys/class/bluetooth/hci0" ] || hciconfig hci0 >/dev/null 2>&1; then
+                    sleep 0.5
+                    hciconfig hci0 up >/dev/null 2>&1 || true
+                    hciconfig hci0 piscan >/dev/null 2>&1 || true
+                    if command -v bluetoothctl >/dev/null 2>&1; then
+                        bluetoothctl power on >/dev/null 2>&1 || true
+                        bluetoothctl pairable on >/dev/null 2>&1 || true
+                        bluetoothctl discoverable on >/dev/null 2>&1 || true
+                    fi
+                    break
+                fi
+                sleep 0.5
+            done
+        ) &
+    else
+        echo "FAIL"
+    fi
+    return "$status"
+}
+
+stop() {
+    printf "Stopping %s: " "$DAEMON"
+    start-stop-daemon --stop --quiet --pidfile "$PIDFILE" \
+        --exec "$EXEC_PATH" 2>/dev/null
+    status=$?
+    if [ "$status" -eq 0 ]; then
+        echo "OK"
+    else
+        # Fallback to killall if pidfile mismatch
+        killall -q "$DAEMON" 2>/dev/null || true
+        echo "OK"
+    fi
+    rm -f "$PIDFILE"
+    return 0
+}
+
+restart() {
+    stop
+    sleep 1
+    start
+}
+
+status() {
+    if pidof "$DAEMON" >/dev/null 2>&1; then
+        echo "$DAEMON is running (PID: $(pidof "$DAEMON"))"
+        if [ -d "/sys/class/bluetooth/hci0" ]; then
+            echo "Bluetooth controller hci0 is active."
+        else
+            echo "Bluetooth controller hci0 not detected yet."
+        fi
+        return 0
+    else
+        echo "$DAEMON is stopped."
+        return 1
+    fi
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart|reload)
+        restart
+        ;;
+    status)
+        status
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+        ;;
+esac
+
+exit $?
+

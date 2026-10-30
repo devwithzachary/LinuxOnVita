@@ -216,6 +216,14 @@ step_diagnostics() {
         wifi_ip=$(ip -4 addr show wlan0 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2 || true)
     fi
 
+    # Bluetooth Controller Check
+    local bt_status="Not Detected"
+    if [ -d /sys/class/bluetooth/hci0 ] || hciconfig hci0 >/dev/null 2>&1; then
+        bt_status="Marvell 88W8787 (hci0 ready)"
+    elif pidof bluetoothd >/dev/null 2>&1; then
+        bt_status="Active (bluetoothd)"
+    fi
+
     printf "  %-18s : %s\n" "SoC / Processor" "ARMv7 Cortex-A9 Quad-Core (${cpu_cores} cores active @ ${cur_freq})"
     printf "  %-18s : %s\n" "Display Screen"  "960x544 ${panel_type}"
     printf "  %-18s : %s\n" "Memory (RAM)"    "${mem_total} RAM (${mem_avail:-good})"
@@ -227,6 +235,7 @@ step_diagnostics() {
     else
         printf "  %-18s : %s\n" "Wi-Fi Radio"     "${wifi_status} (Disconnected)"
     fi
+    printf "  %-18s : %s\n" "Bluetooth Radio" "${bt_status}"
 
     echo ""
     printf "${C_GREEN}[OK] Hardware baseline verified.${C_RESET}\n"

@@ -3,6 +3,22 @@
 All notable changes to LinuxOnVita are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) conventions.
 
+## [v1.6.0] - 2026-10-30
+
+### 📡 Wireless Freedom, Bluetooth & Peripherals
+- **Hardware Bluetooth Subsystem Enablement (`btmrvl_sdio` & `bluez`):**
+  - Activated the Marvell 88W8787 SDIO combo Bluetooth driver (`CONFIG_BT_MRVL=y` and `CONFIG_BT_MRVL_SDIO=y`) in the Linux 6.12 kernel configuration (`vita_defconfig`), operating concurrently alongside the `mwifiex` Wi-Fi driver on SDIF2.
+  - Enabled kernel Userspace HID (`CONFIG_UHID=y`), Bluetooth Low Energy (`CONFIG_BT_LE=y`), Bluetooth Virtual HCI (`CONFIG_BT_HCIVHCI=y`), and RF switch support (`CONFIG_RFKILL=y` and `CONFIG_RFKILL_INPUT=y`) to support modern BLE and classic Bluetooth peripherals.
+  - Deployed optimized BlueZ 5 daemon configuration (`/etc/bluetooth/main.conf` and `/etc/bluetooth/input.conf`) with userspace HID input handling, automatic adapter bringup (`AutoEnable=true`), fast connectability, and battery status reporting.
+  - Implemented `/etc/init.d/S40bluetoothd` sysvinit service to start `bluetoothd` safely after D-Bus, unblock RFKILL, bring up the `hci0` interface, and configure default security agents.
+- **Handheld Bluetooth Peripheral & Audio Manager (`vita-bluetooth`):**
+  - Created a turnkey console management utility `/usr/bin/vita-bluetooth` featuring both an interactive handheld TUI menu and direct scriptable subcommands (`status`, `on`, `off`, `scan`, `pair`, `connect`, `disconnect`, `remove`, `audio`, `gui`).
+  - Added intelligent device categorization with custom badges for wireless keyboards, mice, gamepads (DualShock 4, DualSense, Xbox, 8BitDo), audio headsets, and host PCs.
+  - Streamlined one-touch peripheral pairing: scans nearby devices, displays a numbered table with MAC and signal strength, and pairs, trusts, and connects in a single step.
+  - Added Bluetooth audio profile routing (`vita-bluetooth audio`), integrating with PipeWire / ALSA for wireless headphones, earbuds, and portable speakers.
+  - Integrated with the graphical desktop (`alpine-desktop` IceWM menu and desktop settings) with touch dialog support (`vita-bluetooth gui`).
+  - Added comprehensive Bluetooth controller, daemon, and kernel log diagnostics into `/usr/bin/vita-diagnostics` and first-boot baseline checks into `/usr/bin/vita-setup`.
+
 ## [v1.5.0] - 2026-10-23
 
 ### Hardware & Kernel Architecture

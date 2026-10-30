@@ -1,0 +1,1002 @@
+#!/bin/sh
+# vita-bluetooth: PS Vita Bluetooth Peripheral & Audio Manager
+# PlayStation Vita Linux 6.12
+#
+# Enables scanning, pairing, and managing Bluetooth peripherals
+# (keyboards, mice, gamepads, headsets, and portable speakers)
+# directly from the PS Vita handheld console.
+#
+# Commands:
+#   vita-bluetooth status                 - Show Bluetooth adapter & connection status
+#   vita-bluetooth on                     - Power on Bluetooth radio
+#   vita-bluetooth off                    - Power off Bluetooth radio (save battery)
+#   vita-bluetooth scan [seconds]         - Scan for nearby discoverable devices
+#   vita-bluetooth pair [MAC]             - Pair, trust, and connect to a device
+#   vita-bluetooth connect [MAC]          - Connect to a paired device
+#   vita-bluetooth disconnect [MAC]       - Disconnect an active device
+#   vita-bluetooth remove [MAC]           - Unpair and remove a stored device
+#   vita-bluetooth audio                  - Manage Bluetooth audio peripherals
+#   vita-bluetooth gui                    - Graphical touch dialog (X11 desktop)
+#   vita-bluetooth (no args)              - Interactive handheld TUI menu
+
+set -e
+export PATH="/usr/libexec/bluetooth:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+
+# ANSI Colors
+if [ -t 1 ]; then
+    C_RESET="\033[0m"
+    C_BOLD="\033[1m"
+    C_DIM="\033[2m"
+    C_CYAN="\033[1;36m"
+    C_GREEN="\033[1;32m"
+    C_YELLOW="\033[1;33m"
+    C_RED="\033[1;31m"
+    C_BLUE="\033[1;34m"
+    C_MAGENTA="\033[1;35m"
+else
+    C_RESET=""
+    C_BOLD=""
+    C_DIM=""
+    C_CYAN=""
+    C_GREEN=""
+    C_YELLOW=""
+    C_RED=""
+    C_BLUE=""
+    C_MAGENTA=""
+fi
+
+ensure_bluetoothd() {
+    if ! pidof bluetoothd >/dev/null 2>&1; then
+        echo -e "${C_YELLOW}[*] Starting Bluetooth daemon (bluetoothd)...${C_RESET}"
+        if [ -x "/etc/init.d/S40bluetoothd" ]; then
+            /etc/init.d/S40bluetoothd start >/dev/null 2>&1 || true
+        else
+            rfkill unblock bluetooth >/dev/null 2>&1 || true
+            /usr/libexec/bluetooth/bluetoothd -n &
+        fi
+        sleep 1
+    fi
+
+    if ! command -v bluetoothctl >/dev/null 2>&1; then
+        echo -e "${C_RED}[!] Error: bluetoothctl utility not found in system.${C_RESET}" >&2
+        return 1
+    fi
+    return 0
+}
+
+get_adapter_mac() {
+    bluetoothctl show 2>/dev/null | grep "^Controller" | awk '{print $2}' | head -n 1
+}
+
+is_adapter_powered() {
+    local pwr
+    pwr=$(bluetoothctl show 2>/dev/null | grep "Powered:" | awk '{print $2}')
+    [ "$pwr" = "yes" ] && return 0
+    return 1
+}
+
+classify_device() {
+    local mac="$1"
+    local passed_name="${2:-}"
+    local info
+    info=$(bluetoothctl info "$mac" 2>/dev/null || true)
+    local icon
+    icon=$(echo "$info" | grep "Icon:" | awk '{print $2}' || true)
+    local class
+    class=$(echo "$info" | grep "Class:" | awk '{print $2}' || true)
+    local name
+    name=$(echo "$info" | grep "Name:" | cut -d' ' -f2- || true)
+    [ -z "$name" ] && name="$passed_name"
+
+    case "$icon" in
+        *keyboard*)
+            echo "Keyboard"
+            return
+            ;;
+        *mouse*)
+            echo "Mouse"
+            return
+            ;;
+        *gamepad*|*gaming*)
+            echo "Gamepad"
+            return
+            ;;
+        *audio*|*headset*|*headphone*)
+            echo "Audio"
+            return
+            ;;
+    esac
+
+    case "$name" in
+        *[Kk]eyboard*|*[Kk]eys*)
+            echo "Keyboard"
+            return
+            ;;
+        *[Mm]ouse*|*[Tt]rackpad*)
+            echo "Mouse"
+            return
+            ;;
+        *[Cc]ontroller*|*[Gg]amepad*|*DualShock*|*DualSense*|*Xbox*|*8BitDo*)
+            echo "Gamepad"
+            return
+            ;;
+        *[Hh]eadset*|*[Hh]eadphone*|*[Ee]arbuds*|*[Ss]peaker*|*AirPods*)
+            echo "Audio"
+            return
+            ;;
+    esac
+
+    case "$class" in
+        0x002540|0x000540)
+            echo "Keyboard"
+            return
+            ;;
+        0x002580|0x000580)
+            echo "Mouse"
+            return
+            ;;
+        0x002508|0x000508|0x000504)
+            echo "Gamepad"
+            return
+            ;;
+        0x0024*|0x0004*)
+            echo "Audio"
+            return
+            ;;
+    esac
+
+    echo "Peripheral"
+}
+
+cmd_status() {
+    ensure_bluetoothd || return 1
+
+    local adapter_mac
+    adapter_mac=$(get_adapter_mac)
+
+    echo "================================================================================"
+    echo -e "${C_CYAN}${C_BOLD}PlayStation Vita - Bluetooth Subsystem Status${C_RESET}"
+    echo "================================================================================"
+
+    if [ -z "$adapter_mac" ]; then
+        echo -e "${C_RED}[!] No Bluetooth controller detected (hci0 missing).${C_RESET}"
+        echo "    Ensure kernel btmrvl_sdio driver is enabled and firmware is loaded."
+        echo "================================================================================"
+        return 1
+    fi
+
+    local pwr="OFF"
+    local disc="no"
+    local pairable="no"
+    if is_adapter_powered; then
+        pwr="${C_GREEN}ON${C_RESET}"
+        # Ensure pairable mode is synchronized
+        pairable=$(bluetoothctl show 2>/dev/null | grep "Pairable:" | awk '{print $2}' || echo "no")
+        if [ "$pairable" != "yes" ]; then
+            bluetoothctl pairable on >/dev/null 2>&1 || true
+            pairable=$(bluetoothctl show 2>/dev/null | grep "Pairable:" | awk '{print $2}' || echo "no")
+        fi
+        disc=$(bluetoothctl show 2>/dev/null | grep "Discoverable:" | awk '{print $2}' || echo "no")
+    else
+        pwr="${C_YELLOW}OFF${C_RESET}"
+    fi
+
+    local alias
+    alias=$(bluetoothctl show 2>/dev/null | grep "Alias:" | cut -d' ' -f2- || echo "PS Vita")
+
+    echo -e " Controller : ${C_BOLD}${adapter_mac}${C_RESET} (${alias})"
+    echo -e " Hardware   : ${C_DIM}Marvell 88W8787 (Bluetooth 2.1/3.0 Classic - BLE-only devices unsupported)${C_RESET}"
+    echo -e " Radio Power: ${pwr} | Discoverable: ${disc} | Pairable: ${pairable}"
+    echo "--------------------------------------------------------------------------------"
+
+    echo -e "${C_BOLD}Active Connections:${C_RESET}"
+    local connected_count=0
+    local devs
+    devs=$(bluetoothctl devices 2>/dev/null || true)
+
+    if [ -n "$devs" ]; then
+        echo "$devs" | while read -r _ dmac dname; do
+            [ -z "$dmac" ] && continue
+            local dinfo
+            dinfo=$(bluetoothctl info "$dmac" 2>/dev/null || true)
+            local is_conn
+            is_conn=$(echo "$dinfo" | grep "Connected:" | awk '{print $2}')
+            if [ "$is_conn" = "yes" ]; then
+                local dtype
+                dtype=$(classify_device "$dmac")
+                local batt
+                batt=$(echo "$dinfo" | grep "Battery Percentage:" | awk '{print $4}' | tr -d '()' || true)
+                local batt_str=""
+                [ -n "$batt" ] && batt_str=" [Battery: ${batt}%]"
+
+                echo -e "  * ${C_GREEN}${dname}${C_RESET} (${dmac}) [${dtype}]${batt_str}"
+                connected_count=$((connected_count + 1))
+            fi
+        done
+    fi
+
+    if ! is_adapter_powered; then
+        echo -e "  ${C_DIM}(Radio is powered off. Run 'vita-bluetooth on' to activate)${C_RESET}"
+    elif [ "$connected_count" -eq 0 ] 2>/dev/null; then
+        echo -e "  ${C_DIM}(No active peripheral connections)${C_RESET}"
+    fi
+
+    echo "--------------------------------------------------------------------------------"
+    echo -e "${C_BOLD}Paired Peripherals:${C_RESET}"
+    local paired_devs
+    paired_devs=$(bluetoothctl devices Paired 2>/dev/null || true)
+    if [ -n "$paired_devs" ]; then
+        echo "$paired_devs" | while read -r _ pmac pname; do
+            [ -z "$pmac" ] && continue
+            local ptype
+            ptype=$(classify_device "$pmac")
+            local pconn
+            pconn=$(bluetoothctl info "$pmac" 2>/dev/null | grep "Connected:" | awk '{print $2}')
+            local cstatus="${C_DIM}[Disconnected]${C_RESET}"
+            [ "$pconn" = "yes" ] && cstatus="${C_GREEN}[Connected]${C_RESET}"
+            echo -e "  - ${pname} (${pmac}) [${ptype}] ${cstatus}"
+        done
+    else
+        echo -e "  ${C_DIM}(No paired devices stored)${C_RESET}"
+    fi
+    echo "================================================================================"
+}
+
+cmd_on() {
+    ensure_bluetoothd || return 1
+    echo -e "${C_YELLOW}[*] Unblocking radio and powering on Bluetooth controller...${C_RESET}"
+    rfkill unblock bluetooth >/dev/null 2>&1 || true
+    for rfk in /sys/class/rfkill/rfkill*; do
+        if [ -d "$rfk" ] && [ -f "$rfk/type" ]; then
+            if [ "$(cat "$rfk/type" 2>/dev/null)" = "bluetooth" ]; then
+                echo 0 > "$rfk/soft" 2>/dev/null || true
+            fi
+        fi
+    done
+
+    bluetoothctl power on >/dev/null 2>&1 || true
+    sleep 1
+
+    if is_adapter_powered; then
+        bluetoothctl pairable on >/dev/null 2>&1 || true
+        bluetoothctl discoverable on >/dev/null 2>&1 || true
+        echo -e "${C_GREEN}[OK] Bluetooth controller powered ON (Pairable: yes, Discoverable: yes).${C_RESET}"
+    else
+        echo -e "${C_YELLOW}[!] Warning: Controller did not report power on. Retrying...${C_RESET}"
+        hciconfig hci0 up >/dev/null 2>&1 || true
+        bluetoothctl power on >/dev/null 2>&1 || true
+        bluetoothctl pairable on >/dev/null 2>&1 || true
+        bluetoothctl discoverable on >/dev/null 2>&1 || true
+    fi
+}
+
+cmd_discoverable() {
+    ensure_bluetoothd || return 1
+    local mode="${1:-}"
+    if [ -z "$mode" ]; then
+        local cur
+        cur=$(bluetoothctl show 2>/dev/null | grep "Discoverable:" | awk '{print $2}' || echo "no")
+        if [ "$cur" = "yes" ]; then
+            mode="off"
+        else
+            mode="on"
+        fi
+    fi
+
+    case "$mode" in
+        on|yes|1)
+            bluetoothctl discoverable on >/dev/null 2>&1 || true
+            echo -e "${C_GREEN}[OK] Discoverable mode enabled (Vita is visible to nearby devices).${C_RESET}"
+            ;;
+        off|no|0)
+            bluetoothctl discoverable off >/dev/null 2>&1 || true
+            echo -e "${C_YELLOW}[OK] Discoverable mode disabled (Vita is hidden).${C_RESET}"
+            ;;
+        *)
+            echo "Usage: vita-bluetooth discoverable [on|off]"
+            return 1
+            ;;
+    esac
+}
+
+cmd_pairable() {
+    ensure_bluetoothd || return 1
+    local mode="${1:-}"
+    if [ -z "$mode" ]; then
+        local cur
+        cur=$(bluetoothctl show 2>/dev/null | grep "Pairable:" | awk '{print $2}' || echo "no")
+        if [ "$cur" = "yes" ]; then
+            mode="off"
+        else
+            mode="on"
+        fi
+    fi
+
+    case "$mode" in
+        on|yes|1)
+            bluetoothctl pairable on >/dev/null 2>&1 || true
+            echo -e "${C_GREEN}[OK] Pairable mode enabled (accepts incoming peripheral pairing).${C_RESET}"
+            ;;
+        off|no|0)
+            bluetoothctl pairable off >/dev/null 2>&1 || true
+            echo -e "${C_YELLOW}[OK] Pairable mode disabled.${C_RESET}"
+            ;;
+        *)
+            echo "Usage: vita-bluetooth pairable [on|off]"
+            return 1
+            ;;
+    esac
+}
+
+cmd_off() {
+    ensure_bluetoothd || return 1
+    echo -e "${C_YELLOW}[*] Powering off Bluetooth radio to conserve battery...${C_RESET}"
+    bluetoothctl power off >/dev/null 2>&1 || true
+    hciconfig hci0 down >/dev/null 2>&1 || true
+    rfkill block bluetooth >/dev/null 2>&1 || true
+    echo -e "${C_GREEN}[OK] Bluetooth radio is OFF.${C_RESET}"
+}
+
+cmd_scan() {
+    ensure_bluetoothd || return 1
+    if ! is_adapter_powered; then
+        cmd_on
+    fi
+
+    local duration="${1:-8}"
+    echo "================================================================================"
+    echo -e "${C_CYAN}${C_BOLD}Scanning for Nearby Bluetooth Peripherals (${duration}s)...${C_RESET}"
+    echo "Put your keyboard, mouse, gamepad, or headphones into pairing mode now."
+    echo -e "${C_YELLOW}[i] Note: Vita supports BT 2.1/3.0 Classic. BLE-only devices are not detected.${C_RESET}"
+    echo "================================================================================"
+
+    local scan_tmp="/tmp/bt_scan_$$.log"
+    rm -f "$scan_tmp"
+
+    # Start non-interactive scan in background with timeout, redirecting stdout/stderr to scan_tmp
+    bluetoothctl --timeout "$duration" scan on > "$scan_tmp" 2>&1 &
+    local scan_pid=$!
+
+    # Trap Ctrl+C to stop scanning early and display whatever was found
+    trap 'kill "$scan_pid" 2>/dev/null || true' INT
+
+    local elapsed=0
+    local found_count=0
+    while kill -0 "$scan_pid" 2>/dev/null; do
+        found_count=$(grep -c "Device [0-9A-Fa-f:]\{17\}" "$scan_tmp" 2>/dev/null || echo 0)
+        printf "\r  Scanning... [%ds / %ds] (%d devices found) (Press Ctrl+C to stop)" "$elapsed" "$duration" "$found_count"
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+    wait "$scan_pid" 2>/dev/null || true
+    trap - INT
+
+    printf "\rScan completed (%ds). Parsing discovered devices...                       \n\n" "$elapsed"
+
+    # Extract all discovered devices from scan output + any existing known devices
+    local parsed_devs
+    parsed_devs=$(
+        {
+            cat "$scan_tmp" 2>/dev/null
+            bluetoothctl devices 2>/dev/null
+        } | awk '
+        /Device [0-9A-Fa-f:]{17}/ {
+            for (i = 1; i <= NF; i++) {
+                if ($i ~ /^[0-9A-Fa-f:]{17}$/) {
+                    mac = $i
+                    if ($(i+1) == "Name:") {
+                        name = ""
+                        for (j = i + 2; j <= NF; j++) name = (name == "" ? $j : name " " $j)
+                        dev_name[mac] = name
+                    } else if (dev_name[mac] == "" || dev_name[mac] == mac) {
+                        name = ""
+                        for (j = i + 1; j <= NF; j++) {
+                            if ($j !~ /^(RSSI:|TxPower:|Connected:|ManufacturerData)/) {
+                                name = (name == "" ? $j : name " " $j)
+                            } else {
+                                break
+                            }
+                        }
+                        if (name != "") dev_name[mac] = name
+                    }
+                    if (!seen[mac]++) {
+                        order[++count] = mac
+                    }
+                }
+            }
+        }
+        END {
+            for (k = 1; k <= count; k++) {
+                m = order[k]
+                n = dev_name[m]
+                if (n == "") n = "Unknown Device"
+                print m "\t" n
+            }
+        }
+        '
+    )
+    rm -f "$scan_tmp"
+
+    if [ -z "$parsed_devs" ]; then
+        echo -e "${C_YELLOW}[!] No Bluetooth devices found nearby.${C_RESET}"
+        echo "    * Ensure peripheral pairing mode is active (blinking pairing LED)."
+        echo "    * Check that device supports Bluetooth Classic / 2.1 / 3.0 (BR/EDR)."
+        echo "    * Note: Pure BLE-only devices (e.g. Logitech MX Master 3S) lack Classic"
+        echo "      radios and cannot be detected by the Vita's Marvell 88W8787 hardware."
+        echo "    * Try moving the peripheral closer or run 'vita-bluetooth scan 15'."
+        return 0
+    fi
+
+    echo -e "${C_BOLD}Discovered Devices:${C_RESET}"
+    echo "--------------------------------------------------------------------------------"
+    printf "%-4s %-18s %-14s %s\n" "Num" "MAC Address" "Category" "Device Name"
+    echo "--------------------------------------------------------------------------------"
+
+    local count=0
+    local target_macs=""
+    local old_ifs="$IFS"
+    IFS='
+'
+    for line in $parsed_devs; do
+        [ -z "$line" ] && continue
+        local mac
+        mac=$(echo "$line" | cut -f1)
+        local name
+        name=$(echo "$line" | cut -f2-)
+        [ -z "$mac" ] && continue
+
+        count=$((count + 1))
+        local dtype
+        dtype=$(classify_device "$mac" "$name")
+
+        printf " [%d] %-18s %-14s %s\n" "$count" "$mac" "$dtype" "$name"
+        target_macs="${target_macs}${count}:${mac} "
+    done
+    IFS="$old_ifs"
+    echo "--------------------------------------------------------------------------------"
+
+    if [ -t 0 ] && [ "$count" -gt 0 ]; then
+        printf "Enter device number to pair [1-%d], or press [Enter] to return: " "$count"
+        read -r choice
+        if [ -n "$choice" ]; then
+            for entry in $target_macs; do
+                local num="${entry%%:*}"
+                local sel_mac="${entry#*:}"
+                if [ "$choice" = "$num" ]; then
+                    echo ""
+                    cmd_pair "$sel_mac"
+                    return 0
+                fi
+            done
+            echo "Invalid selection."
+        fi
+    fi
+}
+
+cmd_pair() {
+    ensure_bluetoothd || return 1
+    local mac="$1"
+
+    if [ -z "$mac" ]; then
+        echo "Error: Device MAC address required."
+        echo "Usage: vita-bluetooth pair <MAC>"
+        return 1
+    fi
+
+    if ! is_adapter_powered; then
+        cmd_on
+    fi
+
+    local dev_name
+    dev_name=$(bluetoothctl info "$mac" 2>/dev/null | grep "Name:" | cut -d' ' -f2- || echo "$mac")
+    [ -z "$dev_name" ] && dev_name="$mac"
+
+    echo "================================================================================"
+    echo -e "${C_CYAN}${C_BOLD}Pairing with Peripheral: ${dev_name} (${mac})${C_RESET}"
+    echo "================================================================================"
+
+    echo -e "[*] Initiating device pairing (agent: KeyboardDisplay)..."
+    echo -e "    ${C_DIM}(If your keyboard displays or requests a PIN/passkey, follow the on-screen prompt)${C_RESET}"
+
+    if bluetoothctl --agent KeyboardDisplay pair "$mac"; then
+        echo -e "${C_GREEN}[OK] Device paired successfully.${C_RESET}"
+    else
+        echo -e "${C_YELLOW}[!] Pairing prompt completed or device already bonded.${C_RESET}"
+    fi
+
+    echo -e "[*] Setting device as trusted for automatic reconnection..."
+    bluetoothctl trust "$mac" >/dev/null 2>&1 || true
+
+    echo -e "[*] Connecting device profiles..."
+    if bluetoothctl connect "$mac"; then
+        echo -e "${C_GREEN}[OK] Connected successfully!${C_RESET}"
+        local dtype
+        dtype=$(classify_device "$mac" "$dev_name")
+        case "$dtype" in
+            Keyboard|Mouse)
+                echo -e "${C_GREEN}[i] ${dtype} active: input events mapped to /dev/input and console/desktop.${C_RESET}"
+                ;;
+            Gamepad)
+                echo -e "${C_GREEN}[i] Gamepad active: controller mapped to Linux joystick subsystem (/dev/input/js*).${C_RESET}"
+                ;;
+            Audio)
+                echo -e "${C_GREEN}[i] Audio headset connected: sound routed via PipeWire / ALSA.${C_RESET}"
+                ;;
+        esac
+    else
+        echo -e "${C_YELLOW}[!] Connection pending: Ensure peripheral is awake and within range.${C_RESET}"
+    fi
+    echo "================================================================================"
+}
+
+cmd_connect() {
+    ensure_bluetoothd || return 1
+    local mac="$1"
+
+    if [ -z "$mac" ]; then
+        local paired
+        paired=$(bluetoothctl devices Paired 2>/dev/null || true)
+        if [ -z "$paired" ]; then
+            echo -e "${C_YELLOW}[!] No paired devices found. Run 'vita-bluetooth scan' first.${C_RESET}"
+            return 1
+        fi
+
+        echo "Paired Peripherals:"
+        local count=0
+        local target_macs=""
+        local old_ifs="$IFS"
+        IFS='
+'
+        for line in $paired; do
+            local pmac
+            pmac=$(echo "$line" | awk '{print $2}')
+            local pname
+            pname=$(echo "$line" | cut -d' ' -f3-)
+            count=$((count + 1))
+            printf " [%d] %-18s %s\n" "$count" "$pmac" "$pname"
+            target_macs="${target_macs}${count}:${pmac} "
+        done
+        IFS="$old_ifs"
+
+        printf "Select device number to connect [1-%d]: " "$count"
+        read -r choice
+        for entry in $target_macs; do
+            local num="${entry%%:*}"
+            local sel_mac="${entry#*:}"
+            if [ "$choice" = "$num" ]; then
+                mac="$sel_mac"
+                break
+            fi
+        done
+    fi
+
+    if [ -z "$mac" ]; then
+        echo "No device selected."
+        return 1
+    fi
+
+    if ! is_adapter_powered; then
+        cmd_on
+    fi
+
+    echo -e "${C_YELLOW}[*] Connecting to ${mac}...${C_RESET}"
+    if bluetoothctl connect "$mac"; then
+        echo -e "${C_GREEN}[OK] Connected successfully.${C_RESET}"
+    else
+        echo -e "${C_RED}[!] Connection failed.${C_RESET}"
+        return 1
+    fi
+}
+
+cmd_disconnect() {
+    ensure_bluetoothd || return 1
+    local mac="$1"
+
+    if [ -z "$mac" ]; then
+        local devs
+        devs=$(bluetoothctl devices 2>/dev/null || true)
+        local count=0
+        local target_macs=""
+        local old_ifs="$IFS"
+        IFS='
+'
+        for line in $devs; do
+            local dmac
+            dmac=$(echo "$line" | awk '{print $2}')
+            local dname
+            dname=$(echo "$line" | cut -d' ' -f3-)
+            local is_conn
+            is_conn=$(bluetoothctl info "$dmac" 2>/dev/null | grep "Connected:" | awk '{print $2}')
+            if [ "$is_conn" = "yes" ]; then
+                count=$((count + 1))
+                printf " [%d] %-18s %s\n" "$count" "$dmac" "$dname"
+                target_macs="${target_macs}${count}:${dmac} "
+            fi
+        done
+        IFS="$old_ifs"
+
+        if [ "$count" -eq 0 ]; then
+            echo -e "${C_YELLOW}[!] No connected devices found.${C_RESET}"
+            return 0
+        fi
+
+        printf "Select device number to disconnect [1-%d]: " "$count"
+        read -r choice
+        for entry in $target_macs; do
+            local num="${entry%%:*}"
+            local sel_mac="${entry#*:}"
+            if [ "$choice" = "$num" ]; then
+                mac="$sel_mac"
+                break
+            fi
+        done
+    fi
+
+    if [ -n "$mac" ]; then
+        echo -e "${C_YELLOW}[*] Disconnecting ${mac}...${C_RESET}"
+        bluetoothctl disconnect "$mac"
+        echo -e "${C_GREEN}[OK] Disconnected.${C_RESET}"
+    fi
+}
+
+cmd_remove() {
+    ensure_bluetoothd || return 1
+    local mac="$1"
+
+    if [ -z "$mac" ]; then
+        local paired
+        paired=$(bluetoothctl devices Paired 2>/dev/null || true)
+        if [ -z "$paired" ]; then
+            echo -e "${C_YELLOW}[!] No paired devices found.${C_RESET}"
+            return 0
+        fi
+
+        echo "Paired Peripherals to Remove:"
+        local count=0
+        local target_macs=""
+        local old_ifs="$IFS"
+        IFS='
+'
+        for line in $paired; do
+            local pmac
+            pmac=$(echo "$line" | awk '{print $2}')
+            local pname
+            pname=$(echo "$line" | cut -d' ' -f3-)
+            count=$((count + 1))
+            printf " [%d] %-18s %s\n" "$count" "$pmac" "$pname"
+            target_macs="${target_macs}${count}:${pmac} "
+        done
+        IFS="$old_ifs"
+
+        printf "Select device number to remove [1-%d]: " "$count"
+        read -r choice
+        for entry in $target_macs; do
+            local num="${entry%%:*}"
+            local sel_mac="${entry#*:}"
+            if [ "$choice" = "$num" ]; then
+                mac="$sel_mac"
+                break
+            fi
+        done
+    fi
+
+    if [ -n "$mac" ]; then
+        echo -e "${C_YELLOW}[*] Removing and unpairing device ${mac}...${C_RESET}"
+        bluetoothctl untrust "$mac" >/dev/null 2>&1 || true
+        bluetoothctl remove "$mac"
+        echo -e "${C_GREEN}[OK] Device removed.${C_RESET}"
+    fi
+}
+
+cmd_audio() {
+    ensure_bluetoothd || return 1
+    echo "================================================================================"
+    echo -e "${C_CYAN}${C_BOLD}PlayStation Vita - Bluetooth Audio Profiles${C_RESET}"
+    echo "================================================================================"
+
+    local paired
+    paired=$(bluetoothctl devices Paired 2>/dev/null || true)
+    local audio_count=0
+    local target_macs=""
+
+    if [ -n "$paired" ]; then
+        local old_ifs="$IFS"
+        IFS='
+'
+        for line in $paired; do
+            local pmac
+            pmac=$(echo "$line" | awk '{print $2}')
+            local pname
+            pname=$(echo "$line" | cut -d' ' -f3-)
+            local ptype
+            ptype=$(classify_device "$pmac")
+            if [ "$ptype" = "Audio" ]; then
+                audio_count=$((audio_count + 1))
+                local pconn
+                pconn=$(bluetoothctl info "$pmac" 2>/dev/null | grep "Connected:" | awk '{print $2}')
+                local cstatus="${C_DIM}[Disconnected]${C_RESET}"
+                [ "$pconn" = "yes" ] && cstatus="${C_GREEN}[Active Output]${C_RESET}"
+                printf " [%d] %-18s %s %s\n" "$audio_count" "$pmac" "$pname" "$cstatus"
+                target_macs="${target_macs}${audio_count}:${pmac} "
+            fi
+        done
+        IFS="$old_ifs"
+    fi
+
+    if [ "$audio_count" -eq 0 ]; then
+        echo -e " ${C_DIM}No Bluetooth audio headsets or speakers paired yet.${C_RESET}"
+        echo " Put your headphones in pairing mode and run 'vita-bluetooth scan'."
+        echo "================================================================================"
+        return 0
+    fi
+
+    echo "--------------------------------------------------------------------------------"
+    printf "Enter number to toggle connection [1-%d], or press [Enter] to exit: " "$audio_count"
+    read -r choice
+    if [ -n "$choice" ]; then
+        for entry in $target_macs; do
+            local num="${entry%%:*}"
+            local sel_mac="${entry#*:}"
+            if [ "$choice" = "$num" ]; then
+                local is_conn
+                is_conn=$(bluetoothctl info "$sel_mac" 2>/dev/null | grep "Connected:" | awk '{print $2}')
+                if [ "$is_conn" = "yes" ]; then
+                    cmd_disconnect "$sel_mac"
+                else
+                    cmd_connect "$sel_mac"
+                fi
+                return 0
+            fi
+        done
+    fi
+}
+
+cmd_gui() {
+    if [ -n "$DISPLAY" ] && command -v yad >/dev/null 2>&1; then
+        local choice
+        choice=$(yad --title="PlayStation Vita Bluetooth Manager" \
+                     --window-icon="preferences-system-bluetooth" \
+                     --width=450 --height=340 --center \
+                     --text="<b>PlayStation Vita Bluetooth Control Center</b>\nManage wireless peripherals, keyboards, mice, and audio devices:" \
+                     --list --radiolist \
+                     --column="Select" --column="Action" --column="Description" \
+                     TRUE "status" "View adapter status & active connections" \
+                     FALSE "scan" "Scan and pair nearby Bluetooth devices" \
+                     FALSE "connect" "Connect to a paired peripheral" \
+                     FALSE "disconnect" "Disconnect an active device" \
+                     FALSE "audio" "Manage Bluetooth audio & headphones" \
+                     FALSE "toggle" "Toggle Bluetooth Radio (ON / OFF)" \
+                     --button="Select:0" --button="Close:1")
+        [ $? -ne 0 ] && return 0
+        local action
+        action=$(echo "$choice" | awk -F'|' '{print $2}')
+        case "$action" in
+            status)
+                sakura -e "/usr/bin/vita-bluetooth status"
+                ;;
+            scan)
+                sakura -e "/usr/bin/vita-bluetooth scan"
+                ;;
+            connect)
+                sakura -e "/usr/bin/vita-bluetooth connect"
+                ;;
+            disconnect)
+                sakura -e "/usr/bin/vita-bluetooth disconnect"
+                ;;
+            audio)
+                sakura -e "/usr/bin/vita-bluetooth audio"
+                ;;
+            toggle)
+                if is_adapter_powered; then
+                    cmd_off
+                else
+                    cmd_on
+                fi
+                ;;
+        esac
+    else
+        cmd_menu
+    fi
+}
+
+cmd_menu() {
+    while true; do
+        clear 2>/dev/null || printf '\033[2J\033[H'
+        echo "================================================================================"
+        echo -e "${C_CYAN}${C_BOLD}  PlayStation Vita - Bluetooth Peripheral Manager (vita-bluetooth)${C_RESET}"
+        echo "================================================================================"
+        local adapter_mac
+        adapter_mac=$(get_adapter_mac)
+        if [ -n "$adapter_mac" ]; then
+            local pwr_str="${C_YELLOW}Radio OFF${C_RESET}"
+            local cur_disc="no"
+            local cur_pair="no"
+            if is_adapter_powered; then
+                pwr_str="${C_GREEN}Radio ON${C_RESET}"
+                cur_disc=$(bluetoothctl show 2>/dev/null | grep "Discoverable:" | awk '{print $2}' || echo "no")
+                cur_pair=$(bluetoothctl show 2>/dev/null | grep "Pairable:" | awk '{print $2}' || echo "no")
+            fi
+            echo -e " Controller: ${C_BOLD}${adapter_mac}${C_RESET} | ${pwr_str} | Disc: ${cur_disc} | Pair: ${cur_pair}"
+            echo -e " Hardware  : ${C_DIM}Marvell 88W8787 (BT 2.1/3.0 Classic - BLE-only devices unsupported)${C_RESET}"
+        else
+            echo -e " Controller: ${C_RED}HCI Adapter Not Detected${C_RESET}"
+            echo -e " Hardware  : ${C_DIM}Marvell 88W8787 (Bluetooth 2.1/3.0 Classic)${C_RESET}"
+        fi
+        echo "--------------------------------------------------------------------------------"
+        echo " 1) Bluetooth Status & Active Connections"
+        echo " 2) Scan for Nearby Peripherals & Pair (Keyboard, Mouse, Gamepad, Audio)"
+        echo " 3) Connect to Paired Peripheral"
+        echo " 4) Disconnect Peripheral"
+        echo " 5) Unpair / Remove Stored Device"
+        echo " 6) Toggle Bluetooth Radio (Power ON / OFF)"
+        echo " 7) Toggle Discoverable Mode"
+        echo " 8) Toggle Pairable Mode"
+        echo " 9) Bluetooth Audio (Headphones & Portable Speakers)"
+        echo " 10) Interactive Shell (bluetoothctl)"
+        echo " 11) Exit"
+        echo "================================================================================"
+        printf " Select an option [1-11]: "
+        read -r choice
+        case "$choice" in
+            1)
+                echo ""
+                cmd_status
+                echo ""
+                printf "Press Enter to return to menu..."
+                read -r _
+                ;;
+            2)
+                echo ""
+                cmd_scan 8
+                echo ""
+                printf "Press Enter to return to menu..."
+                read -r _
+                ;;
+            3)
+                echo ""
+                cmd_connect ""
+                echo ""
+                printf "Press Enter to return to menu..."
+                read -r _
+                ;;
+            4)
+                echo ""
+                cmd_disconnect ""
+                echo ""
+                printf "Press Enter to return to menu..."
+                read -r _
+                ;;
+            5)
+                echo ""
+                cmd_remove ""
+                echo ""
+                printf "Press Enter to return to menu..."
+                read -r _
+                ;;
+            6)
+                echo ""
+                if is_adapter_powered; then
+                    cmd_off
+                else
+                    cmd_on
+                fi
+                echo ""
+                printf "Press Enter to return to menu..."
+                read -r _
+                ;;
+            7)
+                echo ""
+                cmd_discoverable ""
+                echo ""
+                printf "Press Enter to return to menu..."
+                read -r _
+                ;;
+            8)
+                echo ""
+                cmd_pairable ""
+                echo ""
+                printf "Press Enter to return to menu..."
+                read -r _
+                ;;
+            9)
+                echo ""
+                cmd_audio
+                echo ""
+                printf "Press Enter to return to menu..."
+                read -r _
+                ;;
+            10)
+                echo ""
+                echo -e "${C_CYAN}[*] Starting interactive bluetoothctl shell (type 'exit' to return)...${C_RESET}"
+                bluetoothctl
+                echo ""
+                printf "Press Enter to return to menu..."
+                read -r _
+                ;;
+            11|q|Q)
+                echo "Exiting."
+                break
+                ;;
+            *)
+                echo "Invalid option."
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+case "${1:-}" in
+    status)
+        cmd_status
+        ;;
+    on|enable|start)
+        cmd_on
+        ;;
+    off|disable|stop)
+        cmd_off
+        ;;
+    discoverable)
+        cmd_discoverable "${2:-}"
+        ;;
+    pairable)
+        cmd_pairable "${2:-}"
+        ;;
+    scan)
+        cmd_scan "${2:-8}"
+        ;;
+    pair)
+        cmd_pair "${2:-}"
+        ;;
+    connect)
+        cmd_connect "${2:-}"
+        ;;
+    disconnect)
+        cmd_disconnect "${2:-}"
+        ;;
+    remove|unpair)
+        cmd_remove "${2:-}"
+        ;;
+    audio)
+        cmd_audio
+        ;;
+    ctl|cli|shell)
+        bluetoothctl
+        ;;
+    gui)
+        cmd_gui
+        ;;
+    help|-h|--help)
+        echo "PlayStation Vita Bluetooth Manager (vita-bluetooth)"
+        echo ""
+        echo "Usage: vita-bluetooth [command]"
+        echo ""
+        echo "Commands:"
+        echo "  status                  Show Bluetooth adapter and peripheral status"
+        echo "  on                      Power on Bluetooth radio"
+        echo "  off                     Power off Bluetooth radio (save battery)"
+        echo "  discoverable [on/off]   Set or toggle discoverable visibility"
+        echo "  pairable [on/off]       Set or toggle incoming pairing acceptance"
+        echo "  scan [duration]         Scan for nearby discoverable peripherals"
+        echo "  pair <MAC>              Pair, trust, and connect to a device"
+        echo "  connect [MAC]           Connect to a previously paired device"
+        echo "  disconnect [MAC]        Disconnect an active peripheral"
+        echo "  remove [MAC]            Unpair and delete a stored device"
+        echo "  audio                   Manage Bluetooth audio headphones and speakers"
+        echo "  ctl                     Open interactive bluetoothctl shell"
+        echo "  gui                     Open graphical GTK manager (X11 desktop)"
+        echo "  (no args)               Interactive handheld console menu"
+        echo ""
+        echo "Hardware Compatibility Note:"
+        echo "  PlayStation Vita uses the Marvell 88W8787 chip (Bluetooth 2.1/3.0 Classic)."
+        echo "  Compatible with Bluetooth Classic / dual-mode devices (keyboards, mice, audio)."
+        echo "  Pure BLE-only peripherals (e.g. Logitech MX Master 3S) are not supported."
+        ;;
+    *)
+        if [ -n "$DISPLAY" ] && [ "${1:-}" = "gui" ]; then
+            cmd_gui
+        else
+            cmd_menu
+        fi
+        ;;
+esac
+

@@ -14,6 +14,7 @@ Welcome to the comprehensive user guide for **LinuxOnVita**. This guide is desig
 4. [Built-In Applications & Tools](#4-built-in-applications--tools)
    - [Interactive First-Boot Setup Wizard (`vita-setup`)](#1-interactive-first-boot-setup-wizard-vita-setup)
    - [On-Device Wi-Fi Manager (`vita-wifi`)](#2-on-device-wi-fi-manager-vita-wifi)
+   - [Bluetooth Peripheral & Audio Manager (`vita-bluetooth`)](#bluetooth-peripheral--audio-manager-vita-bluetooth)
    - [Screen Brightness Control (`vita-brightness`)](#3-screen-brightness-control-vita-brightness)
    - [Memory Expansion & Swap (`vita-swap`)](#4-memory-expansion--swap-vita-swap)
    - [Framebuffer DOOM (`vita-doom`)](#5-framebuffer-doom-vita-doom)
@@ -231,6 +232,63 @@ Displays your active interface (`mlan0`), SSID, MAC address, assigned IP, BSSID,
 ```bash
 vita-wifi off    # Turn off the Wi-Fi radio to save battery
 vita-wifi on     # Turn the radio back on and reconnect
+```
+
+---
+
+### Bluetooth Peripheral & Audio Manager (`vita-bluetooth`)
+Connect wireless keyboards, mice, gamepads (DualShock 4, DualSense, Xbox, 8BitDo), wireless headphones, and portable speakers directly to your PlayStation Vita.
+
+> [!NOTE]
+> **Hardware Support Notice**: The PlayStation Vita's Marvell 88W8787 wireless controller supports **Bluetooth 2.1 + EDR** and **Bluetooth 3.0 + HS**. It is compatible with all Bluetooth Classic (BR/EDR) and dual-mode devices (e.g. Logitech K380, Apple Wireless Keyboards, DualShock 3/4, Bluetooth audio headsets/speakers). Pure Bluetooth Low Energy (BLE-only) peripherals that lack Classic fallback (such as Logitech MX Master 3S and MX Mechanical) require Bluetooth 4.0+ hardware and cannot be detected by the Vita's 88W8787 chip.
+
+#### Interactive Menu:
+Run `vita-bluetooth` with no arguments to launch the on-screen console menu:
+```bash
+vita-bluetooth
+```
+
+#### Scanning and Pairing Peripherals:
+Put your peripheral into pairing mode, then scan nearby devices:
+```bash
+vita-bluetooth scan
+```
+Displays a real-time list of discoverable devices with MAC address, name, signal strength, and detected device category (Keyboard, Mouse, Gamepad, Audio). Enter the row number of your device to pair, trust, and connect immediately.
+
+Or pair directly by MAC address:
+```bash
+vita-bluetooth pair AA:BB:CC:DD:EE:FF
+```
+
+#### Checking Active Connections & Battery:
+```bash
+vita-bluetooth status
+```
+Displays your Bluetooth controller (`hci0`), radio power status, discoverable state, active peripheral connections, battery percentage, and paired devices.
+
+#### Connecting & Disconnecting:
+```bash
+vita-bluetooth connect [MAC]       # Connect to a paired device
+vita-bluetooth disconnect [MAC]    # Disconnect an active device
+vita-bluetooth remove [MAC]        # Unpair and remove a saved device
+```
+
+#### Bluetooth Audio (Headphones & Speakers):
+```bash
+vita-bluetooth audio               # Manage wireless headphones and audio output
+```
+Lists paired audio peripherals and routes system sound through PipeWire / ALSA.
+
+#### Power Savings:
+```bash
+vita-bluetooth off                 # Turn off the Bluetooth radio to conserve battery
+vita-bluetooth on                  # Turn the radio back on and reconnect trusted devices
+```
+
+#### Desktop Touch Dialog:
+When running inside the graphical desktop (`alpine-desktop`), launch the touch-friendly GTK dialog:
+```bash
+vita-bluetooth gui
 ```
 
 ---

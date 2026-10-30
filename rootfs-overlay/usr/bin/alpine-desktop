@@ -749,6 +749,7 @@ EOF
     cat << 'EOF' > "${TARGET}/root/.icewm/menu"
 prog "Welcome Guide" "preferences-desktop" /usr/bin/vita-desktop-welcome
 prog "On-Screen Keyboard" "input-keyboard" /usr/bin/toggle-keyboard
+prog "Bluetooth Manager" "preferences-system-bluetooth" /usr/bin/vita-bluetooth gui
 prog "CPU Power & Frequency" "utilities-system-monitor" /usr/bin/vita-cpu gui
 prog "File Manager" "system-file-manager" pcmanfm
 prog "Web Browser" "web-browser" badwolf
@@ -784,6 +785,7 @@ menu "System" "applications-system" {
 }
 menu "Settings" "preferences-system" {
     prog "Welcome Guide" "preferences-desktop" /usr/bin/vita-desktop-welcome
+    prog "Bluetooth Manager" "preferences-system-bluetooth" /usr/bin/vita-bluetooth gui
     prog "CPU Power & Frequency" "utilities-system-monitor" /usr/bin/vita-cpu gui
     prog "Toggle Boot to Desktop" "preferences-desktop" /usr/bin/vita-autostart toggle
     prog "Desktop Preferences" "preferences-desktop" pcmanfm --desktop-pref

@@ -157,7 +157,7 @@ For full usage instructions, gamepad shortcuts, and Wi-Fi setup, see the **[Comp
 | **Hardware Power & CPU Clocks** | **Working** | Dynamic frequency scaling (111-444 MHz) via `vita-cpufreq` and `vita-cpu` |
 | **Power Management & Sleep** | **Working** | Automated dimming/sleep, burn-in protection, and power button shutdown (`vita-powerd`) |
 | **PlayStation Blue LED** | **Working** | Dynamic triggers (heartbeat, disk I/O, activity, solid on/off) via `vita-led` |
-| **Bluetooth** | **Not yet supported** | Marvell SD8787 Bluetooth driver not enabled in kernel config |
+| **Bluetooth** | **Working** | Marvell SD8787 (BT 2.1+EDR / 3.0+HS) via `btmrvl_sdio` with BlueZ 5, `vita-bluetooth` manager, and audio profiles |
 | **Audio** | **Not yet supported** | Vita audio codec lacks an active Linux ALSA driver |
 | **3D GPU Acceleration** | **Not supported** | PowerVR SGX543MP4+ lacks open-source Linux drivers (software rendering via simplefb) |
 
