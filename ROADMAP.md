@@ -129,8 +129,9 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
 
 * **In-App Bootstrapper GitHub Release Update Checker (`LinuxOnVita.vpk`):**
   * Built-in update notification and one-click VPK download capability directly within the VitaOS handheld installer.
-  * Resilient network backend utilizing a bundled lightweight HTTPS proxy, libcurl wrapper, or custom CA bundle handling to bypass legacy PlayStation Vita firmware SSL/TLS constraints seamlessly.
-  * Real-time download progress modal dialogs with direct file saving to `ux0:data/LinuxOnVita.vpk` for effortless VitaShell installation.
+  * Resilient network backend utilizing `libcurl` and OpenSSL via VitaSDK, bypassing legacy PlayStation Vita firmware SSL/TLS constraints and handling modern `TLSv1.2` / `TLSv1.3` GitHub connections.
+  * Accessible via dedicated header button `[UPDATES: Check GitHub]` and gamepad shortcut (`L-TRIGGER` / `L1`).
+  * Real-time download progress modal dialogs with direct file streaming to `ux0:data/LinuxOnVita.vpk` for effortless VitaShell installation.
 
 ---
 

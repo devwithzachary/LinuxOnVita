@@ -75,6 +75,16 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Configured `~/.icewm/startup` to launch `vita-wifi-widget` automatically on desktop startup.
   - Updated `deploy_desktop_helpers()` to automatically mirror all `vita-*` tools into the container filesystem.
 
+### 🔄 In-App Bootstrapper GitHub Release Update Checker (`LinuxOnVita.vpk`)
+- **Direct GitHub Releases Integration & One-Click Download:**
+  - Integrated built-in network update checking directly into the handheld VitaOS bootstrapper application (`LinuxOnVita.vpk`).
+  - Added dedicated header touch button `[UPDATES: Check GitHub]` and gamepad shortcut (`L-TRIGGER` / `L1`) in the main bootstrapper screen.
+  - Implemented high-performance HTTP client utilizing `libcurl` (v8.17.0) and OpenSSL (v1.1.1t) via VitaSDK with POSIX threading support.
+  - Resolved legacy PlayStation Vita firmware (3.60/3.65) expired SSL certificate limitations and modern TLS handshake constraints (`TLSv1.2` / `TLSv1.3`) via custom SSL peer configuration.
+  - Automatically queries the GitHub Releases API (`https://api.github.com/repos/devwithzachary/LinuxOnVita/releases/latest`) with resilient fallback to direct asset download if API rate limits are encountered.
+  - Displays real-time download progress modal dialogs with transfer speed, megabytes downloaded, percentage, and user cancellation handling (`CIRCLE` or touch).
+  - Streams downloaded release assets directly to `ux0:data/LinuxOnVita.vpk` in chunks, ready for instant installation in VitaShell without requiring PC or USB cable transfers.
+
 
 
 ## [v1.5.0] - 2026-10-23

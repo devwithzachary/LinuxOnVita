@@ -46,7 +46,7 @@ RUN git clone https://github.com/vitasdk/vdpm /tmp/vdpm && \
     cd /tmp/vdpm && \
     ./bootstrap-vitasdk.sh --install-dir /usr/local/vitasdk && \
     rm -rf /tmp/vdpm && \
-    yes | /usr/local/vitasdk/bin/vdpm taihen
+    yes | /usr/local/vitasdk/bin/vdpm taihen curl
 
 # Set environment PATH
 ENV PATH="${TOOLCHAIN_DIR}/bin:${VITASDK}/bin:${PATH}"

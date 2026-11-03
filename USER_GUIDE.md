@@ -117,10 +117,23 @@ The screen will blank briefly, take over the hardware framebuffer, and boot dire
 
 ### Updating to a New Version
 When upgrading your console from a previous release of LinuxOnVita:
-1. Transfer and install the new `LinuxOnVita.vpk` in VitaShell.
+1. Transfer and install the new `LinuxOnVita.vpk` in VitaShell (or download it directly on-device using the In-App Update Checker below).
 2. Launch the **LinuxOnVita** bubble from the LiveArea.
 3. **Reinstall / Update Boot Files:** Press **TRIANGLE (△)** to update the Linux setup (`<mount>/linux/`). Because boot files (`zImage`, Device Tree blobs, and baremetal loaders) already exist on your storage partition from the previous version, pressing Cross (✕) would continue booting the older kernel and files. Pressing **Triangle (△)** refreshes and overwrites your storage partition with the new release files bundled inside the VPK.
 4. Press **CROSS (✕)** to boot into your updated Linux system!
+
+### In-App GitHub Release Update Checker
+`LinuxOnVita.vpk` features a built-in update checker that connects directly to GitHub to check for newer releases and download the latest VPK straight onto your console:
+
+1. Connect your PS Vita to Wi-Fi in VitaOS Settings.
+2. Launch the **LinuxOnVita** bubble from the LiveArea.
+3. Tap the **[UPDATES: Check GitHub]** button in the header (or press **L-TRIGGER / L1** on your gamepad).
+4. The application queries the GitHub Releases API over TLS 1.2/1.3:
+   - If your console is already running the latest version, a notification modal confirms you are up to date. You can choose to re-download or return.
+   - If a newer release is detected, the version tag and release title are shown, prompting you to download.
+5. Press **CROSS (✕)** to begin the streaming download. A visual progress bar displays download progress, speed, and megabytes received in real time. (Press **CIRCLE (○)** or tap the screen at any point to cancel).
+6. Once the download completes, the updated package is saved to `ux0:data/LinuxOnVita.vpk`.
+7. Press the **PS Button**, open **VitaShell**, navigate to `ux0:data/`, and press **CROSS (✕)** on `LinuxOnVita.vpk` to install the update!
 
 ### Booting in Debug Mode (Troubleshooting Boot Issues)
 If Linux fails to boot, freezes, or the screen goes dark without reaching the shell prompt:

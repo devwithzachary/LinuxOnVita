@@ -11,6 +11,7 @@
  */
 
 #include "gui.h"
+#include "updater.h"
 
 #include <psp2/ctrl.h>
 #include <psp2/touch.h>
@@ -909,7 +910,7 @@ static void boot_linux(const char *mount, int debug_mode) {
 }
 
 static void render_main_ui(const MountFileStatus *status, int installed, int has_bundled, int pressed_btn,
-                           const GuiRect *r_exit, const GuiRect *r_btn1, const GuiRect *r_btn2,
+                           const GuiRect *r_update, const GuiRect *r_exit, const GuiRect *r_btn1, const GuiRect *r_btn2,
                            const GuiRect *r_btn3, const GuiRect *r_btn4) {
   gui_clear_screen();
 
@@ -917,6 +918,7 @@ static void render_main_ui(const MountFileStatus *status, int installed, int has
   gui_draw_text(24, 16, "LinuxOnVita", GUI_COLOR_ACCENT_CYAN, 2);
   gui_draw_badge(210, 18, "v1.6.0", GUI_COLOR_CARD_BG, GUI_COLOR_ACCENT_CYAN);
   gui_draw_text(24, 38, "PlayStation Vita Linux Bootstrapper & Installer", GUI_COLOR_TEXT_MUTED, 1);
+  gui_draw_action_button(r_update, "UPDATES", "Check GitHub", "L-TRIG", GUI_COLOR_CARD_BG, pressed_btn == 6);
   gui_draw_action_button(r_exit, "EXIT", NULL, "START", GUI_COLOR_CARD_BG, pressed_btn == 5);
   gui_draw_rect(0, 58, SCREEN_W, 1, GUI_COLOR_CARD_BORDER);
 
@@ -1122,7 +1124,8 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  GuiRect r_exit = {790, 12, 150, 36};
+  GuiRect r_update = {610, 12, 165, 36};
+  GuiRect r_exit   = {790, 12, 150, 36};
   GuiRect r_btn1 = {20, 448, 235, 76};
   GuiRect r_btn2 = {265, 448, 215, 76};
   GuiRect r_btn3 = {490, 448, 215, 76};
@@ -1160,7 +1163,7 @@ int main(int argc, char *argv[]) {
 
     /* Redraw only when state or input changes */
     if (needs_redraw) {
-      render_main_ui(&status, installed, has_bundled, pressed_btn, &r_exit, &r_btn1, &r_btn2, &r_btn3, &r_btn4);
+      render_main_ui(&status, installed, has_bundled, pressed_btn, &r_update, &r_exit, &r_btn1, &r_btn2, &r_btn3, &r_btn4);
       needs_redraw = 0;
     } else {
       gui_wait_vblank();
@@ -1197,10 +1200,29 @@ int main(int argc, char *argv[]) {
 
     /* Check touch interaction */
     if (ts.just_pressed) {
+      /* Update Button */
+      if (gui_hit_test(&r_update, ts.x, ts.y)) {
+        pressed_btn = 6;
+        render_main_ui(&status, installed, has_bundled, pressed_btn, &r_update, &r_exit, &r_btn1, &r_btn2, &r_btn3, &r_btn4);
+        sceKernelDelayThread(80 * 1000);
+        check_for_updates();
+        refresh_mounts();
+        is_target_mounted = g_mounts[g_selected_mount_idx].is_mounted;
+        memset(&status, 0, sizeof(status));
+        if (is_target_mounted) {
+          check_mount_files(g_mounts[g_selected_mount_idx].name, &status);
+        }
+        installed = are_keyfiles_present_on_mount(&status);
+        has_bundled = are_bundled_files_present();
+        pressed_btn = 0;
+        needs_redraw = 1;
+        continue;
+      }
+
       /* Exit Button */
       if (gui_hit_test(&r_exit, ts.x, ts.y)) {
         pressed_btn = 5;
-        render_main_ui(&status, installed, has_bundled, pressed_btn, &r_exit, &r_btn1, &r_btn2, &r_btn3, &r_btn4);
+        render_main_ui(&status, installed, has_bundled, pressed_btn, &r_update, &r_exit, &r_btn1, &r_btn2, &r_btn3, &r_btn4);
         sceKernelDelayThread(80 * 1000);
         break;
       }
@@ -1236,7 +1258,7 @@ int main(int argc, char *argv[]) {
       /* Primary Action Button */
       if (gui_hit_test(&r_btn1, ts.x, ts.y)) {
         pressed_btn = 1;
-        render_main_ui(&status, installed, has_bundled, pressed_btn, &r_exit, &r_btn1, &r_btn2, &r_btn3, &r_btn4);
+        render_main_ui(&status, installed, has_bundled, pressed_btn, &r_update, &r_exit, &r_btn1, &r_btn2, &r_btn3, &r_btn4);
         sceKernelDelayThread(80 * 1000);
         if (!is_target_mounted) {
           mount_partition_interactive(target_mount);
@@ -1261,7 +1283,7 @@ int main(int argc, char *argv[]) {
       /* Debug Boot Button */
       if (gui_hit_test(&r_btn2, ts.x, ts.y)) {
         pressed_btn = 2;
-        render_main_ui(&status, installed, has_bundled, pressed_btn, &r_exit, &r_btn1, &r_btn2, &r_btn3, &r_btn4);
+        render_main_ui(&status, installed, has_bundled, pressed_btn, &r_update, &r_exit, &r_btn1, &r_btn2, &r_btn3, &r_btn4);
         sceKernelDelayThread(80 * 1000);
         boot_linux(target_mount, 1);
         refresh_mounts();
@@ -1280,7 +1302,7 @@ int main(int argc, char *argv[]) {
       /* Reinstall / Copy Button */
       if (gui_hit_test(&r_btn3, ts.x, ts.y)) {
         pressed_btn = 3;
-        render_main_ui(&status, installed, has_bundled, pressed_btn, &r_exit, &r_btn1, &r_btn2, &r_btn3, &r_btn4);
+        render_main_ui(&status, installed, has_bundled, pressed_btn, &r_update, &r_exit, &r_btn1, &r_btn2, &r_btn3, &r_btn4);
         sceKernelDelayThread(80 * 1000);
         if (installed && has_bundled) {
           install_linux_files_to_mount(target_mount);
@@ -1303,7 +1325,7 @@ int main(int argc, char *argv[]) {
       /* View Logs Button */
       if (gui_hit_test(&r_btn4, ts.x, ts.y)) {
         pressed_btn = 4;
-        render_main_ui(&status, installed, has_bundled, pressed_btn, &r_exit, &r_btn1, &r_btn2, &r_btn3, &r_btn4);
+        render_main_ui(&status, installed, has_bundled, pressed_btn, &r_update, &r_exit, &r_btn1, &r_btn2, &r_btn3, &r_btn4);
         sceKernelDelayThread(80 * 1000);
         view_boot_log();
         pressed_btn = 0;
@@ -1354,11 +1376,27 @@ int main(int argc, char *argv[]) {
         needs_redraw = 1;
         sceKernelDelayThread(150 * 1000);
         continue;
+      } else if (pad.buttons & (SCE_CTRL_LTRIGGER | SCE_CTRL_L1)) {
+        pressed_btn = 6;
+        render_main_ui(&status, installed, has_bundled, pressed_btn, &r_update, &r_exit, &r_btn1, &r_btn2, &r_btn3, &r_btn4);
+        sceKernelDelayThread(80 * 1000);
+        check_for_updates();
+        refresh_mounts();
+        is_target_mounted = g_mounts[g_selected_mount_idx].is_mounted;
+        memset(&status, 0, sizeof(status));
+        if (is_target_mounted) {
+          check_mount_files(g_mounts[g_selected_mount_idx].name, &status);
+        }
+        installed = are_keyfiles_present_on_mount(&status);
+        has_bundled = are_bundled_files_present();
+        pressed_btn = 0;
+        needs_redraw = 1;
+        continue;
       } else if (pad.buttons & SCE_CTRL_START) {
         break;
       } else if (pad.buttons & SCE_CTRL_SELECT) {
         pressed_btn = 4;
-        render_main_ui(&status, installed, has_bundled, pressed_btn, &r_exit, &r_btn1, &r_btn2, &r_btn3, &r_btn4);
+        render_main_ui(&status, installed, has_bundled, pressed_btn, &r_update, &r_exit, &r_btn1, &r_btn2, &r_btn3, &r_btn4);
         sceKernelDelayThread(80 * 1000);
         view_boot_log();
         pressed_btn = 0;
@@ -1366,7 +1404,7 @@ int main(int argc, char *argv[]) {
         continue;
       } else if (pad.buttons & SCE_CTRL_CROSS) {
         pressed_btn = 1;
-        render_main_ui(&status, installed, has_bundled, pressed_btn, &r_exit, &r_btn1, &r_btn2, &r_btn3, &r_btn4);
+        render_main_ui(&status, installed, has_bundled, pressed_btn, &r_update, &r_exit, &r_btn1, &r_btn2, &r_btn3, &r_btn4);
         sceKernelDelayThread(80 * 1000);
         if (!is_target_mounted) {
           mount_partition_interactive(target_mount);
@@ -1388,7 +1426,7 @@ int main(int argc, char *argv[]) {
         continue;
       } else if (pad.buttons & SCE_CTRL_SQUARE) {
         pressed_btn = 2;
-        render_main_ui(&status, installed, has_bundled, pressed_btn, &r_exit, &r_btn1, &r_btn2, &r_btn3, &r_btn4);
+        render_main_ui(&status, installed, has_bundled, pressed_btn, &r_update, &r_exit, &r_btn1, &r_btn2, &r_btn3, &r_btn4);
         sceKernelDelayThread(80 * 1000);
         boot_linux(target_mount, 1);
         refresh_mounts();
@@ -1404,7 +1442,7 @@ int main(int argc, char *argv[]) {
         continue;
       } else if (pad.buttons & SCE_CTRL_TRIANGLE) {
         pressed_btn = 3;
-        render_main_ui(&status, installed, has_bundled, pressed_btn, &r_exit, &r_btn1, &r_btn2, &r_btn3, &r_btn4);
+        render_main_ui(&status, installed, has_bundled, pressed_btn, &r_update, &r_exit, &r_btn1, &r_btn2, &r_btn3, &r_btn4);
         sceKernelDelayThread(80 * 1000);
         if (installed && has_bundled) {
           install_linux_files_to_mount(target_mount);
