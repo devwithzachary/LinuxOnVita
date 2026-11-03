@@ -12,6 +12,7 @@ Welcome to the comprehensive user guide for **LinuxOnVita**. This guide is desig
    - [On-Screen Touch Keyboard](#on-screen-touch-keyboard-fbkeyboard)
    - [Physical Gamepad Navigation](#physical-gamepad-navigation-vita-input-mapper)
 4. [Built-In Applications & Tools](#4-built-in-applications--tools)
+   - [Handheld Control Center TUI (`vita-config` / `config`)](#handheld-control-center-tui-vita-config--config)
    - [Interactive First-Boot Setup Wizard (`vita-setup`)](#1-interactive-first-boot-setup-wizard-vita-setup)
    - [On-Device Wi-Fi Manager (`vita-wifi`)](#2-on-device-wi-fi-manager-vita-wifi)
    - [Bluetooth Peripheral & Audio Manager (`vita-bluetooth`)](#bluetooth-peripheral--audio-manager-vita-bluetooth)
@@ -173,6 +174,45 @@ You can control the terminal shell and desktop entirely with the Vita's physical
 ## 4. Built-In Applications & Tools
 
 LinuxOnVita comes pre-installed with dedicated console management utilities tailored specifically for the PS Vita hardware. Type `help` (or `help <command>`) in any shell to view the full categorized command reference directly on your console or via SSH.
+
+### Handheld Control Center TUI (`vita-config` / `config`)
+The **Handheld Control Center** (`vita-config` or short alias `config`) is an interactive, unified console management tool inspired by Raspberry Pi's `raspi-config`. It consolidates all hardware controls, wireless configurations, power options, and system preferences into an intuitive handheld text menu tailored for the Vita's 544p display.
+
+Every screen features a live system telemetry dashboard displaying:
+- **Hardware Model:** Detected console revision (PS Vita 2000 Slim LCD, PS Vita 1000 Fat OLED, or PSTV).
+- **CPU Profile:** Operating clock frequency (111, 333, or 444 MHz) and active cpufreq governor.
+- **Wi-Fi:** Connected SSID and active DHCP IP address.
+- **Bluetooth:** Radio power status and number of connected wireless peripherals.
+- **Storage:** Active partition mount mode (Read-Only `ro` vs Read-Write `rw`) and storage capacity.
+- **Display:** Active brightness percentage on 2000 LCD, or fixed gamma / sleep state on 1000 OLED.
+
+```bash
+vita-config               # Launch interactive Handheld Control Center TUI
+config                    # Quick shortcut alias
+vita-config status        # Print system status dashboard and exit
+vita-config wifi          # Quick jump to wireless networking settings
+vita-config bluetooth     # Quick jump to bluetooth peripheral manager
+vita-config display 75    # Set screen brightness to 75% (PS Vita 2000 LCD only)
+vita-config display sleep # Put display into sleep / blanking mode
+vita-config cpu max       # Set CPU clock to maximum 444 MHz
+vita-config storage ro    # Switch storage to safe read-only mode
+vita-config led heartbeat # Set PlayStation Button LED to heartbeat pulse
+vita-config swap on       # Enable ZRAM RAM compression
+```
+
+#### Menu Categories:
+1. **Wireless & Networking:** Connect to Wi-Fi, scan nearby access points, view signal quality, toggle radio power, and view IP routes.
+2. **Bluetooth & Peripherals:** Scan and pair Bluetooth keyboards, mice, and gamepads, connect/disconnect stored devices, and manage BlueZ adapter states.
+3. **Display & Screen Sleep:** Adjust brightness presets (25%, 50%, 75%, 100%) and custom percentages on PS Vita 2000 LCD models. On PS Vita 1000 OLED models, display panel hardware notice and burn-in sleep / blanking controls. Manage the `vita-powerd` sleep daemon and test immediate display sleep.
+4. **CPU & Performance:** Switch between 444 MHz Max Performance, 333 MHz Balanced, 111 MHz Powersave, custom frequencies, and governors.
+5. **PlayStation LED Indicator Modes:** Configure the front blue PS button LED trigger mode (heartbeat breathing pulse, storage disk activity, solid on, or off).
+6. **Storage & Partition Safety:** Remount `/mnt/ux0` between Read-Only (safe) and Read-Write (unlocked), and inspect filesystem disk usage.
+7. **Memory & Compressed Swap:** Toggle 256 MB ZRAM RAM compression or configure dedicated storage swapfiles (`/mnt/ux0/swapfile`).
+8. **Gamepad & Virtual Keyboard:** Toggle `fbkeyboard` on-screen touch virtual keyboard, inspect `vita-input-mapper`, and review physical shortcuts.
+9. **Desktop & Boot Preferences:** Toggle boot-to-desktop autostart, launch IceWM graphical desktop, run first-boot wizard, or execute hardware diagnostics.
+10. **System Reboot & Shutdown:** Clean hardware reset back to VitaOS LiveArea, or safe poweroff.
+
+---
 
 ### 1. Interactive First-Boot Setup Wizard (`vita-setup`)
 The first time you boot LinuxOnVita, the interactive **First-Boot Setup Wizard** automatically welcomes you directly on the console screen (`/dev/tty1`). It guides you through a seamless 6-step initial configuration so your console is immediately online and optimized for your storage:

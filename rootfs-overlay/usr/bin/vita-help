@@ -27,6 +27,7 @@ show_full_help() {
     echo "================================================================================"
     echo ""
     echo -e "${C_BOLD}Setup & System Essentials:${C_RESET}"
+    printf "  ${C_GREEN}%-18s${C_RESET} %s\n" "vita-config" "Handheld control center TUI (Wi-Fi, Bluetooth, CPU, screen, storage)"
     printf "  ${C_GREEN}%-18s${C_RESET} %s\n" "vita-setup" "Interactive first-boot setup wizard (Wi-Fi, storage, swap, desktop)"
     printf "  ${C_GREEN}%-18s${C_RESET} %s\n" "vita-diagnostics" "Hardware health check, kernel logs, and troubleshooting suite"
     printf "  ${C_GREEN}%-18s${C_RESET} %s\n" "reboot" "Clean system shutdown and hardware reset back to VitaOS"
@@ -36,10 +37,9 @@ show_full_help() {
     printf "  ${C_GREEN}%-18s${C_RESET} %s\n" "vita-bluetooth" "Bluetooth manager for keyboards, mice, gamepads, and audio"
     echo -e "                     ${C_DIM}(Note: Marvell 88W8787 supports BT 2.1/3.0 Classic; BLE-only is unsupported)${C_RESET}"
     echo ""
-    echo -e "${C_BOLD}Hardware, Power & Battery:${C_RESET}"
+    echo -e "${C_BOLD}Hardware & Power Management:${C_RESET}"
     printf "  ${C_GREEN}%-18s${C_RESET} %s\n" "vita-cpu" "CPU clock scaling (111, 333, 444 MHz) and power profiles"
-    printf "  ${C_GREEN}%-18s${C_RESET} %s\n" "vita-brightness" "Screen brightness control (0-255 or presets 25%, 50%, 75%, 100%)"
-    printf "  ${C_GREEN}%-18s${C_RESET} %s\n" "vita-power" "Battery percentage, voltage, charging state, and life remaining"
+    printf "  ${C_GREEN}%-18s${C_RESET} %s\n" "vita-brightness" "Screen backlight control (PS Vita 2000 LCD) and sleep"
     printf "  ${C_GREEN}%-18s${C_RESET} %s\n" "vita-powerd" "Background power daemon (burn-in prevention, display timeout, sleep)"
     printf "  ${C_GREEN}%-18s${C_RESET} %s\n" "vita-led" "PlayStation Button LED modes (heartbeat, disk, solid on, off)"
     echo ""
@@ -93,14 +93,14 @@ show_topic_help() {
             if [ -x "/usr/bin/vita-brightness" ]; then
                 /usr/bin/vita-brightness --help
             else
-                echo "vita-brightness: OLED and LCD screen brightness control (0-255)."
+                echo "vita-brightness: PS Vita 2000 Slim LCD backlight control and display sleep."
             fi
             ;;
-        power|battery|vita-power)
-            if [ -x "/usr/bin/vita-power" ]; then
-                /usr/bin/vita-power --help 2>/dev/null || /usr/bin/vita-power
+        power|vita-power)
+            if [ -x "/usr/bin/vita-cpu" ]; then
+                /usr/bin/vita-cpu status
             else
-                echo "vita-power: Battery level and hardware power status."
+                echo "vita-power: CPU power profiles and operating frequencies."
             fi
             ;;
         powerd|vita-powerd)
@@ -132,6 +132,13 @@ show_topic_help() {
         setup|vita-setup)
             if [ -x "/usr/bin/vita-setup" ]; then
                 /usr/bin/vita-setup --help 2>/dev/null || echo "vita-setup: Interactive system setup wizard."
+            fi
+            ;;
+        config|vita-config)
+            if [ -x "/usr/bin/vita-config" ]; then
+                /usr/bin/vita-config help
+            else
+                echo "vita-config: Handheld Control Center TUI."
             fi
             ;;
         diagnostics|diag|vita-diagnostics|vita-diag)
@@ -201,9 +208,8 @@ show_topic_help() {
             echo "================================================================================"
             echo -e "${C_CYAN}${C_BOLD}PlayStation Vita - Hardware Control Commands${C_RESET}"
             echo "================================================================================"
-            echo "  vita-brightness [0-255|25%|50%|75%|100%] : Set screen backlight brightness"
+            echo "  vita-brightness [0-100|sleep|wake]       : Set LCD backlight (2000 Slim) or display sleep"
             echo "  vita-cpu [profile|mhz|status]            : Set CPU clock (111, 333, 444 MHz)"
-            echo "  vita-power                               : Display battery level and telemetry"
             echo "  vita-led [heartbeat|disk|on|off]         : Control PlayStation Button blue LED"
             echo "  vita-powerd                              : Background power and burn-in daemon"
             echo "================================================================================"

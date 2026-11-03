@@ -25,6 +25,17 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Introduced the dedicated `/usr/bin/vita-help` reference utility (symlinked to `/usr/bin/help` with shell builtin fallback) providing a comprehensive, colorized breakdown of all 14 built-in Vita Linux utilities and topic queries (e.g. `help wifi`, `help bluetooth`, `help desktop`).
   - Added clear hardware documentation and live scan warnings explaining the Marvell 88W8787 Bluetooth 2.1/3.0 Classic architecture to clarify modern BLE-only peripheral limitations.
 
+### 🎮 Handheld Control Center TUI (`vita-config`)
+- **Unified Handheld Configuration Suite (`vita-config` & `config`):**
+  - Implemented an interactive console management utility `/usr/bin/vita-config` (symlinked as `/usr/bin/config`) inspired by Raspberry Pi's `raspi-config`, optimized for the PS Vita's 544p display and terminal geometry.
+  - Features a live system status dashboard banner on every view displaying real-time hardware model detection, CPU frequency/governor, Wi-Fi SSID/IP, Bluetooth radio status, storage mount mode/space, and display mode.
+  - Hardware model-aware display management: presents PWM backlight brightness controls (25%, 50%, 75%, 100%, custom) exclusively on PS Vita 2000 Slim LCD models, while providing panel sleep and burn-in protection blanking controls on PS Vita 1000 OLED consoles.
+  - Removed unsupported battery percentage displays across menus to prevent fictitious telemetry (reflecting lack of a kernel PMIC/fuel gauge driver).
+  - Provides categorized submenus for Wireless & Networking, Bluetooth & Peripherals, Display & Screen Sleep, CPU & Performance Profiles (444 MHz max, 333 MHz balanced, 111 MHz powersave), PS Button LED Modes, Storage Protection (`ro` / `rw`), Memory & ZRAM, Gamepad & Virtual Keyboard, Desktop & Boot Preferences, and System Power.
+  - Supports non-interactive scriptable subcommands (`status`, `wifi`, `bluetooth`, `display`, `cpu`, `storage`, `led`, `swap`, `autostart`, `reboot`, `poweroff`).
+  - Integrated into the IceWM graphical desktop (`alpine-desktop`) application menu and settings, and registered in `welcome.sh` and `vita-help`.
+
+
 
 ## [v1.5.0] - 2026-10-23
 

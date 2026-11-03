@@ -50,6 +50,8 @@ While original proof-of-concept projects proved that modern Linux can boot on th
 
 ## ✨ Features
 
+- **Handheld Control Center TUI (`vita-config` / `config`):** Unified, interactive handheld configuration console (inspired by `raspi-config`) with live dashboard telemetry (Hardware Model, CPU Profile, Wi-Fi, Bluetooth, Storage, Display) and submenus for networking, bluetooth, model-aware display backlight, CPU profiles, storage safety, and desktop preferences.
+- **Bluetooth Subsystem & Peripheral Manager (`vita-bluetooth`):** Marvell 88W8787 combo Bluetooth driver enablement (`CONFIG_BT_MRVL_SDIO=y`) with BlueZ 5 daemon, automatic discovery, one-touch peripheral pairing (keyboards, mice, gamepads, audio), and desktop GUI integration.
 - **Interactive First-Boot Setup Wizard (`vita-setup`):** Automated guided onboarding wizard on first boot for Wi-Fi scanning, storage protection mode selection, ZRAM memory optimization, permanent Alpine container creation, desktop autostart, and PS Button LED configuration.
 - **Display Sleep, Auto-Dimming & Power Management (`vita-powerd`):** OLED and LCD burn-in protection daemon with 3-minute dimming, 5-minute display blanking / sleep (keeping background tasks running), and Power button sleep / graceful shutdown integration.
 - **Hardware Power & Dynamic CPU Frequency Scaling (`vita-cpu` / `vita-power`):** Dynamic clock frequency control across 111, 166, 222, 333, and 444 MHz operating points via native kernel driver (`vita-cpufreq`), standard cpufreq governors, CLI utility, touch GUI dialog, and an IceWM desktop taskbar widget.

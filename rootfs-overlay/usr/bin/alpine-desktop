@@ -748,6 +748,7 @@ EOF
     # 3. IceWM Application Menu
     cat << 'EOF' > "${TARGET}/root/.icewm/menu"
 prog "Welcome Guide" "preferences-desktop" /usr/bin/vita-desktop-welcome
+prog "Control Center (vita-config)" "preferences-system" sakura -e /usr/bin/vita-config
 prog "On-Screen Keyboard" "input-keyboard" /usr/bin/toggle-keyboard
 prog "Bluetooth Manager" "preferences-system-bluetooth" /usr/bin/vita-bluetooth gui
 prog "CPU Power & Frequency" "utilities-system-monitor" /usr/bin/vita-cpu gui
@@ -784,6 +785,7 @@ menu "System" "applications-system" {
     prog "Reboot to VitaOS" "system-reboot" /usr/bin/vita-reboot
 }
 menu "Settings" "preferences-system" {
+    prog "Control Center (vita-config)" "preferences-system" sakura -e /usr/bin/vita-config
     prog "Welcome Guide" "preferences-desktop" /usr/bin/vita-desktop-welcome
     prog "Bluetooth Manager" "preferences-system-bluetooth" /usr/bin/vita-bluetooth gui
     prog "CPU Power & Frequency" "utilities-system-monitor" /usr/bin/vita-cpu gui

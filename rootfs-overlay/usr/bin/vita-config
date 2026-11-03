@@ -1,0 +1,1182 @@
+#!/bin/sh
+# vita-config: Handheld Control Center TUI for PlayStation Vita Linux
+# Unified interactive management console inspired by raspi-config.
+#
+# Provides centralized management for:
+#   - Wireless & Networking (Wi-Fi connect, scan, telemetry, radio toggle)
+#   - Bluetooth Peripherals & Audio (keyboards, mice, gamepads)
+#   - Display & Backlight / Sleep (brightness levels on 2000 LCD, sleep daemon)
+#   - CPU Scaling & Power Profiles (444 MHz max, 333 MHz balanced, powersave)
+#   - PlayStation Button LED Modes (heartbeat, disk I/O, solid on, off)
+#   - Storage Safety & Partition Mounts (read-only ux0 protection, remounts)
+#   - Compressed Memory (ZRAM) & Swapfiles
+#   - Input Mapping & Console Touch Virtual Keyboard
+#   - Desktop Preferences & Boot-to-Desktop Toggle
+#   - Hardware Diagnostics & Safe Reboot/Shutdown
+#
+# Licensed under the GNU General Public License v3.0 (GPL-3.0)
+
+set -e
+export PATH="/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+
+VERSION="1.6.0"
+
+# ANSI Terminal Colors
+if [ -t 1 ]; then
+    C_RESET="\033[0m"
+    C_BOLD="\033[1m"
+    C_DIM="\033[2m"
+    C_CYAN="\033[1;36m"
+    C_GREEN="\033[1;32m"
+    C_YELLOW="\033[1;33m"
+    C_RED="\033[1;31m"
+    C_BLUE="\033[1;34m"
+    C_MAGENTA="\033[1;35m"
+else
+    C_RESET=""
+    C_BOLD=""
+    C_DIM=""
+    C_CYAN=""
+    C_GREEN=""
+    C_YELLOW=""
+    C_RED=""
+    C_BLUE=""
+    C_MAGENTA=""
+fi
+
+clear_screen() {
+    clear 2>/dev/null || printf '\033[2J\033[H'
+}
+
+press_enter() {
+    echo ""
+    printf "${C_DIM}Press [Enter] to return...${C_RESET}"
+    read -r _
+}
+
+# ------------------------------------------------------------------------------
+# Hardware Model Detection
+# ------------------------------------------------------------------------------
+
+detect_hardware() {
+    if [ -f /proc/device-tree/model ]; then
+        local model_str
+        model_str=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || true)
+        case "$model_str" in
+            *1000*|*OLED*|*oled*)
+                echo "oled"
+                return
+                ;;
+            *2000*|*LCD*|*lcd*|*Slim*|*slim*)
+                echo "lcd"
+                return
+                ;;
+            *TV*|*tv*|*Dolce*|*dolce*)
+                echo "pstv"
+                return
+                ;;
+        esac
+    fi
+
+    # Fallback: check for I2C backlight controller at 0x64 on I2C bus 1 (Vita 2000 Slim)
+    if [ -e "/dev/i2c-1" ] && command -v i2cset >/dev/null 2>&1; then
+        if i2cset -y 1 0x64 0x0e 0x01 >/dev/null 2>&1; then
+            echo "lcd"
+            return
+        fi
+    fi
+
+    echo "oled"
+}
+
+get_model_name() {
+    local hw
+    hw=$(detect_hardware)
+    case "$hw" in
+        lcd)  echo "PS Vita 2000 (Slim / LCD)" ;;
+        oled) echo "PS Vita 1000 (Fat / OLED)" ;;
+        pstv) echo "PlayStation TV (HDMI)" ;;
+        *)    echo "PlayStation Vita" ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# System Telemetry Helpers
+# ------------------------------------------------------------------------------
+
+get_cpu_summary() {
+    local cur_khz=0
+    if [ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq ]; then
+        cur_khz=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>/dev/null || echo 0)
+    elif [ -f /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_cur_freq ]; then
+        cur_khz=$(cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_cur_freq 2>/dev/null || echo 0)
+    fi
+
+    local mhz=0
+    if [ "$cur_khz" -gt 0 ]; then
+        mhz=$(( cur_khz / 1000 ))
+    else
+        mhz=$(awk -F': ' '/cpu MHz/ {print int($2); exit}' /proc/cpuinfo 2>/dev/null || echo 444)
+    fi
+
+    local gov="ondemand"
+    if [ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor ]; then
+        gov=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo "ondemand")
+    fi
+
+    echo "${mhz} MHz (${gov})"
+}
+
+get_wifi_summary() {
+    local iface="mlan0"
+    [ -e "/sys/class/net/wlan0" ] && iface="wlan0"
+
+    local ip_addr=""
+    ip_addr=$(ip -4 addr show "$iface" 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1 | head -n1 || true)
+
+    local ssid=""
+    if command -v wpa_cli >/dev/null 2>&1; then
+        ssid=$(wpa_cli -i "$iface" status 2>/dev/null | awk -F'=' '/^ssid=/ {print $2}' || true)
+    fi
+
+    if [ -n "$ip_addr" ] && [ -n "$ssid" ]; then
+        echo "${ssid} (${ip_addr})"
+    elif [ -n "$ip_addr" ]; then
+        echo "Online (${ip_addr})"
+    elif [ -n "$ssid" ]; then
+        echo "${ssid} (Connecting...)"
+    else
+        echo "Disconnected"
+    fi
+}
+
+get_bt_summary() {
+    if ! command -v bluetoothctl >/dev/null 2>&1; then
+        echo "BlueZ Not Installed"
+        return
+    fi
+
+    local pwr="no"
+    pwr=$(bluetoothctl show 2>/dev/null | grep "Powered:" | awk '{print $2}' || echo "no")
+    if [ "$pwr" != "yes" ]; then
+        echo "Radio OFF"
+        return
+    fi
+
+    local conn_cnt=0
+    conn_cnt=$(bluetoothctl devices Connected 2>/dev/null | wc -l || echo 0)
+    echo "ON (${conn_cnt} connected)"
+}
+
+get_storage_summary() {
+    local mode="RW"
+    if command -v vita-storage >/dev/null 2>&1; then
+        if vita-storage is-ro ux0 2>/dev/null; then
+            mode="RO"
+        fi
+    fi
+
+    local usage="N/A"
+    if grep -qs ' /mnt/ux0 ' /proc/mounts; then
+        usage=$(df -h /mnt/ux0 2>/dev/null | awk 'NR==2 {print $3 "/" $2}' || echo "Mounted")
+        echo "ux0: ${mode} (${usage})"
+    elif grep -qs ' /mnt/ur0 ' /proc/mounts; then
+        usage=$(df -h /mnt/ur0 2>/dev/null | awk 'NR==2 {print $3 "/" $2}' || echo "Mounted")
+        echo "ur0: ${mode} (${usage})"
+    else
+        echo "RAM-Only (No SD Mounted)"
+    fi
+}
+
+get_display_summary() {
+    local hw
+    hw=$(detect_hardware)
+    case "$hw" in
+        lcd)
+            local pct="100"
+            [ -f /var/run/vita_brightness ] && pct=$(cat /var/run/vita_brightness 2>/dev/null || echo "100")
+            echo "${pct}% (LCD Backlight)"
+            ;;
+        oled)
+            local curr=100
+            [ -f /var/run/vita_brightness ] && curr=$(cat /var/run/vita_brightness 2>/dev/null || echo "100")
+            if [ "$curr" -eq 0 ]; then
+                echo "0% (Display Sleep)"
+            else
+                echo "Fixed Gamma (OLED)"
+            fi
+            ;;
+        pstv)
+            echo "HDMI (External)"
+            ;;
+        *)
+            echo "Standard Display"
+            ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Dashboard Header
+# ------------------------------------------------------------------------------
+
+print_dashboard_header() {
+    clear_screen
+    echo "================================================================================"
+    echo -e "${C_CYAN}${C_BOLD}  PlayStation Vita - Handheld Control Center (vita-config v${VERSION})${C_RESET}"
+    echo "================================================================================"
+
+    local model_str
+    local cpu_str
+    local wifi_str
+    local bt_str
+    local stor_str
+    local disp_str
+
+    model_str=$(get_model_name)
+    cpu_str=$(get_cpu_summary)
+    wifi_str=$(get_wifi_summary)
+    bt_str=$(get_bt_summary)
+    stor_str=$(get_storage_summary)
+    disp_str=$(get_display_summary)
+
+    printf " %-14s: ${C_BOLD}%-21s${C_RESET} | %-12s: ${C_BOLD}%-23s${C_RESET}\n" "Hardware Model" "$model_str" "CPU Profile" "$cpu_str"
+    printf " %-14s: ${C_BOLD}%-21s${C_RESET} | %-12s: ${C_BOLD}%-23s${C_RESET}\n" "Wi-Fi" "$wifi_str" "Bluetooth" "$bt_str"
+    printf " %-14s: ${C_BOLD}%-21s${C_RESET} | %-12s: ${C_BOLD}%-23s${C_RESET}\n" "Storage" "$stor_str" "Display" "$disp_str"
+    echo "--------------------------------------------------------------------------------"
+}
+
+# ------------------------------------------------------------------------------
+# Submenus
+# ------------------------------------------------------------------------------
+
+# 1. Wireless & Networking Menu
+menu_wifi() {
+    while true; do
+        print_dashboard_header
+        echo -e "${C_YELLOW}${C_BOLD}[Wireless & Networking]${C_RESET}"
+        echo " 1) Connect to a Wi-Fi Network (Interactive Setup)"
+        echo " 2) Quick Scan for Nearby Networks"
+        echo " 3) View Wi-Fi Status & Signal Telemetry"
+        echo " 4) Turn Wi-Fi Radio ON"
+        echo " 5) Turn Wi-Fi Radio OFF (Conserve Battery)"
+        echo " 6) View IP Addresses & Network Interfaces"
+        echo " 7) Return to Main Menu"
+        echo "================================================================================"
+        printf " Select an option [1-7]: "
+        read -r choice
+        case "$choice" in
+            1)
+                echo ""
+                if command -v vita-wifi >/dev/null 2>&1; then
+                    vita-wifi
+                else
+                    echo "[!] vita-wifi utility not found."
+                fi
+                press_enter
+                ;;
+            2)
+                echo ""
+                if command -v vita-wifi >/dev/null 2>&1; then
+                    vita-wifi scan
+                else
+                    echo "[!] vita-wifi utility not found."
+                fi
+                press_enter
+                ;;
+            3)
+                echo ""
+                if command -v vita-wifi >/dev/null 2>&1; then
+                    vita-wifi status
+                else
+                    echo "[!] vita-wifi utility not found."
+                fi
+                press_enter
+                ;;
+            4)
+                echo ""
+                if command -v vita-wifi >/dev/null 2>&1; then
+                    vita-wifi on
+                else
+                    ip link set mlan0 up 2>/dev/null || true
+                    echo "[OK] Interface bringup initiated."
+                fi
+                press_enter
+                ;;
+            5)
+                echo ""
+                if command -v vita-wifi >/dev/null 2>&1; then
+                    vita-wifi off
+                else
+                    ip link set mlan0 down 2>/dev/null || true
+                    echo "[OK] Interface brought down."
+                fi
+                press_enter
+                ;;
+            6)
+                echo ""
+                echo "================================================================================"
+                echo " Network Interfaces & IP Routes:"
+                echo "================================================================================"
+                ip -4 addr show || ifconfig
+                echo ""
+                echo " Default Gateway / Routes:"
+                ip route show 2>/dev/null || netstat -rn 2>/dev/null || true
+                echo "================================================================================"
+                press_enter
+                ;;
+            7|"")
+                return 0
+                ;;
+            *)
+                echo "Invalid option."
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+# 2. Bluetooth & Peripherals Menu
+menu_bluetooth() {
+    while true; do
+        print_dashboard_header
+        echo -e "${C_YELLOW}${C_BOLD}[Bluetooth & Peripherals]${C_RESET}"
+        echo -e " ${C_DIM}Note: Marvell 88W8787 supports BT 2.1/3.0 Classic (BLE-only devices unsupported)${C_RESET}"
+        echo " 1) Bluetooth Manager TUI (vita-bluetooth)"
+        echo " 2) Quick Scan & Pair Nearby Peripherals (Keyboard, Mouse, Gamepad)"
+        echo " 3) View Bluetooth Status & Bonded Devices"
+        echo " 4) Connect to a Stored Device"
+        echo " 5) Disconnect a Device"
+        echo " 6) Remove / Unpair Device"
+        echo " 7) Toggle Bluetooth Radio (ON / OFF)"
+        echo " 8) Open Interactive BlueZ Shell (bluetoothctl)"
+        echo " 9) Return to Main Menu"
+        echo "================================================================================"
+        printf " Select an option [1-9]: "
+        read -r choice
+        case "$choice" in
+            1)
+                echo ""
+                if command -v vita-bluetooth >/dev/null 2>&1; then
+                    vita-bluetooth
+                else
+                    echo "[!] vita-bluetooth utility not found."
+                    press_enter
+                fi
+                ;;
+            2)
+                echo ""
+                if command -v vita-bluetooth >/dev/null 2>&1; then
+                    vita-bluetooth scan 8
+                else
+                    echo "[!] vita-bluetooth utility not found."
+                fi
+                press_enter
+                ;;
+            3)
+                echo ""
+                if command -v vita-bluetooth >/dev/null 2>&1; then
+                    vita-bluetooth status
+                else
+                    echo "[!] vita-bluetooth utility not found."
+                fi
+                press_enter
+                ;;
+            4)
+                echo ""
+                if command -v vita-bluetooth >/dev/null 2>&1; then
+                    vita-bluetooth connect
+                else
+                    echo "[!] vita-bluetooth utility not found."
+                fi
+                press_enter
+                ;;
+            5)
+                echo ""
+                if command -v vita-bluetooth >/dev/null 2>&1; then
+                    vita-bluetooth disconnect
+                else
+                    echo "[!] vita-bluetooth utility not found."
+                fi
+                press_enter
+                ;;
+            6)
+                echo ""
+                if command -v vita-bluetooth >/dev/null 2>&1; then
+                    vita-bluetooth remove
+                else
+                    echo "[!] vita-bluetooth utility not found."
+                fi
+                press_enter
+                ;;
+            7)
+                echo ""
+                if command -v vita-bluetooth >/dev/null 2>&1; then
+                    local pwr="no"
+                    pwr=$(bluetoothctl show 2>/dev/null | grep "Powered:" | awk '{print $2}' || echo "no")
+                    if [ "$pwr" = "yes" ]; then
+                        vita-bluetooth off
+                    else
+                        vita-bluetooth on
+                    fi
+                else
+                    echo "[!] vita-bluetooth utility not found."
+                fi
+                press_enter
+                ;;
+            8)
+                echo ""
+                if command -v bluetoothctl >/dev/null 2>&1; then
+                    bluetoothctl
+                else
+                    echo "[!] bluetoothctl not found."
+                    press_enter
+                fi
+                ;;
+            9|"")
+                return 0
+                ;;
+            *)
+                echo "Invalid option."
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+# 3. Display & Backlight / Sleep Menu (Model-Aware)
+menu_display() {
+    local hw
+    hw=$(detect_hardware)
+
+    while true; do
+        print_dashboard_header
+
+        if [ "$hw" = "lcd" ]; then
+            echo -e "${C_YELLOW}${C_BOLD}[Display & Backlight Control - PS Vita 2000 Slim LCD]${C_RESET}"
+            echo " 1) Set Brightness: 25%  (Dim / Battery Saving)"
+            echo " 2) Set Brightness: 50%  (Comfortable Indoor)"
+            echo " 3) Set Brightness: 75%  (Standard Daylight)"
+            echo " 4) Set Brightness: 100% (Maximum Full Brightness)"
+            echo " 5) Set Custom Brightness (1 - 100%)"
+            echo " 6) View Screen Inactivity & Sleep Daemon (vita-powerd)"
+            echo " 7) Immediate Screen Sleep Test (Wake with screen tap or button)"
+            echo " 8) Return to Main Menu"
+            echo "================================================================================"
+            printf " Select an option [1-8]: "
+            read -r choice
+            case "$choice" in
+                1)
+                    echo ""
+                    /usr/bin/vita-brightness set 25
+                    sleep 1
+                    ;;
+                2)
+                    echo ""
+                    /usr/bin/vita-brightness set 50
+                    sleep 1
+                    ;;
+                3)
+                    echo ""
+                    /usr/bin/vita-brightness set 75
+                    sleep 1
+                    ;;
+                4)
+                    echo ""
+                    /usr/bin/vita-brightness set 100
+                    sleep 1
+                    ;;
+                5)
+                    echo ""
+                    printf "Enter brightness percentage [1-100]: "
+                    read -r custom_pct
+                    if echo "$custom_pct" | grep -q '^[0-9]\+$' && [ "$custom_pct" -ge 1 ] && [ "$custom_pct" -le 100 ]; then
+                        /usr/bin/vita-brightness set "$custom_pct"
+                    else
+                        echo "[!] Invalid percentage. Must be an integer between 1 and 100."
+                    fi
+                    sleep 1
+                    ;;
+                6)
+                    echo ""
+                    if command -v vita-powerd >/dev/null 2>&1; then
+                        vita-powerd status
+                    else
+                        echo "vita-powerd background daemon is not running."
+                    fi
+                    press_enter
+                    ;;
+                7)
+                    echo ""
+                    echo "[*] Blanking screen in 2 seconds... Tap screen or press any button to wake."
+                    sleep 2
+                    if command -v vita-powerd >/dev/null 2>&1; then
+                        vita-powerd sleep
+                    else
+                        /usr/bin/vita-brightness set 0
+                    fi
+                    ;;
+                8|"")
+                    return 0
+                    ;;
+                *)
+                    echo "Invalid option."
+                    sleep 1
+                    ;;
+            esac
+        elif [ "$hw" = "oled" ]; then
+            echo -e "${C_YELLOW}${C_BOLD}[Display & Screen Sleep - PS Vita 1000 OLED]${C_RESET}"
+            echo -e " ${C_DIM}Panel Type: Samsung Emissive OLED (AMS387VB01)${C_RESET}"
+            echo ""
+            echo " Hardware Notice:"
+            echo "   PS Vita 1000 OLED models use an emissive OLED panel set to fixed Level 15"
+            echo "   hardware gamma at boot. Adjustable backlight dimming is exclusive to PS"
+            echo "   Vita 2000 Slim LCD hardware. Display sleep and burn-in blanking are fully"
+            echo "   supported via vita-powerd."
+            echo ""
+            echo " 1) View Screen Inactivity & Sleep Daemon (vita-powerd)"
+            echo " 2) Immediate Screen Sleep Test (Wake with screen tap or button)"
+            echo " 3) Return to Main Menu"
+            echo "================================================================================"
+            printf " Select an option [1-3]: "
+            read -r choice
+            case "$choice" in
+                1)
+                    echo ""
+                    if command -v vita-powerd >/dev/null 2>&1; then
+                        vita-powerd status
+                    else
+                        echo "vita-powerd background daemon is not running."
+                    fi
+                    press_enter
+                    ;;
+                2)
+                    echo ""
+                    echo "[*] Putting OLED panel to sleep in 2 seconds... Tap screen or press any button to wake."
+                    sleep 2
+                    if command -v vita-powerd >/dev/null 2>&1; then
+                        vita-powerd sleep
+                    else
+                        /usr/bin/vita-brightness set 0
+                    fi
+                    ;;
+                3|"")
+                    return 0
+                    ;;
+                *)
+                    echo "Invalid option."
+                    sleep 1
+                    ;;
+            esac
+        else
+            echo -e "${C_YELLOW}${C_BOLD}[Display & Video Output - PlayStation TV]${C_RESET}"
+            echo " Notice: PlayStation TV outputs video over HDMI. Adjust display brightness"
+            echo " directly on your connected television or monitor settings."
+            echo ""
+            echo " 1) Return to Main Menu"
+            echo "================================================================================"
+            printf " Select an option [1]: "
+            read -r _
+            return 0
+        fi
+    done
+}
+
+# 4. CPU & Performance Menu
+menu_cpu() {
+    while true; do
+        print_dashboard_header
+        echo -e "${C_YELLOW}${C_BOLD}[CPU & Performance Scaling]${C_RESET}"
+        echo " 1) Max Performance Profile (444 MHz - Compilation, Desktop & Emulation)"
+        echo " 2) Balanced Standard Profile (333 MHz - Default System Baseline)"
+        echo " 3) Powersave Mode (111 MHz - Battery Preservation & Background Tasks)"
+        echo " 4) Dynamic Scaling Governor (ondemand - Auto scales clock to CPU load)"
+        echo " 5) Set Custom Frequency (111, 166, 222, 333, 444 MHz)"
+        echo " 6) View Detailed Clock, Core Load & Thermal Telemetry"
+        echo " 7) Return to Main Menu"
+        echo "================================================================================"
+        printf " Select an option [1-7]: "
+        read -r choice
+        case "$choice" in
+            1)
+                echo ""
+                /usr/bin/vita-cpu max
+                sleep 1
+                ;;
+            2)
+                echo ""
+                /usr/bin/vita-cpu balanced
+                sleep 1
+                ;;
+            3)
+                echo ""
+                /usr/bin/vita-cpu powersave
+                sleep 1
+                ;;
+            4)
+                echo ""
+                /usr/bin/vita-cpu ondemand
+                sleep 1
+                ;;
+            5)
+                echo ""
+                echo "Available frequencies: 111, 166, 222, 333, 444 MHz"
+                printf "Enter target frequency (MHz): "
+                read -r target_mhz
+                if [ -n "$target_mhz" ]; then
+                    /usr/bin/vita-cpu set "$target_mhz"
+                fi
+                press_enter
+                ;;
+            6)
+                echo ""
+                /usr/bin/vita-cpu status
+                press_enter
+                ;;
+            7|"")
+                return 0
+                ;;
+            *)
+                echo "Invalid option."
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+# 5. PlayStation LED Modes Menu
+menu_led() {
+    while true; do
+        print_dashboard_header
+        echo -e "${C_YELLOW}${C_BOLD}[PlayStation Button LED Control (vita-led)]${C_RESET}"
+        echo " 1) Heartbeat Pulse Mode (Smooth breathing pulse rhythm)"
+        echo " 2) Disk / Storage I/O Mode (Flashes on SD card read/write)"
+        echo " 3) Solid Blue (Always illuminated while system is running)"
+        echo " 4) Turn LED Off (Complete dark mode / battery saving)"
+        echo " 5) View Current LED Mode & Configuration"
+        echo " 6) Return to Main Menu"
+        echo "================================================================================"
+        printf " Select an option [1-6]: "
+        read -r choice
+        case "$choice" in
+            1)
+                echo ""
+                /usr/bin/vita-led heartbeat
+                sleep 1
+                ;;
+            2)
+                echo ""
+                /usr/bin/vita-led disk
+                sleep 1
+                ;;
+            3)
+                echo ""
+                /usr/bin/vita-led on
+                sleep 1
+                ;;
+            4)
+                echo ""
+                /usr/bin/vita-led off
+                sleep 1
+                ;;
+            5)
+                echo ""
+                /usr/bin/vita-led status
+                press_enter
+                ;;
+            6|"")
+                return 0
+                ;;
+            *)
+                echo "Invalid option."
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+# 6. Storage & Partition Safety Menu
+menu_storage() {
+    while true; do
+        print_dashboard_header
+        echo -e "${C_YELLOW}${C_BOLD}[Storage & Partition Safety (vita-storage)]${C_RESET}"
+        echo " 1) Set ux0: Read-Only  (ro - Safe mode; prevents filesystem corruption)"
+        echo " 2) Set ux0: Read-Write (rw - Allows saving configs, downloads & packages)"
+        echo " 3) View Storage Protection Status"
+        echo " 4) Check Partition Free Space & Filesystem Utilization"
+        echo " 5) Return to Main Menu"
+        echo "================================================================================"
+        printf " Select an option [1-5]: "
+        read -r choice
+        case "$choice" in
+            1)
+                echo ""
+                /usr/bin/vita-storage ro ux0
+                sleep 1
+                ;;
+            2)
+                echo ""
+                /usr/bin/vita-storage rw ux0
+                sleep 1
+                ;;
+            3)
+                echo ""
+                /usr/bin/vita-storage status
+                press_enter
+                ;;
+            4)
+                echo ""
+                echo "================================================================================"
+                echo " Filesystem Disk Space Utilization:"
+                echo "================================================================================"
+                df -h /mnt/ux0 /mnt/ur0 /mnt/uma0 / 2>/dev/null || df -h
+                echo "================================================================================"
+                press_enter
+                ;;
+            5|"")
+                return 0
+                ;;
+            *)
+                echo "Invalid option."
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+# 7. Memory & Swapfile Menu
+menu_memory() {
+    while true; do
+        print_dashboard_header
+        echo -e "${C_YELLOW}${C_BOLD}[Memory & Compressed Swap Management (vita-swap)]${C_RESET}"
+        echo " 1) View Memory & Swap Telemetry (RAM, ZRAM, swap utilization)"
+        echo " 2) Enable ZRAM RAM Compression (256 MB compressed swap pool in RAM)"
+        echo " 3) Disable ZRAM / Swap"
+        echo " 4) Configure Swapfile on Storage (/mnt/ux0/swapfile)"
+        echo " 5) Return to Main Menu"
+        echo "================================================================================"
+        printf " Select an option [1-5]: "
+        read -r choice
+        case "$choice" in
+            1)
+                echo ""
+                echo "================================================================================"
+                echo " System Memory Telemetry:"
+                echo "================================================================================"
+                free -m 2>/dev/null || free
+                echo ""
+                if command -v zramctl >/dev/null 2>&1; then
+                    zramctl 2>/dev/null || true
+                elif [ -f /sys/block/zram0/disksize ]; then
+                    local zsize
+                    zsize=$(cat /sys/block/zram0/disksize 2>/dev/null || echo 0)
+                    echo "ZRAM0 Disksize: $(( zsize / 1048576 )) MB"
+                fi
+                echo "================================================================================"
+                press_enter
+                ;;
+            2)
+                echo ""
+                if command -v vita-swap >/dev/null 2>&1; then
+                    vita-swap on
+                else
+                    echo "[!] vita-swap utility not found."
+                fi
+                press_enter
+                ;;
+            3)
+                echo ""
+                if command -v vita-swap >/dev/null 2>&1; then
+                    vita-swap off
+                else
+                    echo "[!] vita-swap utility not found."
+                fi
+                press_enter
+                ;;
+            4)
+                echo ""
+                if command -v vita-swap >/dev/null 2>&1; then
+                    printf "Enter desired swapfile size in MB (e.g. 512): "
+                    read -r sz_mb
+                    if [ -n "$sz_mb" ]; then
+                        vita-swap size "${sz_mb}M"
+                    fi
+                else
+                    echo "[!] vita-swap utility not found."
+                fi
+                press_enter
+                ;;
+            5|"")
+                return 0
+                ;;
+            *)
+                echo "Invalid option."
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+# 8. Gamepad & Virtual Keyboard Menu
+menu_input() {
+    while true; do
+        print_dashboard_header
+        echo -e "${C_YELLOW}${C_BOLD}[Gamepad & Virtual Keyboard Controls]${C_RESET}"
+        echo " 1) Toggle On-Screen Touch Keyboard (fbkeyboard)"
+        echo " 2) View Gamepad Input Mapper Status (vita-input-mapper)"
+        echo " 3) Physical Gamepad Shortcuts & Cheat Sheet"
+        echo " 4) Return to Main Menu"
+        echo "================================================================================"
+        printf " Select an option [1-4]: "
+        read -r choice
+        case "$choice" in
+            1)
+                echo ""
+                if command -v toggle-keyboard >/dev/null 2>&1; then
+                    toggle-keyboard
+                elif pidof fbkeyboard >/dev/null 2>&1; then
+                    killall -SIGUSR1 fbkeyboard 2>/dev/null || true
+                    echo "[OK] Keyboard toggled."
+                else
+                    echo "[!] fbkeyboard not found."
+                fi
+                sleep 1
+                ;;
+            2)
+                echo ""
+                if pidof vita-input-mapper >/dev/null 2>&1; then
+                    echo "[OK] vita-input-mapper is ACTIVE (PID: $(pidof vita-input-mapper))."
+                    echo "     Analog sticks and buttons are mapped to input events."
+                else
+                    echo "[i] vita-input-mapper is not currently running."
+                fi
+                press_enter
+                ;;
+            3)
+                echo ""
+                echo "================================================================================"
+                echo " PlayStation Vita Physical Shortcuts Cheat Sheet:"
+                echo "================================================================================"
+                echo "  * SELECT Button       : Sends ESC key (exits vi, cancels command, dialogs)"
+                echo "  * PS (PlayStation)    : Toggles fbkeyboard on-screen virtual keyboard"
+                echo "  * VOLUME UP / DOWN    : Adjust screen brightness up/down by 10% (Vita 2000 LCD)"
+                echo "  * POWER Button (tap)  : Immediate display sleep / wake"
+                echo "  * POWER Button (hold) : Graceful system shutdown (hold 3s)"
+                echo "  * Touchscreen         : Direct tap to click; bottom half types on fbkeyboard"
+                echo "================================================================================"
+                press_enter
+                ;;
+            4|"")
+                return 0
+                ;;
+            *)
+                echo "Invalid option."
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+# 9. Desktop & Boot Preferences Menu
+menu_desktop() {
+    while true; do
+        print_dashboard_header
+        echo -e "${C_YELLOW}${C_BOLD}[Desktop & Boot Preferences]${C_RESET}"
+        echo " 1) Toggle Boot-to-Desktop (Directly launch IceWM on startup vs console)"
+        echo " 2) Launch IceWM Graphical Desktop Now (alpine-desktop)"
+        echo " 3) Run First-Boot Setup Wizard (vita-setup)"
+        echo " 4) Run Hardware Diagnostics Suite (vita-diagnostics)"
+        echo " 5) Return to Main Menu"
+        echo "================================================================================"
+        printf " Select an option [1-5]: "
+        read -r choice
+        case "$choice" in
+            1)
+                echo ""
+                if command -v vita-autostart >/dev/null 2>&1; then
+                    vita-autostart toggle
+                else
+                    echo "[!] vita-autostart utility not found."
+                fi
+                press_enter
+                ;;
+            2)
+                echo ""
+                echo "[*] Launching IceWM Graphical Desktop..."
+                sleep 1
+                if command -v alpine-desktop >/dev/null 2>&1; then
+                    alpine-desktop
+                else
+                    echo "[!] alpine-desktop not found."
+                    press_enter
+                fi
+                ;;
+            3)
+                echo ""
+                if command -v vita-setup >/dev/null 2>&1; then
+                    vita-setup
+                else
+                    echo "[!] vita-setup utility not found."
+                    press_enter
+                fi
+                ;;
+            4)
+                echo ""
+                if command -v vita-diagnostics >/dev/null 2>&1; then
+                    vita-diagnostics
+                else
+                    echo "[!] vita-diagnostics utility not found."
+                fi
+                press_enter
+                ;;
+            5|"")
+                return 0
+                ;;
+            *)
+                echo "Invalid option."
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+# 10. System Reboot & Shutdown Menu
+menu_power() {
+    print_dashboard_header
+    echo -e "${C_YELLOW}${C_BOLD}[System Power & Reset]${C_RESET}"
+    echo " 1) Clean Reboot back to VitaOS LiveArea"
+    echo " 2) Graceful System Power Off (Safe hardware shutdown)"
+    echo " 3) Return to Main Menu"
+    echo "================================================================================"
+    printf " Select an option [1-3]: "
+    read -r choice
+    case "$choice" in
+        1)
+            echo ""
+            echo "[*] Preparing clean reboot to VitaOS..."
+            sync
+            if command -v reboot >/dev/null 2>&1; then
+                reboot
+            else
+                echo 1 > /proc/sys/kernel/sysrq
+                echo b > /proc/sysrq-trigger
+            fi
+            ;;
+        2)
+            echo ""
+            echo "[*] Shutting down LinuxOnVita..."
+            sync
+            if command -v poweroff >/dev/null 2>&1; then
+                poweroff
+            else
+                echo 1 > /proc/sys/kernel/sysrq
+                echo o > /proc/sysrq-trigger
+            fi
+            ;;
+        3|"")
+            return 0
+            ;;
+        *)
+            echo "Invalid option."
+            sleep 1
+            ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Main Menu
+# ------------------------------------------------------------------------------
+
+menu_main() {
+    while true; do
+        print_dashboard_header
+        echo -e "${C_BOLD}Configuration Categories:${C_RESET}"
+        echo "  1) Wireless & Networking       (Connect to Wi-Fi, scan, radio toggle, IP)"
+        echo "  2) Bluetooth & Peripherals     (Pair keyboards, mice, gamepads, status)"
+        echo "  3) Display & Screen Sleep      (Brightness on 2000 LCD, sleep daemon, dim)"
+        echo "  4) CPU & Performance           (444 MHz max, 333 MHz standard, powersave)"
+        echo "  5) LED Indicator Modes         (PS Button: Heartbeat, Disk, Solid, Off)"
+        echo "  6) Storage & Partition Safety  (Read-only ux0 protection, remounts, space)"
+        echo "  7) Memory & Compressed Swap    (ZRAM compressed RAM, swapfile allocation)"
+        echo "  8) Gamepad & Virtual Keyboard  (Touch keyboard toggle, shortcuts cheat sheet)"
+        echo "  9) Desktop & Boot Preferences  (Boot to IceWM toggle, setup wizard, logs)"
+        echo " 10) System Reboot & Shutdown    (Reboot to VitaOS, Power off console)"
+        echo " 11) Exit Control Center"
+        echo "================================================================================"
+        printf " Select a category [1-11]: "
+        read -r choice
+        case "$choice" in
+            1) menu_wifi ;;
+            2) menu_bluetooth ;;
+            3) menu_display ;;
+            4) menu_cpu ;;
+            5) menu_led ;;
+            6) menu_storage ;;
+            7) menu_memory ;;
+            8) menu_input ;;
+            9) menu_desktop ;;
+            10) menu_power ;;
+            11|q|Q|exit)
+                clear_screen
+                echo "Exited PlayStation Vita Handheld Control Center."
+                break
+                ;;
+            *)
+                echo "Invalid option: $choice"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+# ------------------------------------------------------------------------------
+# Direct CLI Dispatch & Non-Interactive Commands
+# ------------------------------------------------------------------------------
+
+show_help() {
+    cat << EOF
+Usage: vita-config [COMMAND] [ARGS...]
+       config [COMMAND]
+
+Handheld Control Center TUI for PlayStation Vita Linux.
+
+Commands:
+  (no args)             Launch interactive Handheld Control Center TUI
+  status                Display system status dashboard and exit
+  wifi [args...]        Jump to Wi-Fi settings or pass args to vita-wifi
+  bluetooth [args...]   Jump to Bluetooth settings or pass args to vita-bluetooth
+  display [level]       Adjust brightness (PS Vita 2000 LCD) or toggle display sleep
+  cpu [profile|mhz]     Set CPU profile (max, balanced, powersave, 444, 333)
+  storage [ro|rw]       Toggle storage protection mode on ux0
+  led [mode]            Set PS Button LED mode (heartbeat, disk, on, off)
+  swap [on|off]         Toggle ZRAM RAM compression
+  autostart [on|off]    Toggle boot-to-desktop preference
+  reboot                Clean reboot to VitaOS LiveArea
+  poweroff              Graceful system shutdown
+  help, -h, --help      Show this help message
+
+Hardware Notes:
+  * Display Brightness : Backlight adjustments are exclusive to PS Vita 2000 (Slim) LCD.
+                         PS Vita 1000 OLED features fixed emissive hardware gamma.
+  * Battery Telemetry  : Linux currently lacks a PMIC/fuel gauge driver; battery level
+                         cannot be monitored in software.
+
+Examples:
+  vita-config               # Launch interactive menu
+  vita-config status        # View system dashboard
+  vita-config cpu max       # Immediately switch to 444 MHz
+  vita-config display 75    # Set brightness to 75% (PS Vita 2000 LCD only)
+  vita-config storage ro    # Lock storage into read-only protection
+EOF
+}
+
+ACTION="${1:-}"
+shift 2>/dev/null || true
+
+case "$ACTION" in
+    "")
+        menu_main
+        ;;
+    status|info)
+        print_dashboard_header
+        echo ""
+        ;;
+    wifi|network)
+        if [ "$#" -gt 0 ]; then
+            /usr/bin/vita-wifi "$@"
+        else
+            menu_wifi
+        fi
+        ;;
+    bluetooth|bt)
+        if [ "$#" -gt 0 ]; then
+            /usr/bin/vita-bluetooth "$@"
+        else
+            menu_bluetooth
+        fi
+        ;;
+    display|brightness)
+        hw=$(detect_hardware)
+        if [ "$#" -gt 0 ]; then
+            if [ "$1" = "sleep" ] || [ "$1" = "0" ]; then
+                if command -v vita-powerd >/dev/null 2>&1; then
+                    vita-powerd sleep
+                else
+                    /usr/bin/vita-brightness set 0
+                fi
+            elif [ "$1" = "wake" ]; then
+                if command -v vita-powerd >/dev/null 2>&1; then
+                    vita-powerd wake
+                else
+                    /usr/bin/vita-brightness max
+                fi
+            elif [ "$hw" = "oled" ]; then
+                echo "Notice: PS Vita 1000 OLED displays do not use an adjustable LCD backlight."
+                echo "Brightness is fixed at boot Level 15 Gamma. Display sleep is supported via:"
+                echo "  vita-config display sleep"
+            elif [ "$hw" = "pstv" ]; then
+                echo "Notice: PlayStation TV uses HDMI output. Adjust display brightness on your monitor/TV."
+            else
+                /usr/bin/vita-brightness set "$1"
+            fi
+        else
+            menu_display
+        fi
+        ;;
+    cpu|performance)
+        if [ "$#" -gt 0 ]; then
+            /usr/bin/vita-cpu "$@"
+        else
+            menu_cpu
+        fi
+        ;;
+    led)
+        if [ "$#" -gt 0 ]; then
+            /usr/bin/vita-led "$@"
+        else
+            menu_led
+        fi
+        ;;
+    storage)
+        if [ "$#" -gt 0 ]; then
+            /usr/bin/vita-storage "$@"
+        else
+            menu_storage
+        fi
+        ;;
+    swap|memory)
+        if [ "$#" -gt 0 ]; then
+            /usr/bin/vita-swap "$@"
+        else
+            menu_memory
+        fi
+        ;;
+    autostart)
+        if [ "$#" -gt 0 ]; then
+            /usr/bin/vita-autostart "$@"
+        else
+            menu_desktop
+        fi
+        ;;
+    input|keyboard)
+        menu_input
+        ;;
+    desktop)
+        menu_desktop
+        ;;
+    reboot)
+        sync
+        reboot
+        ;;
+    poweroff|shutdown)
+        sync
+        poweroff
+        ;;
+    help|-h|--help)
+        show_help
+        ;;
+    *)
+        echo "Unknown option or category: '$ACTION'"
+        echo "Run 'vita-config help' for usage details, or run without arguments for the TUI."
+        exit 1
+        ;;
+esac
