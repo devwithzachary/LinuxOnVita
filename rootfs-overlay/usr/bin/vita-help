@@ -36,6 +36,7 @@ show_full_help() {
     printf "  ${C_GREEN}%-18s${C_RESET} %s\n" "vita-wifi" "Scan, connect, manage Wi-Fi networks and view signal telemetry"
     printf "  ${C_GREEN}%-18s${C_RESET} %s\n" "vita-bluetooth" "Bluetooth manager for keyboards, mice, gamepads, and audio"
     echo -e "                     ${C_DIM}(Note: Marvell 88W8787 supports BT 2.1/3.0 Classic; BLE-only is unsupported)${C_RESET}"
+    printf "  ${C_GREEN}%-18s${C_RESET} %s\n" "vita-webui" "Web management portal and wireless file transfer (http://<IP>:8080)"
     echo ""
     echo -e "${C_BOLD}Hardware & Power Management:${C_RESET}"
     printf "  ${C_GREEN}%-18s${C_RESET} %s\n" "vita-cpu" "CPU clock scaling (111, 333, 444 MHz) and power profiles"
@@ -59,8 +60,8 @@ show_full_help() {
     printf "  ${C_GREEN}%-18s${C_RESET} %s\n" "vita-swap" "ZRAM compressed RAM expansion and swapfile manager"
     echo ""
     echo "================================================================================"
-    echo -e "Detailed info: ${C_BOLD}help <command>${C_RESET} (e.g. ${C_CYAN}help vita-wifi${C_RESET} or ${C_CYAN}help wifi${C_RESET})"
-    echo -e "Category info: ${C_BOLD}help <category>${C_RESET} (topics: ${C_CYAN}wifi, bluetooth, hardware, desktop, gaming, storage${C_RESET})"
+    echo -e "Detailed info: ${C_BOLD}help <command>${C_RESET} (e.g. ${C_CYAN}help vita-wifi${C_RESET} or ${C_CYAN}help webui${C_RESET})"
+    echo -e "Category info: ${C_BOLD}help <category>${C_RESET} (topics: ${C_CYAN}wifi, bluetooth, webui, hardware, desktop, gaming, storage${C_RESET})"
     echo -e "Shell builtins: ${C_BOLD}builtin help <topic>${C_RESET} (e.g. ${C_CYAN}builtin help cd${C_RESET})"
     echo "================================================================================"
 }
@@ -80,6 +81,13 @@ show_topic_help() {
                 /usr/bin/vita-bluetooth --help 2>/dev/null || /usr/bin/vita-bluetooth help
             else
                 echo "vita-bluetooth: Bluetooth peripheral pairing and audio manager."
+            fi
+            ;;
+        webui|vita-webui|web)
+            if [ -x "/usr/bin/vita-webui" ]; then
+                /usr/bin/vita-webui help
+            else
+                echo "vita-webui: Web management portal and wireless file transfer server."
             fi
             ;;
         cpu|vita-cpu)

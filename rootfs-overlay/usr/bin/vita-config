@@ -260,9 +260,10 @@ menu_wifi() {
         echo " 4) Turn Wi-Fi Radio ON"
         echo " 5) Turn Wi-Fi Radio OFF (Conserve Battery)"
         echo " 6) View IP Addresses & Network Interfaces"
-        echo " 7) Return to Main Menu"
+        echo " 7) Web Management Portal & File Transfer (vita-webui)"
+        echo " 8) Return to Main Menu"
         echo "================================================================================"
-        printf " Select an option [1-7]: "
+        printf " Select an option [1-8]: "
         read -r choice
         case "$choice" in
             1)
@@ -324,7 +325,16 @@ menu_wifi() {
                 echo "================================================================================"
                 press_enter
                 ;;
-            7|"")
+            7)
+                echo ""
+                if command -v vita-webui >/dev/null 2>&1; then
+                    vita-webui
+                else
+                    echo "[!] vita-webui utility not found."
+                fi
+                press_enter
+                ;;
+            8|"")
                 return 0
                 ;;
             *)
@@ -1044,6 +1054,7 @@ Commands:
   status                Display system status dashboard and exit
   wifi [args...]        Jump to Wi-Fi settings or pass args to vita-wifi
   bluetooth [args...]   Jump to Bluetooth settings or pass args to vita-bluetooth
+  webui [args...]       Manage web portal (vita-webui start/stop/status/url)
   display [level]       Adjust brightness (PS Vita 2000 LCD) or toggle display sleep
   cpu [profile|mhz]     Set CPU profile (max, balanced, powersave, 444, 333)
   storage [ro|rw]       Toggle storage protection mode on ux0
@@ -1092,6 +1103,13 @@ case "$ACTION" in
             /usr/bin/vita-bluetooth "$@"
         else
             menu_bluetooth
+        fi
+        ;;
+    webui|web)
+        if command -v vita-webui >/dev/null 2>&1; then
+            vita-webui "$@"
+        else
+            echo "[!] vita-webui utility not found."
         fi
         ;;
     display|brightness)

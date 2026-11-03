@@ -58,7 +58,9 @@ if [ -d "${TOOLS_DIR}" ]; then
     cp "${TOOLS_DIR}/vita-input-mapper/vita-input-mapper" "${ROOTFS_OVERLAY}/usr/bin/"
     cp "${TOOLS_DIR}/vita-tun/vita-tun" "${ROOTFS_OVERLAY}/usr/bin/"
     cp "${TOOLS_DIR}/vita-powerd/vita-powerd" "${ROOTFS_OVERLAY}/usr/bin/"
+    cp "${TOOLS_DIR}/vita-webui/vita-webui-server" "${ROOTFS_OVERLAY}/usr/bin/"
     arm-linux-gnueabihf-strip "${ROOTFS_OVERLAY}/usr/bin/vita-powerd" 2>/dev/null || true
+    arm-linux-gnueabihf-strip "${ROOTFS_OVERLAY}/usr/bin/vita-webui-server" 2>/dev/null || true
     if [ -f "${TOOLS_DIR}/fbdoom/fbdoom" ]; then
         arm-linux-gnueabihf-strip "${TOOLS_DIR}/fbdoom/fbdoom" 2>/dev/null || true
         cp "${TOOLS_DIR}/fbdoom/fbdoom" "${ROOTFS_OVERLAY}/usr/bin/"

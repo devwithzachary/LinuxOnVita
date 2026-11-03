@@ -35,6 +35,23 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Supports non-interactive scriptable subcommands (`status`, `wifi`, `bluetooth`, `display`, `cpu`, `storage`, `led`, `swap`, `autostart`, `reboot`, `poweroff`).
   - Integrated into the IceWM graphical desktop (`alpine-desktop`) application menu and settings, and registered in `welcome.sh` and `vita-help`.
 
+### 🌐 Web Management Portal & Wireless File Transfer (`vita-webui`)
+- **Zero-Dependency Native HTTP Server (`vita-webui-server`):**
+  - Engineered a high-performance, lightweight embedded C web server compiled statically with zero external dependencies, running with a memory footprint under 1 MB.
+  - Listens on port 8080 (`http://vita.local:8080` or `http://<VITA_IP>:8080`) and serves a responsive single-page web application featuring PlayStation slate styling (`#0b0e14`, `#00d2ff`, and `#0070d1`).
+  - Implemented `/api/status` endpoint delivering live system telemetry: CPU clock, cpufreq governor, load averages, RAM and ZRAM usage, storage partition capacity, mount mode (`ro` / `rw`), Wi-Fi IP and SSID, Bluetooth radio state, hardware model, and system uptime.
+- **Drag-and-Drop Web File Manager with Storage Safety Elevation:**
+  - Full browser-based file management for `/mnt/ux0/` (or any subfolder) with direct chunked file streaming downloads (`/download`) and interactive directory creation/deletion.
+  - Streaming multipart/form-data upload pipeline (`/api/upload`) that writes directly to disk in 16 KB chunks without buffering entire payloads into RAM, preventing Out-Of-Memory (OOM) issues during large ROM or zip transfers.
+  - Intelligent storage elevation: automatically detects read-only protected storage partitions (`/mnt/ux0`), temporarily remounts `rw` for uploads, flushes data to flash media via `sync()`, and safely restores read-only protection.
+- **In-Browser Web Terminal & Hardware Quick Actions:**
+  - Interactive command execution terminal (`/api/terminal`) allowing users to run shell commands and inspect output directly from a phone, tablet, or PC without SSH keys or telnet.
+  - Web-based system controls: one-click CPU clock switching (444 MHz max, 333 MHz balanced, 111 MHz powersave), PS Button LED triggers, display sleep/wake, and clean reboot to VitaOS.
+- **CLI Management Utility & Boot Service (`vita-webui` & `S60vita-webui`):**
+  - Created `/usr/bin/vita-webui` management tool supporting interactive handheld TUI menus and subcommands (`status`, `start [port]`, `stop`, `restart [port]`, `enable`, `disable`, `url`).
+  - Added sysvinit service `/etc/init.d/S60vita-webui` providing automatic background daemon initialization at boot, configurable via `/etc/vita-webui.conf` or `/mnt/ux0/linux/webui.conf`.
+  - Fully integrated into `vita-config` under Wireless & Networking and registered in `vita-help` and `welcome.sh`.
+
 
 
 ## [v1.5.0] - 2026-10-23

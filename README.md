@@ -43,13 +43,14 @@ While original proof-of-concept projects proved that modern Linux can boot on th
 ## 📚 Documentation & Roadmap
 
 > [!TIP]
-> * Looking for the comprehensive user manual? Check out the **[Complete User Guide](USER_GUIDE.md)** for detailed walkthroughs on every built-in utility (`vita-wifi`, `vita-brightness`, `vita-swap`, `vita-doom`, `alpine-desktop`), on-screen touch typing, physical gamepad controls, remote SSH access, and package management.
+> * Looking for the comprehensive user manual? Check out the **[Complete User Guide](USER_GUIDE.md)** for detailed walkthroughs on every built-in utility (`vita-wifi`, `vita-bluetooth`, `vita-webui`, `vita-brightness`, `vita-swap`, `vita-doom`, `alpine-desktop`), on-screen touch typing, physical gamepad controls, remote SSH access, and package management.
 > * Want to see what is coming next? Check out the **[Project Roadmap](ROADMAP.md)** for upcoming release plans from v1.4.0 through v1.8.0 and beyond.
 
 ---
 
 ## ✨ Features
 
+- **Web-Based Management Portal & Wireless File Transfer (`vita-webui`):** Zero-dependency native HTTP server listening on port 8080 (`http://vita.local:8080` or `http://<VITA_IP>:8080`) featuring live telemetry dashboards (CPU, RAM, storage, Wi-Fi), drag-and-drop file transfers directly to `/mnt/ux0/` with storage protection auto-elevation, an in-browser web terminal, and hardware controls.
 - **Handheld Control Center TUI (`vita-config` / `config`):** Unified, interactive handheld configuration console (inspired by `raspi-config`) with live dashboard telemetry (Hardware Model, CPU Profile, Wi-Fi, Bluetooth, Storage, Display) and submenus for networking, bluetooth, model-aware display backlight, CPU profiles, storage safety, and desktop preferences.
 - **Bluetooth Subsystem & Peripheral Manager (`vita-bluetooth`):** Marvell 88W8787 combo Bluetooth driver enablement (`CONFIG_BT_MRVL_SDIO=y`) with BlueZ 5 daemon, automatic discovery, one-touch peripheral pairing (keyboards, mice, gamepads, audio), and desktop GUI integration.
 - **Interactive First-Boot Setup Wizard (`vita-setup`):** Automated guided onboarding wizard on first boot for Wi-Fi scanning, storage protection mode selection, ZRAM memory optimization, permanent Alpine container creation, desktop autostart, and PS Button LED configuration.

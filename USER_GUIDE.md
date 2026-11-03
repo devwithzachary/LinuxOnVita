@@ -16,6 +16,7 @@ Welcome to the comprehensive user guide for **LinuxOnVita**. This guide is desig
    - [Interactive First-Boot Setup Wizard (`vita-setup`)](#1-interactive-first-boot-setup-wizard-vita-setup)
    - [On-Device Wi-Fi Manager (`vita-wifi`)](#2-on-device-wi-fi-manager-vita-wifi)
    - [Bluetooth Peripheral & Audio Manager (`vita-bluetooth`)](#bluetooth-peripheral--audio-manager-vita-bluetooth)
+   - [Web Management Portal & Wireless File Transfer (`vita-webui`)](#web-management-portal--wireless-file-transfer-vita-webui)
    - [Screen Brightness Control (`vita-brightness`)](#3-screen-brightness-control-vita-brightness)
    - [Memory Expansion & Swap (`vita-swap`)](#4-memory-expansion--swap-vita-swap)
    - [Framebuffer DOOM (`vita-doom`)](#5-framebuffer-doom-vita-doom)
@@ -329,6 +330,54 @@ vita-bluetooth on                  # Turn the radio back on and reconnect truste
 When running inside the graphical desktop (`alpine-desktop`), launch the touch-friendly GTK dialog:
 ```bash
 vita-bluetooth gui
+```
+
+---
+
+### Web Management Portal & Wireless File Transfer (`vita-webui`)
+LinuxOnVita includes an embedded, zero-dependency web management portal and wireless file transfer server (`vita-webui-server`). Built as a native C daemon with a memory footprint under 1 MB, it turns your PS Vita into a self-hosted wireless server accessible from any web browser on your local network:
+```
+http://vita.local:8080
+http://<VITA_IP>:8080
+```
+
+> [!TIP]
+> The web management service starts automatically in the background at boot (`/etc/init.d/S60vita-webui`). Whenever your PS Vita connects to Wi-Fi, open your phone, tablet, or desktop browser and navigate to `http://vita.local:8080` (or the IP shown on your console screen).
+
+#### Key Features:
+1. **Live System Dashboard:**
+   - Real-time telemetry: CPU frequency, active cpufreq governor, 1/5/15-minute load averages, RAM and ZRAM memory utilization, storage capacity (`ux0:`), Wi-Fi IP and SSID, Bluetooth radio state, hardware model, and uptime.
+2. **Drag-and-Drop Web File Manager:**
+   - Browse `/mnt/ux0/` and subdirectories directly in your browser.
+   - Drag and drop files (game ROMs, ISOs, zips, media, or scripts) directly from your computer into the browser.
+   - Uploads are streamed in 16 KB chunks directly to disk without loading entire files into the PS Vita's limited RAM, preventing Out-Of-Memory (OOM) crashes.
+   - Automatic Storage Safety Elevation: If your storage card is mounted read-only (`ro`) for corruption protection, `vita-webui-server` automatically detects it, temporarily elevates the mount to read-write (`rw`), writes the file, executes `sync()`, and immediately restores read-only protection!
+   - Direct downloads: Click any file to download it directly to your PC or phone.
+   - Folder creation and file deletion tools.
+3. **In-Browser Web Terminal:**
+   - Run shell commands and inspect output directly from your browser without needing SSH keys or a local terminal client.
+4. **Hardware Quick Controls:**
+   - **CPU Scaling:** Instantly switch between Max (444 MHz), Balanced (333 MHz), and Powersave (111 MHz).
+   - **Display Controls:** Put display to sleep or wake the screen remotely.
+   - **PS Button LED:** Switch between heartbeat pulse, disk activity, and disabled modes.
+   - **Reboot & Shutdown:** Safely sync filesystems and reboot back to VitaOS LiveArea or power off.
+
+#### Handheld CLI & Interactive Menu:
+Run `vita-webui` with no arguments on the PS Vita console to launch the interactive handheld TUI:
+```bash
+vita-webui
+```
+
+#### Scriptable CLI Commands:
+```bash
+vita-webui status          # View server status, PID, and active browser URLs
+vita-webui url             # Print only the browser connection URL
+vita-webui start           # Start the web server daemon on default port 8080
+vita-webui start 8888      # Start on a custom port
+vita-webui stop            # Stop the web server daemon
+vita-webui restart         # Restart the web server daemon
+vita-webui enable          # Enable automatic startup at system boot
+vita-webui disable         # Disable automatic startup at system boot
 ```
 
 ---

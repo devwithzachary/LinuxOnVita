@@ -47,7 +47,7 @@ fi
 help() {
     if [ "$#" -eq 0 ]; then
         /usr/bin/vita-help
-    elif [ -x "/usr/bin/$1" ] || [ "$1" = "config" ] || [ "$1" = "wifi" ] || [ "$1" = "network" ] || [ "$1" = "bluetooth" ] || [ "$1" = "bt" ] || [ "$1" = "hardware" ] || [ "$1" = "power" ] || [ "$1" = "desktop" ] || [ "$1" = "storage" ] || [ "$1" = "memory" ] || [ "$1" = "audio" ] || [ "$1" = "gaming" ] || [ "$1" = "doom" ]; then
+    elif [ -x "/usr/bin/$1" ] || [ "$1" = "config" ] || [ "$1" = "wifi" ] || [ "$1" = "network" ] || [ "$1" = "bluetooth" ] || [ "$1" = "bt" ] || [ "$1" = "webui" ] || [ "$1" = "web" ] || [ "$1" = "hardware" ] || [ "$1" = "power" ] || [ "$1" = "desktop" ] || [ "$1" = "storage" ] || [ "$1" = "memory" ] || [ "$1" = "audio" ] || [ "$1" = "gaming" ] || [ "$1" = "doom" ]; then
         /usr/bin/vita-help "$@"
     elif type builtin >/dev/null 2>&1 && builtin help "$1" >/dev/null 2>&1; then
         builtin help "$@"
