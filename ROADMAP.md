@@ -122,10 +122,10 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
     * **Console:** Change console font size on the fly.
     * **Power:** Reboot directly to VitaOS LiveArea or perform full shutdown.
 
-* **Desktop Wi-Fi Manager (GUI):**
-  * Intuitive network manager applet for the IceWM desktop system tray.
-  * Graphical network scanning, password prompt dialogs, and active signal strength indicators.
-  * Automatic background reconnection daemon across network dropouts and roaming.
+* **Desktop Wi-Fi Manager (GUI) (`vita-wifi gui` & `vita-wifi-widget`):**
+  * Intuitive network manager applet for the IceWM desktop system tray with live signal strength icons and hover tooltips.
+  * Graphical network scanning, password prompt dialogs, manual SSID entry, and radio power toggling.
+  * Automatic background reconnection daemon (`vita-wifi-daemon`) across network dropouts, roaming, and display sleep.
 
 * **In-App Bootstrapper GitHub Release Update Checker (`LinuxOnVita.vpk`):**
   * Built-in update notification and one-click VPK download capability directly within the VitaOS handheld installer.

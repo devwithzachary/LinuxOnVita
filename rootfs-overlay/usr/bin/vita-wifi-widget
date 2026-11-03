@@ -1,0 +1,112 @@
+#!/bin/sh
+# LinuxOnVita Wi-Fi System Tray Applet (vita-wifi-widget)
+#
+# Provides an interactive system tray notification widget in the IceWM taskbar.
+# Displays real-time signal strength (0-100%, dBm), active SSID, and IP address.
+# 1-Click / 1-Tap launches the touch-friendly Graphical Wi-Fi Manager.
+#
+# Licensed under the GNU General Public License v3.0 (GPL-3.0)
+
+# Check if running under X11
+if [ -z "$DISPLAY" ]; then
+    exit 0
+fi
+
+# Ensure single instance
+PIDFILE="/tmp/vita-wifi-widget.pid"
+if [ -f "$PIDFILE" ]; then
+    old_pid=$(cat "$PIDFILE" 2>/dev/null || echo "")
+    if [ -n "$old_pid" ] && kill -0 "$old_pid" 2>/dev/null; then
+        exit 0
+    fi
+fi
+echo "$$" > "$PIDFILE" 2>/dev/null || true
+
+# If yad is not installed, exit quietly
+if ! command -v yad >/dev/null 2>&1; then
+    exit 0
+fi
+
+PIPE="/tmp/vita-wifi-tray-$$.pipe"
+rm -f "$PIPE"
+mkfifo "$PIPE"
+trap 'rm -f "$PIPE" "$PIDFILE" 2>/dev/null' EXIT INT TERM
+
+# Launch yad notification reading from pipe
+yad --notification \
+    --listen \
+    --image="network-wireless" \
+    --text="LinuxOnVita Wi-Fi: Initializing..." \
+    --command="sh -c '/usr/bin/vita-wifi gui'" \
+    --menu="Wi-Fi Manager (GUI)!sh -c '/usr/bin/vita-wifi gui'|Disconnect Network!sh -c '/usr/bin/vita-wifi disconnect'|Toggle Wi-Fi Radio!sh -c '/usr/bin/vita-wifi toggle'|Signal Telemetry!sh -c '/usr/bin/vita-wifi status-gui'|Control Center!sh -c 'sakura -e /usr/bin/vita-config'" \
+    < "$PIPE" &
+YAD_PID=$!
+
+# Feeder loop: update tooltip and icon every 3 seconds
+(
+    exec 3> "$PIPE"
+    while kill -0 "$YAD_PID" 2>/dev/null; do
+        iface="mlan0"
+        if [ ! -e "/sys/class/net/mlan0" ] && [ -e "/sys/class/net/wlan0" ]; then
+            iface="wlan0"
+        fi
+
+        operstate="DOWN"
+        if [ -f "/sys/class/net/$iface/operstate" ]; then
+            operstate=$(cat "/sys/class/net/$iface/operstate" 2>/dev/null || echo "DOWN")
+        fi
+
+        if [ -f "/tmp/wifi_disabled" ] || [ "$operstate" = "DOWN" ]; then
+            icon="network-wireless-disabled"
+            tooltip="PlayStation Vita Wi-Fi: Radio OFF\nClick or tap to open Wi-Fi Manager"
+        else
+            cur_ssid=""
+            wpa_state="DISCONNECTED"
+            if pidof wpa_supplicant >/dev/null 2>&1; then
+                wpa_out=$(wpa_cli -i "$iface" status 2>/dev/null || true)
+                cur_ssid=$(echo "$wpa_out" | grep "^ssid=" | cut -d= -f2- || true)
+                wpa_state=$(echo "$wpa_out" | grep "^wpa_state=" | cut -d= -f2- || true)
+            fi
+
+            if [ "$wpa_state" = "COMPLETED" ] && [ -n "$cur_ssid" ]; then
+                cur_ip=$(ip -4 addr show "$iface" 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2 || true)
+                sig_poll=$(wpa_cli -i "$iface" signal_poll 2>/dev/null || true)
+                cur_rssi=$(echo "$sig_poll" | grep "^RSSI=" | cut -d= -f2 || true)
+
+                pct=0
+                if [ -n "$cur_rssi" ]; then
+                    pct=$(( (cur_rssi + 100) * 2 ))
+                    [ $pct -gt 100 ] && pct=100
+                    [ $pct -lt 0 ] && pct=0
+                fi
+
+                if [ $pct -ge 75 ]; then
+                    icon="network-wireless-signal-excellent"
+                elif [ $pct -ge 50 ]; then
+                    icon="network-wireless-signal-good"
+                elif [ $pct -ge 25 ]; then
+                    icon="network-wireless-signal-ok"
+                else
+                    icon="network-wireless-signal-weak"
+                fi
+
+                tooltip="PlayStation Vita Wi-Fi: ${cur_ssid}\nSignal: ${cur_rssi:-N/A} dBm (${pct}%)\nIP Address: ${cur_ip:-Acquiring DHCP...}\nClick or tap to open Wi-Fi Manager"
+            else
+                icon="network-wireless-offline"
+                tooltip="PlayStation Vita Wi-Fi: Disconnected\nClick or tap to scan & connect"
+            fi
+        fi
+
+        printf "icon:%s\n" "$icon" >&3 2>/dev/null || break
+        printf "tooltip:%s\n" "$tooltip" >&3 2>/dev/null || break
+
+        sleep 3
+    done
+    exec 3>&-
+) &
+FEEDER_PID=$!
+
+wait "$YAD_PID" 2>/dev/null || true
+kill "$FEEDER_PID" 2>/dev/null || true
+rm -f "$PIPE" "$PIDFILE" 2>/dev/null || true
+

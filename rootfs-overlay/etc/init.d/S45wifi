@@ -103,6 +103,8 @@ start)
                 else
                     echo "[WiFi] $IFACE associated. Waiting for background DHCP..."
                 fi
+                # Start background reconnection and roaming daemon
+                [ -x /usr/bin/vita-wifi-daemon ] && /usr/bin/vita-wifi-daemon start >/dev/null 2>&1 || true
             else
                 echo "[WiFi] No wpa_supplicant.conf found. Initializing idle Wi-Fi stack for vita-wifi..."
                 cat << 'EOF' > /etc/wpa_supplicant.conf
@@ -111,6 +113,7 @@ update_config=1
 EOF
                 wpa_supplicant -B -i "$IFACE" -c /etc/wpa_supplicant.conf -O /var/run/wpa_supplicant
                 echo "[WiFi] Wi-Fi ready. Run 'vita-wifi' to scan and connect."
+                [ -x /usr/bin/vita-wifi-daemon ] && /usr/bin/vita-wifi-daemon start >/dev/null 2>&1 || true
             fi
         else
             echo "[WiFi] Wireless interface not detected after ${TIMEOUT}s."
@@ -120,6 +123,7 @@ EOF
     echo "Starting Wi-Fi daemon in background..."
     ;;
 stop)
+    [ -x /usr/bin/vita-wifi-daemon ] && /usr/bin/vita-wifi-daemon stop >/dev/null 2>&1 || true
     killall wpa_supplicant 2>/dev/null
     killall udhcpc 2>/dev/null
     for iface in mlan0 wlan0; do

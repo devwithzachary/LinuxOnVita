@@ -273,7 +273,39 @@ Displays your active interface (`mlan0`), SSID, MAC address, assigned IP, BSSID,
 ```bash
 vita-wifi off    # Turn off the Wi-Fi radio to save battery
 vita-wifi on     # Turn the radio back on and reconnect
+vita-wifi toggle # Toggle radio power state
 ```
+
+#### Disconnecting:
+```bash
+vita-wifi disconnect # Disconnect from active network without disabling radio
+```
+
+#### Desktop Touch GUI (`vita-wifi gui`):
+When running inside the graphical desktop (`alpine-desktop`), launch the touch-optimized GTK dialog:
+```bash
+vita-wifi gui
+```
+* **Visual Network Scanner:** Displays an interactive list of all discovered 2.4 GHz wireless networks with active signal strength bars (`[====]`), signal percentage, security type (WPA2, WPA3, Open), and BSSID.
+* **One-Touch Association:** Tap your network, tap **Connect**, and enter your passphrase in a masked input dialog.
+* **Manual / Hidden Networks:** Connect to non-broadcasting SSIDs via the **Manual SSID** button.
+* **Quick Controls:** 1-tap buttons for **Rescan**, **Disconnect**, and **Radio ON / OFF**.
+
+#### IceWM System Tray Applet (`vita-wifi-widget`):
+Running automatically in the desktop taskbar, the system tray applet provides continuous signal monitoring:
+* **Dynamic Icons:** Reflects link quality in real time (Excellent, Good, Fair, Weak, Disconnected, or Disabled).
+* **Hover Tooltip:** Shows the connected SSID, exact dBm, percentage, and assigned IPv4 address.
+* **Quick Access:** Tap the icon to launch the Graphical Wi-Fi Manager, or right-click to open quick shortcuts (Disconnect, Toggle Radio, Telemetry).
+
+#### Automatic Background Reconnection Daemon (`vita-wifi-daemon`):
+LinuxOnVita includes a background daemon that monitors wireless connectivity:
+```bash
+vita-wifi daemon status     # Check daemon state and recent connection logs
+vita-wifi daemon restart    # Restart background monitor
+```
+* **Dropout Recovery:** If Wi-Fi signal drops or the router switches channels, the daemon automatically re-associates with known networks in `wpa_supplicant.conf`.
+* **DHCP Lease Guard:** Detects lost IP leases or unreachable default gateways and automatically requests DHCP renewal without interrupting background services.
+* **Sleep / Wake Resumption:** Automatically recovers connection when the console wakes from display sleep.
 
 ---
 

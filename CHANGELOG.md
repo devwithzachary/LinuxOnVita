@@ -52,6 +52,29 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Added sysvinit service `/etc/init.d/S60vita-webui` providing automatic background daemon initialization at boot, configurable via `/etc/vita-webui.conf` or `/mnt/ux0/linux/webui.conf`.
   - Fully integrated into `vita-config` under Wireless & Networking and registered in `vita-help` and `welcome.sh`.
 
+### 📶 Desktop Wi-Fi Manager (GUI) & Background Reconnection Daemon
+- **Graphical Touch Wi-Fi Manager (`vita-wifi gui`):**
+  - Built a touch-optimized GTK dialog manager utilizing `yad`, tailored specifically for the 960x544 display and analog stick mouse navigation.
+  - Features real-time connection status headers with live SSID, IP address, and RSSI dBm/percentage.
+  - Interactive radio scan list displaying all nearby 2.4 GHz access points with dynamic signal strength bars (`[====]`), percentage, security protocols (WPA2, WPA3, Open), and BSSID.
+  - Streamlined one-touch connection flow with masked passphrase input dialogs, animated association progress bars, and instant IP assignment confirmations.
+  - Support for connecting to hidden/manual network SSIDs, active network disconnection, and 1-tap radio power toggling.
+- **IceWM System Tray Network Applet (`vita-wifi-widget`):**
+  - Integrated a live system tray applet into the IceWM taskbar (`/usr/bin/vita-wifi-widget`) alongside `vita-cpu-widget`.
+  - Automatically updates icon states every 3 seconds according to wireless link conditions: excellent (>=75%), good (>=50%), ok (>=25%), weak (<25%), disconnected, or radio disabled.
+  - Real-time hover tooltip displaying active network SSID, exact dBm, signal percentage, and assigned IPv4 address.
+  - 1-tap launcher to open the full Graphical Wi-Fi Manager, plus a right-click context menu for quick disconnection, signal telemetry, radio toggling, and Control Center navigation.
+- **Automatic Background Reconnection & Roaming Daemon (`vita-wifi-daemon`):**
+  - Implemented `/usr/bin/vita-wifi-daemon` running in the background to guard wireless connectivity across network dropouts, screen blanking/sleep, and AP roaming.
+  - Detects dropped connections (`DISCONNECTED` / `INACTIVE` states) and automatically triggers reassociation and reconnection to known networks in `wpa_supplicant.conf`.
+  - Monitors DHCP lease health and automatically re-requests or renews IP addresses if the interface loses its lease or default gateway ping fails.
+  - Respects battery-saving power states (`/tmp/wifi_disabled`) when the user explicitly turns off Wi-Fi.
+  - Automatically launched at system boot via `/etc/init.d/S45wifi`.
+- **Desktop Environment Integration (`alpine-desktop`):**
+  - Integrated `vita-wifi.desktop` application launcher into the IceWM application menu, `Internet` submenu, `Settings` submenu, and `/root/Desktop` desktop shortcuts.
+  - Configured `~/.icewm/startup` to launch `vita-wifi-widget` automatically on desktop startup.
+  - Updated `deploy_desktop_helpers()` to automatically mirror all `vita-*` tools into the container filesystem.
+
 
 
 ## [v1.5.0] - 2026-10-23

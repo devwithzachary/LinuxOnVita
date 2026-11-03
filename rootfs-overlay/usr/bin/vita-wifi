@@ -434,6 +434,10 @@ cmd_off() {
     local iface
     iface=$(get_iface) || true
     echo -e "${C_YELLOW}Powering off Wi-Fi...${C_RESET}"
+    touch /tmp/wifi_disabled 2>/dev/null || true
+    if command -v vita-wifi-daemon >/dev/null 2>&1; then
+        vita-wifi-daemon stop >/dev/null 2>&1 || true
+    fi
     killall udhcpc 2>/dev/null || true
     killall wpa_supplicant 2>/dev/null || true
     if [ -n "$iface" ]; then
@@ -447,13 +451,303 @@ cmd_on() {
     local iface
     iface=$(get_iface) || true
     echo -e "${C_CYAN}Powering on Wi-Fi radio...${C_RESET}"
+    rm -f /tmp/wifi_disabled 2>/dev/null || true
     rfkill unblock wifi 2>/dev/null || true
     if [ -n "$iface" ]; then
         ip link set "$iface" up 2>/dev/null || true
     fi
     /etc/init.d/S45wifi start
+    if command -v vita-wifi-daemon >/dev/null 2>&1; then
+        vita-wifi-daemon start >/dev/null 2>&1 || true
+    fi
     echo -e "${C_GREEN}[OK] Wi-Fi service started.${C_RESET}"
     echo "Run 'vita-wifi status' in a few seconds to verify connection."
+}
+
+cmd_disconnect() {
+    local iface
+    iface=$(get_iface) || true
+    echo -e "${C_YELLOW}Disconnecting from Wi-Fi network...${C_RESET}"
+    if [ -n "$iface" ]; then
+        wpa_cli -i "$iface" disconnect >/dev/null 2>&1 || true
+        killall udhcpc 2>/dev/null || true
+        ip addr flush dev "$iface" 2>/dev/null || true
+    fi
+    echo -e "${C_GREEN}[OK] Disconnected from Wi-Fi.${C_RESET}"
+}
+
+cmd_toggle() {
+    local iface
+    iface=$(get_iface) || true
+    local operstate="DOWN"
+    [ -f "/sys/class/net/$iface/operstate" ] && operstate=$(cat "/sys/class/net/$iface/operstate" 2>/dev/null || echo "DOWN")
+    if [ -f "/tmp/wifi_disabled" ] || [ "$operstate" = "DOWN" ]; then
+        cmd_on
+    else
+        cmd_off
+    fi
+}
+
+cmd_status_gui() {
+    if [ -n "$DISPLAY" ] && command -v yad >/dev/null 2>&1; then
+        local status_text
+        status_text=$(cmd_status | sed 's/\x1b\[[0-9;]*m//g')
+        yad --title="PlayStation Vita Wi-Fi Telemetry" \
+            --window-icon="network-wireless" \
+            --width=460 --height=320 --center \
+            --text-info --fontname="Monospace 9" \
+            <<< "$status_text" \
+            --button="OK:0"
+    else
+        cmd_status
+    fi
+}
+
+cmd_gui() {
+    if [ -z "$DISPLAY" ] || ! command -v yad >/dev/null 2>&1; then
+        cmd_menu
+        return $?
+    fi
+
+    local iface
+    iface=$(get_iface) || true
+    if [ -z "$iface" ]; then
+        yad --error --title="Wi-Fi Interface Missing" \
+            --window-icon="network-wireless" \
+            --width=380 --center \
+            --text="<b>No Wireless Interface Found</b>\n\nThe Marvell 88W8787 wireless driver (mlan0) is not loaded or the interface is missing." \
+            --button="OK:0"
+        return 1
+    fi
+
+    ensure_wpa_running "$iface"
+
+    while true; do
+        local cur_ssid="" cur_ip="" cur_rssi="" cur_bssid="" operstate="DOWN"
+        [ -f "/sys/class/net/$iface/operstate" ] && operstate=$(cat "/sys/class/net/$iface/operstate" 2>/dev/null || echo "DOWN")
+        cur_ip=$(ip -4 addr show "$iface" 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2 || true)
+
+        local wpa_out=""
+        if pidof wpa_supplicant >/dev/null 2>&1; then
+            wpa_out=$(wpa_cli -i "$iface" status 2>/dev/null || true)
+            cur_ssid=$(echo "$wpa_out" | grep "^ssid=" | cut -d= -f2- || true)
+            cur_bssid=$(echo "$wpa_out" | grep "^bssid=" | cut -d= -f2- || true)
+        fi
+
+        local sig_poll=""
+        if pidof wpa_supplicant >/dev/null 2>&1; then
+            sig_poll=$(wpa_cli -i "$iface" signal_poll 2>/dev/null || true)
+            cur_rssi=$(echo "$sig_poll" | grep "^RSSI=" | cut -d= -f2 || true)
+        fi
+
+        local status_markup=""
+        if [ -n "$cur_ssid" ] && [ -n "$cur_ip" ]; then
+            local sig_text=""
+            if [ -n "$cur_rssi" ]; then
+                local pct=$(( (cur_rssi + 100) * 2 ))
+                [ $pct -gt 100 ] && pct=100
+                [ $pct -lt 0 ] && pct=0
+                sig_text=" | Signal: <b>${pct}%</b> (${cur_rssi} dBm)"
+            fi
+            status_markup="Connected to <b><span color='#00bb00'>${cur_ssid}</span></b>\nIP Address: <b>${cur_ip}</b>${sig_text}"
+        elif [ -n "$cur_ssid" ]; then
+            status_markup="Associated with <b><span color='#ffaa00'>${cur_ssid}</span></b> (Waiting for IP...)"
+        elif [ -f "/tmp/wifi_disabled" ]; then
+            status_markup="<span color='#cc0000'>Wi-Fi Radio Power OFF</span> (Disabled)"
+        else
+            status_markup="<span color='#888888'>Disconnected / Idle</span> (Select a network below to connect)"
+        fi
+
+        wpa_cli -i "$iface" scan >/dev/null 2>&1 || true
+        local raw=""
+        raw=$(wpa_cli -i "$iface" scan_results 2>/dev/null || true)
+
+        local rows=()
+        local count=0
+
+        if [ -n "$raw" ]; then
+            local parsed
+            parsed=$(echo "$raw" | awk -F'\t' -v active="$cur_ssid" '
+            NR>1 && $1 ~ /^[0-9a-fA-F:]+$/ {
+                bssid=$1; freq=$2; signal=$3+0; flags=$4; ssid=$5;
+                if (ssid == "" || ssid ~ /^[ \t]*$/) next;
+
+                if (!(ssid in seen)) {
+                    seen[ssid] = 1;
+                    best_order[++n] = ssid;
+                    max_sig[ssid] = signal;
+                    best_bssid[ssid] = bssid;
+                    best_flags[ssid] = flags;
+                } else if (signal > max_sig[ssid]) {
+                    max_sig[ssid] = signal;
+                    best_bssid[ssid] = bssid;
+                    best_flags[ssid] = flags;
+                }
+            }
+            END {
+                for (i = 1; i <= n; i++) {
+                    s = best_order[i];
+                    sig = max_sig[s];
+                    fl = best_flags[s];
+                    bs = best_bssid[s];
+
+                    pct = (sig + 100) * 2;
+                    if (pct > 100) pct = 100;
+                    if (pct < 0) pct = 0;
+
+                    if (sig >= -55) bars = "[====]";
+                    else if (sig >= -68) bars = "[=== ]";
+                    else if (sig >= -80) bars = "[==  ]";
+                    else bars = "[=   ]";
+
+                    sig_str = sprintf("%s %d%% (%d dBm)", bars, pct, sig);
+
+                    if (fl ~ /WPA3/) sec = "WPA3";
+                    else if (fl ~ /WPA2/ && fl ~ /WPA/) sec = "WPA/WPA2";
+                    else if (fl ~ /WPA2/) sec = "WPA2";
+                    else if (fl ~ /WPA/) sec = "WPA";
+                    else if (fl ~ /WEP/) sec = "WEP";
+                    else sec = "Open";
+
+                    sel = (s == active) ? "TRUE" : "FALSE";
+                    printf "%s\t%s\t%s\t%s\t%s\n", sel, s, sig_str, sec, bs;
+                }
+            }')
+
+            while IFS="$(printf '\t')" read -r r_sel r_ssid r_sig r_sec r_bssid; do
+                [ -z "$r_ssid" ] && continue
+                rows+=("$r_sel" "$r_ssid" "$r_sig" "$r_sec" "$r_bssid")
+                count=$((count + 1))
+            done << EOF
+$parsed
+EOF
+        fi
+
+        if [ $count -eq 0 ]; then
+            rows+=("FALSE" "(No networks found - click Rescan)" "[    ] 0%" "None" "00:00:00:00:00:00")
+        fi
+
+        local choice
+        choice=$(yad --title="PlayStation Vita Wi-Fi Manager" \
+                     --window-icon="network-wireless" \
+                     --width=540 --height=400 --center \
+                     --text="<b>PlayStation Vita Wireless Network Manager</b>\n${status_markup}" \
+                     --list --radiolist \
+                     --column="Select" --column="SSID" --column="Signal" --column="Security" --column="BSSID" \
+                     "${rows[@]}" \
+                     --button="Connect:0" \
+                     --button="Rescan:2" \
+                     --button="Disconnect:3" \
+                     --button="Manual SSID:4" \
+                     --button="Radio ON/OFF:5" \
+                     --button="Close:1")
+        local exit_code=$?
+
+        case "$exit_code" in
+            0)
+                local sel_ssid
+                sel_ssid=$(echo "$choice" | awk -F'|' '{print $2}')
+                local sel_sec
+                sel_sec=$(echo "$choice" | awk -F'|' '{print $4}')
+
+                if [ -z "$sel_ssid" ] || [ "$sel_ssid" = "(No networks found - click Rescan)" ]; then
+                    continue
+                fi
+
+                local pass=""
+                if [ "$sel_sec" != "Open" ] && [ "$sel_sec" != "None" ]; then
+                    pass=$(yad --title="Wi-Fi Security Passphrase" \
+                               --window-icon="network-wireless" \
+                               --width=380 --center \
+                               --text="Enter WPA passphrase for <b>${sel_ssid}</b>:\n<small>(Minimum 8 characters)</small>" \
+                               --entry --hide-text \
+                               --button="Connect:0" --button="Cancel:1")
+                    [ $? -ne 0 ] && continue
+                    if [ -n "$pass" ] && [ ${#pass} -lt 8 ]; then
+                        yad --warning --title="Invalid Passphrase" \
+                            --window-icon="network-wireless" \
+                            --width=320 --center \
+                            --text="WPA passphrases must be at least 8 characters." \
+                            --button="OK:0"
+                        continue
+                    fi
+                fi
+
+                cmd_connect "$sel_ssid" "$pass" | yad --progress --pulsate \
+                    --title="Connecting to Wi-Fi" \
+                    --window-icon="network-wireless" \
+                    --width=380 --center \
+                    --text="Associating with <b>${sel_ssid}</b> and requesting IP address..." \
+                    --auto-close --no-buttons
+
+                local new_ip=""
+                new_ip=$(ip -4 addr show "$iface" 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2 || true)
+                if [ -n "$new_ip" ]; then
+                    yad --info --title="Wi-Fi Connected" \
+                        --window-icon="network-wireless" \
+                        --width=380 --center \
+                        --text="<b>Successfully connected to ${sel_ssid}!</b>\n\nIP Address: <b>${new_ip}</b>\nSSH Access: <code>ssh root@${new_ip}</code>" \
+                        --button="OK:0"
+                else
+                    yad --error --title="Connection Incomplete" \
+                        --window-icon="network-wireless" \
+                        --width=380 --center \
+                        --text="Could not complete connection to <b>${sel_ssid}</b>.\nPlease verify your passphrase and signal range." \
+                        --button="OK:0"
+                fi
+                ;;
+            2)
+                (
+                    wpa_cli -i "$iface" scan >/dev/null 2>&1 || true
+                    sleep 2
+                ) | yad --progress --pulsate \
+                        --title="Scanning Wi-Fi" \
+                        --window-icon="network-wireless" \
+                        --width=340 --center \
+                        --text="Scanning for nearby 2.4 GHz wireless networks..." \
+                        --auto-close --no-buttons
+                ;;
+            3)
+                cmd_disconnect
+                yad --info --title="Disconnected" \
+                    --window-icon="network-wireless" \
+                    --width=320 --center \
+                    --text="Disconnected from Wi-Fi network." \
+                    --button="OK:0"
+                ;;
+            4)
+                local form_out
+                form_out=$(yad --title="Connect to Hidden / Manual Network" \
+                               --window-icon="network-wireless" \
+                               --width=380 --center \
+                               --text="Enter Wi-Fi network credentials:" \
+                               --form \
+                               --field="Network SSID:" "" \
+                               --field="Passphrase (leave blank for Open):":H "" \
+                               --button="Connect:0" --button="Cancel:1")
+                [ $? -ne 0 ] && continue
+
+                local man_ssid man_pass
+                man_ssid=$(echo "$form_out" | awk -F'|' '{print $1}')
+                man_pass=$(echo "$form_out" | awk -F'|' '{print $2}')
+
+                if [ -n "$man_ssid" ]; then
+                    cmd_connect "$man_ssid" "$man_pass" | yad --progress --pulsate \
+                        --title="Connecting" \
+                        --window-icon="network-wireless" \
+                        --width=380 --center \
+                        --text="Associating with <b>${man_ssid}</b>..." \
+                        --auto-close --no-buttons
+                fi
+                ;;
+            5)
+                cmd_toggle
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
 }
 
 cmd_menu() {
@@ -475,6 +769,8 @@ cmd_menu() {
             echo -e " Status: ${C_GREEN}Connected to '${cur_ssid}' (${cur_ip})${C_RESET}"
         elif [ -n "$cur_ssid" ]; then
             echo -e " Status: ${C_YELLOW}Connected to '${cur_ssid}' (Waiting for IP...)${C_RESET}"
+        elif [ -f "/tmp/wifi_disabled" ]; then
+            echo -e " Status: ${C_RED}Wi-Fi Radio Power OFF${C_RESET}"
         else
             echo " Status: Disconnected / Radio Idle"
         fi
@@ -482,11 +778,12 @@ cmd_menu() {
         echo " 1) Scan for wireless networks"
         echo " 2) Connect to a network"
         echo " 3) View detailed status"
-        echo " 4) Turn Wi-Fi OFF (save battery)"
-        echo " 5) Turn Wi-Fi ON / Reconnect"
-        echo " 6) Exit"
+        echo " 4) Disconnect active network"
+        echo " 5) Turn Wi-Fi OFF (save battery)"
+        echo " 6) Turn Wi-Fi ON / Reconnect"
+        echo " 7) Exit"
         echo "=================================================="
-        printf " Select an option [1-6]: "
+        printf " Select an option [1-7]: "
         read -r choice
         case "$choice" in
             1)
@@ -512,19 +809,26 @@ cmd_menu() {
                 ;;
             4)
                 echo ""
-                cmd_off
+                cmd_disconnect
                 echo ""
                 printf "Press Enter to return to menu..."
                 read -r _
                 ;;
             5)
                 echo ""
+                cmd_off
+                echo ""
+                printf "Press Enter to return to menu..."
+                read -r _
+                ;;
+            6)
+                echo ""
                 cmd_on
                 echo ""
                 printf "Press Enter to return to menu..."
                 read -r _
                 ;;
-            6|q|Q)
+            7|q|Q)
                 echo "Exiting."
                 break
                 ;;
@@ -536,21 +840,42 @@ cmd_menu() {
     done
 }
 
-case "${1:-}" in
+ACTION="${1:-}"
+shift 2>/dev/null || true
+
+case "$ACTION" in
     scan)
         cmd_scan
         ;;
+    scan-gui)
+        cmd_gui
+        ;;
     connect)
-        cmd_connect "${2:-}" "${3:-}"
+        cmd_connect "${1:-}" "${2:-}"
+        ;;
+    disconnect)
+        cmd_disconnect
         ;;
     status)
         cmd_status
+        ;;
+    status-gui)
+        cmd_status_gui
         ;;
     off|disable|stop)
         cmd_off
         ;;
     on|enable|start)
         cmd_on
+        ;;
+    toggle)
+        cmd_toggle
+        ;;
+    daemon)
+        /usr/bin/vita-wifi-daemon "$@"
+        ;;
+    gui)
+        cmd_gui
         ;;
     help|-h|--help)
         echo "PlayStation Vita Wi-Fi Manager (vita-wifi)"
@@ -560,12 +885,23 @@ case "${1:-}" in
         echo "Commands:"
         echo "  scan                   Scan and display available Wi-Fi networks"
         echo "  connect <SSID> [PASS]  Connect to network and save configuration"
+        echo "  disconnect             Disconnect from current wireless network"
         echo "  status                 Display current connection and signal details"
+        echo "  status-gui             Display graphical signal telemetry dialog"
         echo "  off                    Turn Wi-Fi off to conserve battery"
         echo "  on                     Turn Wi-Fi on and reconnect"
+        echo "  toggle                 Toggle Wi-Fi radio power ON / OFF"
+        echo "  daemon [start|stop]    Manage background reconnection daemon"
+        echo "  gui                    Open graphical touch manager (X11 desktop)"
         echo "  (no args)              Interactive menu mode"
         ;;
     *)
-        cmd_menu
+        if [ -n "$DISPLAY" ] && [ "$ACTION" = "gui" ]; then
+            cmd_gui
+        elif [ -n "$DISPLAY" ] && command -v yad >/dev/null 2>&1 && [ -z "$ACTION" ]; then
+            cmd_gui
+        else
+            cmd_menu
+        fi
         ;;
 esac

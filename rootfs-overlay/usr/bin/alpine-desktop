@@ -403,6 +403,17 @@ deploy_desktop_helpers() {
     ln -sf reboot                    "${TARGET}/sbin/halt" 2>/dev/null || true
     cp /usr/bin/vita-storage         "${TARGET}/usr/bin/vita-storage" 2>/dev/null || true
     [ -f /usr/bin/vita-autostart ] && cp /usr/bin/vita-autostart "${TARGET}/usr/bin/vita-autostart" 2>/dev/null || true
+    [ -f /usr/bin/vita-wifi ] && cp /usr/bin/vita-wifi "${TARGET}/usr/bin/vita-wifi" 2>/dev/null || true
+    [ -f /usr/bin/vita-wifi-widget ] && cp /usr/bin/vita-wifi-widget "${TARGET}/usr/bin/vita-wifi-widget" 2>/dev/null || true
+    [ -f /usr/bin/vita-wifi-daemon ] && cp /usr/bin/vita-wifi-daemon "${TARGET}/usr/bin/vita-wifi-daemon" 2>/dev/null || true
+    [ -f /usr/bin/vita-cpu ] && cp /usr/bin/vita-cpu "${TARGET}/usr/bin/vita-cpu" 2>/dev/null || true
+    [ -f /usr/bin/vita-cpu-widget ] && cp /usr/bin/vita-cpu-widget "${TARGET}/usr/bin/vita-cpu-widget" 2>/dev/null || true
+    [ -f /usr/bin/vita-bluetooth ] && cp /usr/bin/vita-bluetooth "${TARGET}/usr/bin/vita-bluetooth" 2>/dev/null || true
+    [ -f /usr/bin/vita-config ] && cp /usr/bin/vita-config "${TARGET}/usr/bin/vita-config" 2>/dev/null || true
+    [ -f /usr/bin/vita-help ] && cp /usr/bin/vita-help "${TARGET}/usr/bin/vita-help" 2>/dev/null || true
+    [ -f /usr/bin/vita-diagnostics ] && cp /usr/bin/vita-diagnostics "${TARGET}/usr/bin/vita-diagnostics" 2>/dev/null || true
+    [ -f /usr/bin/vita-webui ] && cp /usr/bin/vita-webui "${TARGET}/usr/bin/vita-webui" 2>/dev/null || true
+    chmod +x "${TARGET}/usr/bin/vita-"* 2>/dev/null || true
     chmod +x "${TARGET}/usr/bin/vita-desktop-welcome" \
              "${TARGET}/usr/bin/toggle-keyboard" \
              "${TARGET}/usr/bin/taskmanager" \
@@ -548,6 +559,18 @@ Exec=/usr/bin/vita-cpu gui
 Icon=utilities-system-monitor
 Terminal=false
 Categories=Settings;System;
+EOF
+
+    cat << 'EOF' > "${TARGET}/usr/share/applications/vita-wifi.desktop"
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Wi-Fi Manager
+Comment=Scan, connect, and manage PlayStation Vita Wi-Fi networks
+Exec=/usr/bin/vita-wifi gui
+Icon=preferences-system-network
+Terminal=false
+Categories=Settings;System;Network;
 EOF
 }
 
@@ -749,9 +772,10 @@ EOF
     cat << 'EOF' > "${TARGET}/root/.icewm/menu"
 prog "Welcome Guide" "preferences-desktop" /usr/bin/vita-desktop-welcome
 prog "Control Center (vita-config)" "preferences-system" sakura -e /usr/bin/vita-config
-prog "On-Screen Keyboard" "input-keyboard" /usr/bin/toggle-keyboard
+prog "Wi-Fi Manager" "preferences-system-network" /usr/bin/vita-wifi gui
 prog "Bluetooth Manager" "preferences-system-bluetooth" /usr/bin/vita-bluetooth gui
 prog "CPU Power & Frequency" "utilities-system-monitor" /usr/bin/vita-cpu gui
+prog "On-Screen Keyboard" "input-keyboard" /usr/bin/toggle-keyboard
 prog "File Manager" "system-file-manager" pcmanfm
 prog "Web Browser" "web-browser" badwolf
 prog "Text Editor" "text-editor" mousepad
@@ -774,6 +798,7 @@ menu "Accessories" "applications-accessories" {
     prog "Image Viewer (Feh)" "image-viewer" feh
 }
 menu "Internet" "applications-internet" {
+    prog "Wi-Fi Manager (GUI)" "preferences-system-network" /usr/bin/vita-wifi gui
     prog "Badwolf Web Browser" "web-browser" badwolf
 }
 menu "System" "applications-system" {
@@ -786,9 +811,10 @@ menu "System" "applications-system" {
 }
 menu "Settings" "preferences-system" {
     prog "Control Center (vita-config)" "preferences-system" sakura -e /usr/bin/vita-config
-    prog "Welcome Guide" "preferences-desktop" /usr/bin/vita-desktop-welcome
+    prog "Wi-Fi Network Manager" "preferences-system-network" /usr/bin/vita-wifi gui
     prog "Bluetooth Manager" "preferences-system-bluetooth" /usr/bin/vita-bluetooth gui
     prog "CPU Power & Frequency" "utilities-system-monitor" /usr/bin/vita-cpu gui
+    prog "Welcome Guide" "preferences-desktop" /usr/bin/vita-desktop-welcome
     prog "Toggle Boot to Desktop" "preferences-desktop" /usr/bin/vita-autostart toggle
     prog "Desktop Preferences" "preferences-desktop" pcmanfm --desktop-pref
 }
@@ -817,11 +843,12 @@ EOF
     cp "${TARGET}/root/.icewm/menu" "${TARGET}/usr/share/icewm/menu" 2>/dev/null || true
     cp "${TARGET}/root/.icewm/winoptions" "${TARGET}/usr/share/icewm/winoptions" 2>/dev/null || true
 
-    # 4. IceWM Startup script (starts PCManFM desktop manager and CPU taskbar widget)
+    # 4. IceWM Startup script (starts PCManFM desktop manager, CPU taskbar widget, and Wi-Fi tray applet)
     cat << 'EOF' > "${TARGET}/root/.icewm/startup"
 #!/bin/sh
 pcmanfm --desktop &
 [ -x /usr/bin/vita-cpu-widget ] && /usr/bin/vita-cpu-widget &
+[ -x /usr/bin/vita-wifi-widget ] && /usr/bin/vita-wifi-widget &
 EOF
     chmod +x "${TARGET}/root/.icewm/startup"
     cp "${TARGET}/root/.icewm/startup" "${TARGET}/root/.config/icewm/startup" 2>/dev/null || true
@@ -1012,6 +1039,18 @@ Exec=/usr/bin/vita-cpu gui
 Icon=utilities-system-monitor
 Terminal=false
 Categories=Settings;System;
+EOF
+
+    cat << 'EOF' > "${TARGET}/root/Desktop/wifi.desktop"
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Wi-Fi Manager
+Comment=Scan, connect, and manage PlayStation Vita Wi-Fi networks
+Exec=/usr/bin/vita-wifi gui
+Icon=preferences-system-network
+Terminal=false
+Categories=Network;Settings;
 EOF
 
     cat << 'EOF' > "${TARGET}/root/Desktop/reboot.desktop"
