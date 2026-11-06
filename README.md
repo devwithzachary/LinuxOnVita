@@ -3,7 +3,7 @@
 [![PS Vita](https://img.shields.io/badge/Platform-PlayStation%20Vita-blue.svg)](https://en.wikipedia.org/wiki/PlayStation_Vita)
 [![Kernel](https://img.shields.io/badge/Kernel-Linux%206.12-orange.svg)](https://kernel.org)
 [![Architecture](https://img.shields.io/badge/Architecture-ARMv7--A%20(Cortex--A9)-green.svg)](https://developer.arm.com/Processors/Cortex-A9)
-[![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2.svg?logo=discord&logoColor=white)](https://discord.gg/BrzdmHu8Am)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2.svg?logo=discord&logoColor=white)](https://discord.gg/QdT9yCrKmV)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 
 A complete distribution, automated build environment, and handheld userland for running **Linux 6.12** on hacked PlayStation Vita consoles ([HENlo](https://vita.hacks.guide/using-henlo) / HENkaku / Ensō 3.60 & 3.65).
@@ -225,7 +225,7 @@ This project builds upon the groundbreaking research and development of the PS V
 
 ## 🤝 Community, Contributing & AI Policy
 
-Have questions, need help troubleshooting, or want to share photos and clips of Linux running on your Vita? Join our **[Discord Community](https://discord.gg/BrzdmHu8Am)**!
+Have questions, need help troubleshooting, or want to share photos and clips of Linux running on your Vita? Join our **[Discord Community](https://discord.gg/QdT9yCrKmV)**!
 
 Contributions, bug reports, and feature requests are welcome! Feel free to join the discussion on Discord, check out the [issues page](https://github.com/devwithzachary/LinuxOnVita/issues), or submit a pull request.
 
@@ -240,7 +240,7 @@ If LinuxOnVita has been useful to you, consider supporting continued development
 <div align="center">
   <a href="https://www.patreon.com/DevWithZachary"><img src="https://img.shields.io/badge/Patreon-Become%20a%20Patron-F96854.svg?logo=patreon&logoColor=white&style=for-the-badge" alt="Patreon" /></a>
   &nbsp;
-  <a href="https://buymeacoffee.com/linuxonandroid"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Tip%20the%20Dev-FFDD00.svg?logo=buymeacoffee&logoColor=black&style=for-the-badge" alt="Buy Me a Coffee" /></a>
+  <a href="https://www.buymeacoffee.com/devwithzachary"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Tip%20the%20Dev-FFDD00.svg?logo=buymeacoffee&logoColor=black&style=for-the-badge" alt="Buy Me a Coffee" /></a>
 </div>
 
 ---
