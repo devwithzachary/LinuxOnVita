@@ -223,6 +223,6 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
 
 LinuxOnVita is an open-source, community-driven project. We invite testing reports, feature discussions, and contributions:
 
-* **Discord Community:** Join discussions, share ideas, and get support on [Discord](https://discord.gg/BrzdmHu8Am).
+* **Discord Community:** Join discussions, share ideas, and get support on [Discord](https://discord.gg/QdT9yCrKmV).
 * **Issue Tracker:** Submit feature requests and bug reports on the [GitHub Issue Tracker](https://github.com/devwithzachary/LinuxOnVita/issues).
 * **Contributions:** Pull requests are always welcome. Please review our documentation and contribution guidelines before submitting.
