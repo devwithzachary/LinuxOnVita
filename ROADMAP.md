@@ -49,7 +49,7 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
 
 ---
 
-### [v1.5.0] - Handheld Ergonomics, Screen Protection & First-Boot Setup (Current)
+### [v1.5.0] - Handheld Ergonomics, Screen Protection & First-Boot Setup (Released)
 
 **Priority:** CRITICAL (Highest)
 **Focus Areas:** Battery life preservation, OLED burn-in protection, guided onboarding, and gamepad ergonomics.
@@ -94,7 +94,7 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
 
 ---
 
-### [v1.6.0] - Wireless Freedom, Web Management & Performance Controls
+### [v1.6.0] - Wireless Freedom, Web Management & Performance Controls (Released)
 
 **Priority:** HIGH
 **Focus Areas:** Cable-free file management, CPU frequency governors, Bluetooth peripherals, and desktop network management.
@@ -122,9 +122,10 @@ This roadmap outlines upcoming milestones, target releases, and prioritized feat
     * **Console:** Change console font size on the fly.
     * **Power:** Reboot directly to VitaOS LiveArea or perform full shutdown.
 
-* **Desktop Wi-Fi Manager (GUI) (`vita-wifi gui` & `vita-wifi-widget`):**
-  * Intuitive network manager applet for the IceWM desktop system tray with live signal strength icons and hover tooltips.
-  * Graphical network scanning, password prompt dialogs, manual SSID entry, and radio power toggling.
+* **Native C + X11 Desktop GUIs & Wi-Fi Stack (`vita-wifi-gui`, `vita-cpu-gui`, `vita-reboot-gui`, `vita-welcome-gui`, `vita-wifi-widget`):**
+  * Zero-dependency static ARMv7 C + X11 desktop utilities that render instantaneously on both the Buildroot host and inside the Alpine chroot.
+  * Intuitive network manager applet (`vita-wifi-widget`) for the IceWM desktop system tray with live signal strength icons and hover tooltips.
+  * Graphical network scanning, masked password prompt modal, manual SSID entry, and radio power toggling (`vita-wifi-gui`), plus native CPU profile (`vita-cpu-gui`), reboot (`vita-reboot-gui`), and welcome (`vita-welcome-gui`) dialogs.
   * Automatic background reconnection daemon (`vita-wifi-daemon`) across network dropouts, roaming, and display sleep.
 
 * **In-App Bootstrapper GitHub Release Update Checker (`LinuxOnVita.vpk`):**

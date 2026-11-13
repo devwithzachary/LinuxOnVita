@@ -938,7 +938,7 @@ alpine-desktop
 On first launch, `alpine-desktop` automatically:
 1. Verifies active Wi-Fi internet connectivity.
 2. Updates Alpine package indexes.
-3. Installs `icewm`, `pcmanfm`, `xfce4-taskmanager`, `dbus-x11`, `htop`, `mousepad`, `badwolf`, `feh`, `matchbox-keyboard`, `yad`, and `sakura`.
+3. Installs `icewm`, `pcmanfm`, `xfce4-taskmanager`, `dbus-x11`, `htop`, `mousepad`, `badwolf`, `feh`, `matchbox-keyboard`, `yad`, and `sakura`, alongside native C + X11 system tools (`vita-wifi-gui`, `vita-cpu-gui`, `vita-reboot-gui`, `vita-welcome-gui`).
 4. Creates pre-configured X11 framebuffer settings (`/etc/X11/xorg.conf.d/10-fbdev.conf`) calibrated for 96 DPI proportional font rendering.
 5. Configures desktop shortcuts and application menus for the Welcome Guide, Badwolf web browser, PCManFM file manager, Mousepad text editor, Xfce activity monitor, Sakura terminal, and virtual keyboard.
 6. Starts the graphical IceWM desktop session.
