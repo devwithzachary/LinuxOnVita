@@ -18,18 +18,22 @@ set(VITA_APP_NAME "LinuxOnVita")
 # Title ID for the application (9 uppercase alphanumeric characters)
 set(VITA_TITLEID  "LNXONVITA")
 
-set(VITA_VERSION  "01.50")
+set(VITA_VERSION  "01.60")
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Os -ffunction-sections -fdata-sections")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--gc-sections")
 
 set(VITA_MKSFOEX_FLAGS "${VITA_MKSFOEX_FLAGS} -d PARENTAL_LEVEL=1")
 
+find_package(CURL REQUIRED)
+find_package(OpenSSL REQUIRED)
+
 # Add all files needed to compile
 add_executable(${PROJECT_NAME}
   main.c
   debugScreenFont.c
   gui.c
+  updater.c
 )
 
 target_link_libraries(${PROJECT_NAME}
@@ -40,6 +44,16 @@ target_link_libraries(${PROJECT_NAME}
   SceVshBridge_stub
   SceSysmem_stub
   SceSysmodule_stub
+  SceNet_stub
+  SceNetCtl_stub
+  SceHttp_stub
+  SceSsl_stub
+  ${CURL_LIBRARIES}
+  ${OPENSSL_LIBRARIES}
+  pthread
+  c
+  m
+  z
 )
 
 # Create Vita SELF

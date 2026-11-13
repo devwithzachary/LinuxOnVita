@@ -22,6 +22,12 @@ if [ ! -f "${VITASDK}/arm-vita-eabi/include/taihen.h" ]; then
     echo "y" | vdpm taihen
 fi
 
+# Ensure curl and openssl are installed for update checker
+if [ ! -f "${VITASDK}/arm-vita-eabi/include/curl/curl.h" ]; then
+    echo "Installing curl via vdpm..."
+    echo "y" | vdpm curl
+fi
+
 # 1. Build vita-baremetal-loader (Kernel plugin)
 echo "[1/4] Building vita-baremetal-loader..."
 if [ ! -d "vita-baremetal-loader" ]; then

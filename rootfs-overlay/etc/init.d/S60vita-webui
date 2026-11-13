@@ -1,0 +1,98 @@
+#!/bin/sh
+# S60vita-webui: Start/Stop the PlayStation Vita Web Management Portal daemon
+#
+# Provides web management and wireless file transfer on port 8080.
+
+DAEMON="vita-webui-server"
+BIN="/usr/bin/$DAEMON"
+PIDFILE="/var/run/vita-webui.pid"
+CONF_FILE="/etc/vita-webui.conf"
+CONF_UX0="/mnt/ux0/linux/webui.conf"
+
+[ -x "$BIN" ] || exit 0
+
+get_port() {
+    if [ -f "$CONF_UX0" ]; then
+        grep -E '^PORT=' "$CONF_UX0" 2>/dev/null | cut -d= -f2 || echo "8080"
+    elif [ -f "$CONF_FILE" ]; then
+        grep -E '^PORT=' "$CONF_FILE" 2>/dev/null | cut -d= -f2 || echo "8080"
+    else
+        echo "8080"
+    fi
+}
+
+is_autostart_disabled() {
+    if [ -f "$CONF_UX0" ]; then
+        grep -E -q '^AUTOSTART=0' "$CONF_UX0" 2>/dev/null && return 0
+    fi
+    if [ -f "$CONF_FILE" ]; then
+        grep -E -q '^AUTOSTART=0' "$CONF_FILE" 2>/dev/null && return 0
+    fi
+    return 1
+}
+
+start() {
+    if is_autostart_disabled; then
+        echo "vita-webui: autostart disabled in configuration."
+        return 0
+    fi
+
+    if pidof "$DAEMON" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    local port
+    port=$(get_port)
+    local docroot="/mnt/ux0"
+    [ ! -d "$docroot" ] && docroot="/"
+
+    printf "Starting %s (port %s): " "$DAEMON" "$port"
+    "$BIN" -p "$port" -d "$docroot" -daemon
+    status=$?
+
+    if [ "$status" -eq 0 ]; then
+        sleep 1
+        pidof "$DAEMON" > "$PIDFILE" 2>/dev/null || true
+        echo "OK"
+    else
+        echo "FAIL"
+    fi
+    return "$status"
+}
+
+stop() {
+    printf "Stopping %s: " "$DAEMON"
+    killall "$DAEMON" 2>/dev/null || true
+    rm -f "$PIDFILE" 2>/dev/null || true
+    echo "OK"
+}
+
+restart() {
+    stop
+    sleep 1
+    start
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart|reload)
+        restart
+        ;;
+    status)
+        if pidof "$DAEMON" >/dev/null 2>&1; then
+            echo "$DAEMON is running (PID: $(pidof $DAEMON))"
+        else
+            echo "$DAEMON is stopped"
+        fi
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+        ;;
+esac
+

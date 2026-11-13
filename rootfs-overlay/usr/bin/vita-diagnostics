@@ -548,6 +548,34 @@ done
         fi
     fi
     echo ""
+
+    echo "--- Bluetooth Subsystem & Peripherals ---"
+    local bt_pid
+    bt_pid=$(pidof bluetoothd 2>/dev/null || true)
+    echo "bluetoothd Daemon:      $([ -n "$bt_pid" ] && echo "RUNNING (PID: $bt_pid)" || echo "STOPPED")"
+    if [ -d "/sys/class/bluetooth/hci0" ]; then
+        local bt_mac
+        bt_mac=$(cat /sys/class/bluetooth/hci0/address 2>/dev/null || true)
+        echo "Bluetooth Controller:   hci0 (BD_ADDR: ${bt_mac:-Unknown})"
+        if command -v bluetoothctl >/dev/null 2>&1; then
+            local bt_pwr
+            bt_pwr=$(bluetoothctl show 2>/dev/null | grep "Powered:" | awk '{print $2}' || echo "unknown")
+            echo "Controller Radio Power: $bt_pwr"
+            local paired_count
+            paired_count=$(bluetoothctl devices Paired 2>/dev/null | wc -l || echo "0")
+            echo "Paired Peripherals:     $paired_count"
+        fi
+    else
+        echo "Bluetooth Controller:   Not detected (hci0 missing)"
+    fi
+    local bt_dmesg
+    bt_dmesg=$(dmesg 2>/dev/null | grep -i -E "bluetooth|btmrvl|hci" | tail -n 15 || true)
+    if [ -n "$bt_dmesg" ]; then
+        echo ""
+        echo "--- Kernel Bluetooth Messages (dmesg) ---"
+        echo "$bt_dmesg"
+    fi
+    echo ""
 } >> "$MAIN_REPORT"
 
 # -----------------------------------------------------------------------------

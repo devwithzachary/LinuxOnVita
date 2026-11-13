@@ -38,20 +38,21 @@ if [ -t 0 ]; then
         echo "   * Wi-Fi IP:   Connecting in background...             "
     fi
     echo ""
-    echo "   Useful Commands:"
-    echo "     - vita-setup       : Initial setup wizard (Wi-Fi, storage, memory, desktop)"
-    echo "     - vita-wifi        : Scan, connect, and manage Wi-Fi networks"
-    echo "     - vita-storage     : Manage storage write protection (ro / rw)"
-    echo "     - vita-cpu         : Power profiles & CPU clocks (444, 333, 111 MHz)"
-    echo "     - vita-autostart   : Configure direct boot into desktop (on / off)"
-    echo "     - vita-diagnostics : Gather logs & troubleshoot Wi-Fi / SD cards"
-    echo "     - alpine-desktop   : Launch IceWM graphical desktop with mouse emulation"
-    echo "     - alpine-chroot    : Enter Alpine Linux with 'apk' (isolated container)"
-    echo "     - vita-doom        : Play DOOM under Linux Framebuffer (/dev/fb0)"
-    echo "     - vita-brightness  : Control screen brightness / backlight"
-    echo "     - vita-led         : PlayStation Button LED mode (heartbeat, disk, on, off)"
-    echo "     - vita-swap        : Manage compressed ZRAM memory & swapfiles"
-    echo "     - reboot           : Clean hardware reset back to VitaOS"
+    echo "   Type 'help' for command reference, or 'config' for control center."
     echo "  ========================================================"
     echo ""
 fi
+
+# Intercept 'help' to route to vita-help while preserving builtin help for shell keywords
+help() {
+    if [ "$#" -eq 0 ]; then
+        /usr/bin/vita-help
+    elif [ -x "/usr/bin/$1" ] || [ "$1" = "config" ] || [ "$1" = "wifi" ] || [ "$1" = "network" ] || [ "$1" = "bluetooth" ] || [ "$1" = "bt" ] || [ "$1" = "webui" ] || [ "$1" = "web" ] || [ "$1" = "hardware" ] || [ "$1" = "power" ] || [ "$1" = "desktop" ] || [ "$1" = "storage" ] || [ "$1" = "memory" ] || [ "$1" = "audio" ] || [ "$1" = "gaming" ] || [ "$1" = "doom" ]; then
+        /usr/bin/vita-help "$@"
+    elif type builtin >/dev/null 2>&1 && builtin help "$1" >/dev/null 2>&1; then
+        builtin help "$@"
+    else
+        /usr/bin/vita-help "$@"
+    fi
+}
+alias help='help'

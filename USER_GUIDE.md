@@ -12,8 +12,11 @@ Welcome to the comprehensive user guide for **LinuxOnVita**. This guide is desig
    - [On-Screen Touch Keyboard](#on-screen-touch-keyboard-fbkeyboard)
    - [Physical Gamepad Navigation](#physical-gamepad-navigation-vita-input-mapper)
 4. [Built-In Applications & Tools](#4-built-in-applications--tools)
+   - [Handheld Control Center TUI (`vita-config` / `config`)](#handheld-control-center-tui-vita-config--config)
    - [Interactive First-Boot Setup Wizard (`vita-setup`)](#1-interactive-first-boot-setup-wizard-vita-setup)
    - [On-Device Wi-Fi Manager (`vita-wifi`)](#2-on-device-wi-fi-manager-vita-wifi)
+   - [Bluetooth Peripheral & Audio Manager (`vita-bluetooth`)](#bluetooth-peripheral--audio-manager-vita-bluetooth)
+   - [Web Management Portal & Wireless File Transfer (`vita-webui`)](#web-management-portal--wireless-file-transfer-vita-webui)
    - [Screen Brightness Control (`vita-brightness`)](#3-screen-brightness-control-vita-brightness)
    - [Memory Expansion & Swap (`vita-swap`)](#4-memory-expansion--swap-vita-swap)
    - [Framebuffer DOOM (`vita-doom`)](#5-framebuffer-doom-vita-doom)
@@ -114,10 +117,23 @@ The screen will blank briefly, take over the hardware framebuffer, and boot dire
 
 ### Updating to a New Version
 When upgrading your console from a previous release of LinuxOnVita:
-1. Transfer and install the new `LinuxOnVita.vpk` in VitaShell.
+1. Transfer and install the new `LinuxOnVita.vpk` in VitaShell (or download it directly on-device using the In-App Update Checker below).
 2. Launch the **LinuxOnVita** bubble from the LiveArea.
 3. **Reinstall / Update Boot Files:** Press **TRIANGLE (△)** to update the Linux setup (`<mount>/linux/`). Because boot files (`zImage`, Device Tree blobs, and baremetal loaders) already exist on your storage partition from the previous version, pressing Cross (✕) would continue booting the older kernel and files. Pressing **Triangle (△)** refreshes and overwrites your storage partition with the new release files bundled inside the VPK.
 4. Press **CROSS (✕)** to boot into your updated Linux system!
+
+### In-App GitHub Release Update Checker
+`LinuxOnVita.vpk` features a built-in update checker that connects directly to GitHub to check for newer releases and download the latest VPK straight onto your console:
+
+1. Connect your PS Vita to Wi-Fi in VitaOS Settings.
+2. Launch the **LinuxOnVita** bubble from the LiveArea.
+3. Tap the **[UPDATES: Check GitHub]** button in the header (or press **L-TRIGGER / L1** on your gamepad).
+4. The application queries the GitHub Releases API over TLS 1.2/1.3:
+   - If your console is already running the latest version, a notification modal confirms you are up to date. You can choose to re-download or return.
+   - If a newer release is detected, the version tag and release title are shown, prompting you to download.
+5. Press **CROSS (✕)** to begin the streaming download. A visual progress bar displays download progress, speed, and megabytes received in real time. (Press **CIRCLE (○)** or tap the screen at any point to cancel).
+6. Once the download completes, the updated package is saved to `ux0:data/LinuxOnVita.vpk`.
+7. Press the **PS Button**, open **VitaShell**, navigate to `ux0:data/`, and press **CROSS (✕)** on `LinuxOnVita.vpk` to install the update!
 
 ### Booting in Debug Mode (Troubleshooting Boot Issues)
 If Linux fails to boot, freezes, or the screen goes dark without reaching the shell prompt:
@@ -171,7 +187,46 @@ You can control the terminal shell and desktop entirely with the Vita's physical
 
 ## 4. Built-In Applications & Tools
 
-LinuxOnVita comes pre-installed with dedicated console management utilities tailored specifically for the PS Vita hardware.
+LinuxOnVita comes pre-installed with dedicated console management utilities tailored specifically for the PS Vita hardware. Type `help` (or `help <command>`) in any shell to view the full categorized command reference directly on your console or via SSH.
+
+### Handheld Control Center TUI (`vita-config` / `config`)
+The **Handheld Control Center** (`vita-config` or short alias `config`) is an interactive, unified console management tool inspired by Raspberry Pi's `raspi-config`. It consolidates all hardware controls, wireless configurations, power options, and system preferences into an intuitive handheld text menu tailored for the Vita's 544p display.
+
+Every screen features a live system telemetry dashboard displaying:
+- **Hardware Model:** Detected console revision (PS Vita 2000 Slim LCD, PS Vita 1000 Fat OLED, or PSTV).
+- **CPU Profile:** Operating clock frequency (111, 333, or 444 MHz) and active cpufreq governor.
+- **Wi-Fi:** Connected SSID and active DHCP IP address.
+- **Bluetooth:** Radio power status and number of connected wireless peripherals.
+- **Storage:** Active partition mount mode (Read-Only `ro` vs Read-Write `rw`) and storage capacity.
+- **Display:** Active brightness percentage on 2000 LCD, or fixed gamma / sleep state on 1000 OLED.
+
+```bash
+vita-config               # Launch interactive Handheld Control Center TUI
+config                    # Quick shortcut alias
+vita-config status        # Print system status dashboard and exit
+vita-config wifi          # Quick jump to wireless networking settings
+vita-config bluetooth     # Quick jump to bluetooth peripheral manager
+vita-config display 75    # Set screen brightness to 75% (PS Vita 2000 LCD only)
+vita-config display sleep # Put display into sleep / blanking mode
+vita-config cpu max       # Set CPU clock to maximum 444 MHz
+vita-config storage ro    # Switch storage to safe read-only mode
+vita-config led heartbeat # Set PlayStation Button LED to heartbeat pulse
+vita-config swap on       # Enable ZRAM RAM compression
+```
+
+#### Menu Categories:
+1. **Wireless & Networking:** Connect to Wi-Fi, scan nearby access points, view signal quality, toggle radio power, and view IP routes.
+2. **Bluetooth & Peripherals:** Scan and pair Bluetooth keyboards, mice, and gamepads, connect/disconnect stored devices, and manage BlueZ adapter states.
+3. **Display & Screen Sleep:** Adjust brightness presets (25%, 50%, 75%, 100%) and custom percentages on PS Vita 2000 LCD models. On PS Vita 1000 OLED models, display panel hardware notice and burn-in sleep / blanking controls. Manage the `vita-powerd` sleep daemon and test immediate display sleep.
+4. **CPU & Performance:** Switch between 444 MHz Max Performance, 333 MHz Balanced, 111 MHz Powersave, custom frequencies, and governors.
+5. **PlayStation LED Indicator Modes:** Configure the front blue PS button LED trigger mode (heartbeat breathing pulse, storage disk activity, solid on, or off).
+6. **Storage & Partition Safety:** Remount `/mnt/ux0` between Read-Only (safe) and Read-Write (unlocked), and inspect filesystem disk usage.
+7. **Memory & Compressed Swap:** Toggle 256 MB ZRAM RAM compression or configure dedicated storage swapfiles (`/mnt/ux0/swapfile`).
+8. **Gamepad & Virtual Keyboard:** Toggle `fbkeyboard` on-screen touch virtual keyboard, inspect `vita-input-mapper`, and review physical shortcuts.
+9. **Desktop & Boot Preferences:** Toggle boot-to-desktop autostart, launch IceWM graphical desktop, run first-boot wizard, or execute hardware diagnostics.
+10. **System Reboot & Shutdown:** Clean hardware reset back to VitaOS LiveArea, or safe poweroff.
+
+---
 
 ### 1. Interactive First-Boot Setup Wizard (`vita-setup`)
 The first time you boot LinuxOnVita, the interactive **First-Boot Setup Wizard** automatically welcomes you directly on the console screen (`/dev/tty1`). It guides you through a seamless 6-step initial configuration so your console is immediately online and optimized for your storage:
@@ -231,6 +286,143 @@ Displays your active interface (`mlan0`), SSID, MAC address, assigned IP, BSSID,
 ```bash
 vita-wifi off    # Turn off the Wi-Fi radio to save battery
 vita-wifi on     # Turn the radio back on and reconnect
+vita-wifi toggle # Toggle radio power state
+```
+
+#### Disconnecting:
+```bash
+vita-wifi disconnect # Disconnect from active network without disabling radio
+```
+
+#### Desktop Touch GUI (`vita-wifi gui`):
+When running inside the graphical desktop (`alpine-desktop`), launch the touch-optimized GTK dialog:
+```bash
+vita-wifi gui
+```
+* **Visual Network Scanner:** Displays an interactive list of all discovered 2.4 GHz wireless networks with active signal strength bars (`[====]`), signal percentage, security type (WPA2, WPA3, Open), and BSSID.
+* **One-Touch Association:** Tap your network, tap **Connect**, and enter your passphrase in a masked input dialog.
+* **Manual / Hidden Networks:** Connect to non-broadcasting SSIDs via the **Manual SSID** button.
+* **Quick Controls:** 1-tap buttons for **Rescan**, **Disconnect**, and **Radio ON / OFF**.
+
+#### IceWM System Tray Applet (`vita-wifi-widget`):
+Running automatically in the desktop taskbar, the system tray applet provides continuous signal monitoring:
+* **Dynamic Icons:** Reflects link quality in real time (Excellent, Good, Fair, Weak, Disconnected, or Disabled).
+* **Hover Tooltip:** Shows the connected SSID, exact dBm, percentage, and assigned IPv4 address.
+* **Quick Access:** Tap the icon to launch the Graphical Wi-Fi Manager, or right-click to open quick shortcuts (Disconnect, Toggle Radio, Telemetry).
+
+#### Automatic Background Reconnection Daemon (`vita-wifi-daemon`):
+LinuxOnVita includes a background daemon that monitors wireless connectivity:
+```bash
+vita-wifi daemon status     # Check daemon state and recent connection logs
+vita-wifi daemon restart    # Restart background monitor
+```
+* **Dropout Recovery:** If Wi-Fi signal drops or the router switches channels, the daemon automatically re-associates with known networks in `wpa_supplicant.conf`.
+* **DHCP Lease Guard:** Detects lost IP leases or unreachable default gateways and automatically requests DHCP renewal without interrupting background services.
+* **Sleep / Wake Resumption:** Automatically recovers connection when the console wakes from display sleep.
+
+---
+
+### Bluetooth Peripheral & Audio Manager (`vita-bluetooth`)
+Connect wireless keyboards, mice, gamepads (DualShock 4, DualSense, Xbox, 8BitDo), wireless headphones, and portable speakers directly to your PlayStation Vita.
+
+> [!NOTE]
+> **Hardware Support Notice**: The PlayStation Vita's Marvell 88W8787 wireless controller supports **Bluetooth 2.1 + EDR** and **Bluetooth 3.0 + HS**. It is compatible with all Bluetooth Classic (BR/EDR) and dual-mode devices (e.g. Logitech K380, Apple Wireless Keyboards, DualShock 3/4, Bluetooth audio headsets/speakers). Pure Bluetooth Low Energy (BLE-only) peripherals that lack Classic fallback (such as Logitech MX Master 3S and MX Mechanical) require Bluetooth 4.0+ hardware and cannot be detected by the Vita's 88W8787 chip.
+
+#### Interactive Menu:
+Run `vita-bluetooth` with no arguments to launch the on-screen console menu:
+```bash
+vita-bluetooth
+```
+
+#### Scanning and Pairing Peripherals:
+Put your peripheral into pairing mode, then scan nearby devices:
+```bash
+vita-bluetooth scan
+```
+Displays a real-time list of discoverable devices with MAC address, name, signal strength, and detected device category (Keyboard, Mouse, Gamepad, Audio). Enter the row number of your device to pair, trust, and connect immediately.
+
+Or pair directly by MAC address:
+```bash
+vita-bluetooth pair AA:BB:CC:DD:EE:FF
+```
+
+#### Checking Active Connections & Battery:
+```bash
+vita-bluetooth status
+```
+Displays your Bluetooth controller (`hci0`), radio power status, discoverable state, active peripheral connections, battery percentage, and paired devices.
+
+#### Connecting & Disconnecting:
+```bash
+vita-bluetooth connect [MAC]       # Connect to a paired device
+vita-bluetooth disconnect [MAC]    # Disconnect an active device
+vita-bluetooth remove [MAC]        # Unpair and remove a saved device
+```
+
+#### Bluetooth Audio (Headphones & Speakers):
+```bash
+vita-bluetooth audio               # Manage wireless headphones and audio output
+```
+Lists paired audio peripherals and routes system sound through PipeWire / ALSA.
+
+#### Power Savings:
+```bash
+vita-bluetooth off                 # Turn off the Bluetooth radio to conserve battery
+vita-bluetooth on                  # Turn the radio back on and reconnect trusted devices
+```
+
+#### Desktop Touch Dialog:
+When running inside the graphical desktop (`alpine-desktop`), launch the touch-friendly GTK dialog:
+```bash
+vita-bluetooth gui
+```
+
+---
+
+### Web Management Portal & Wireless File Transfer (`vita-webui`)
+LinuxOnVita includes an embedded, zero-dependency web management portal and wireless file transfer server (`vita-webui-server`). Built as a native C daemon with a memory footprint under 1 MB, it turns your PS Vita into a self-hosted wireless server accessible from any web browser on your local network:
+```
+http://vita.local:8080
+http://<VITA_IP>:8080
+```
+
+> [!TIP]
+> The web management service starts automatically in the background at boot (`/etc/init.d/S60vita-webui`). Whenever your PS Vita connects to Wi-Fi, open your phone, tablet, or desktop browser and navigate to `http://vita.local:8080` (or the IP shown on your console screen).
+
+#### Key Features:
+1. **Live System Dashboard:**
+   - Real-time telemetry: CPU frequency, active cpufreq governor, 1/5/15-minute load averages, RAM and ZRAM memory utilization, storage capacity (`ux0:`), Wi-Fi IP and SSID, Bluetooth radio state, hardware model, and uptime.
+2. **Drag-and-Drop Web File Manager:**
+   - Browse `/mnt/ux0/` and subdirectories directly in your browser.
+   - Drag and drop files (game ROMs, ISOs, zips, media, or scripts) directly from your computer into the browser.
+   - Uploads are streamed in 16 KB chunks directly to disk without loading entire files into the PS Vita's limited RAM, preventing Out-Of-Memory (OOM) crashes.
+   - Automatic Storage Safety Elevation: If your storage card is mounted read-only (`ro`) for corruption protection, `vita-webui-server` automatically detects it, temporarily elevates the mount to read-write (`rw`), writes the file, executes `sync()`, and immediately restores read-only protection!
+   - Direct downloads: Click any file to download it directly to your PC or phone.
+   - Folder creation and file deletion tools.
+3. **In-Browser Web Terminal:**
+   - Run shell commands and inspect output directly from your browser without needing SSH keys or a local terminal client.
+4. **Hardware Quick Controls:**
+   - **CPU Scaling:** Instantly switch between Max (444 MHz), Balanced (333 MHz), and Powersave (111 MHz).
+   - **Display Controls:** Put display to sleep or wake the screen remotely.
+   - **PS Button LED:** Switch between heartbeat pulse, disk activity, and disabled modes.
+   - **Reboot & Shutdown:** Safely sync filesystems and reboot back to VitaOS LiveArea or power off.
+
+#### Handheld CLI & Interactive Menu:
+Run `vita-webui` with no arguments on the PS Vita console to launch the interactive handheld TUI:
+```bash
+vita-webui
+```
+
+#### Scriptable CLI Commands:
+```bash
+vita-webui status          # View server status, PID, and active browser URLs
+vita-webui url             # Print only the browser connection URL
+vita-webui start           # Start the web server daemon on default port 8080
+vita-webui start 8888      # Start on a custom port
+vita-webui stop            # Stop the web server daemon
+vita-webui restart         # Restart the web server daemon
+vita-webui enable          # Enable automatic startup at system boot
+vita-webui disable         # Disable automatic startup at system boot
 ```
 
 ---

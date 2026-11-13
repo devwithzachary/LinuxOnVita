@@ -3,6 +3,91 @@
 All notable changes to LinuxOnVita are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) conventions.
 
+## [v1.6.0] - 2026-11-13
+
+### 📡 Wireless Freedom, Bluetooth & Peripherals
+- **Hardware Bluetooth Subsystem Enablement (`btmrvl_sdio` & `bluez`):**
+  - Activated the Marvell 88W8787 SDIO combo Bluetooth driver (`CONFIG_BT_MRVL=y` and `CONFIG_BT_MRVL_SDIO=y`) in the Linux 6.12 kernel configuration (`vita_defconfig`), operating concurrently alongside the `mwifiex` Wi-Fi driver on SDIF2.
+  - Enabled kernel Userspace HID (`CONFIG_UHID=y`), Bluetooth Low Energy (`CONFIG_BT_LE=y`), Bluetooth Virtual HCI (`CONFIG_BT_HCIVHCI=y`), and RF switch support (`CONFIG_RFKILL=y` and `CONFIG_RFKILL_INPUT=y`) to support modern BLE and classic Bluetooth peripherals.
+  - Deployed optimized BlueZ 5 daemon configuration (`/etc/bluetooth/main.conf` and `/etc/bluetooth/input.conf`) with userspace HID input handling, automatic adapter bringup (`AutoEnable=true`), fast connectability, and battery status reporting.
+  - Implemented `/etc/init.d/S40bluetoothd` sysvinit service to start `bluetoothd` safely after D-Bus, unblock RFKILL, bring up the `hci0` interface, and configure default security agents.
+- **Handheld Bluetooth Peripheral & Audio Manager (`vita-bluetooth`):**
+  - Created a turnkey console management utility `/usr/bin/vita-bluetooth` featuring both an interactive handheld TUI menu and direct scriptable subcommands (`status`, `on`, `off`, `scan`, `pair`, `connect`, `disconnect`, `remove`, `audio`, `gui`).
+  - Added intelligent device categorization with custom badges for wireless keyboards, mice, gamepads (DualShock 4, DualSense, Xbox, 8BitDo), audio headsets, and host PCs.
+  - Streamlined one-touch peripheral pairing: scans nearby devices, displays a numbered table with MAC and signal strength, and pairs, trusts, and connects in a single step.
+  - Added Bluetooth audio profile routing (`vita-bluetooth audio`), integrating with PipeWire / ALSA for wireless headphones, earbuds, and portable speakers.
+  - Integrated with the graphical desktop (`alpine-desktop` IceWM menu and desktop settings) with touch dialog support (`vita-bluetooth gui`).
+  - Added comprehensive Bluetooth controller, daemon, and kernel log diagnostics into `/usr/bin/vita-diagnostics` and first-boot baseline checks into `/usr/bin/vita-setup`.
+
+### 🧭 Shell UX & Dedicated Command Reference (`vita-help`)
+- **Streamlined Login Banner & Dedicated Help Utility:**
+  - Condensed the interactive login welcome banner (`/etc/profile.d/welcome.sh`) to a minimal 11-line card, preserving terminal viewport space on the 544p display above virtual keyboards (`fbkeyboard`).
+  - Introduced the dedicated `/usr/bin/vita-help` reference utility (symlinked to `/usr/bin/help` with shell builtin fallback) formatted in a compact 17-line two-column layout so all commands fit on screen above `fbkeyboard`, with topic queries (e.g. `help wifi`, `help bluetooth`, `help desktop`).
+  - Added clear hardware documentation and live scan warnings explaining the Marvell 88W8787 Bluetooth 2.1/3.0 Classic architecture to clarify modern BLE-only peripheral limitations.
+
+### 🎮 Handheld Control Center TUI (`vita-config`)
+- **Unified Handheld Configuration Suite (`vita-config` & `config`):**
+  - Implemented an interactive console management utility `/usr/bin/vita-config` (symlinked as `/usr/bin/config`) inspired by Raspberry Pi's `raspi-config`, optimized for the PS Vita's 544p display and terminal geometry.
+  - Features a live system status dashboard banner on every view displaying real-time hardware model detection, CPU frequency/governor, Wi-Fi SSID/IP, Bluetooth radio status, storage mount mode/space, and display mode.
+  - Hardware model-aware display management: presents PWM backlight brightness controls (25%, 50%, 75%, 100%, custom) exclusively on PS Vita 2000 Slim LCD models, while providing panel sleep and burn-in protection blanking controls on PS Vita 1000 OLED consoles.
+  - Removed unsupported battery percentage displays across menus to prevent fictitious telemetry (reflecting lack of a kernel PMIC/fuel gauge driver).
+  - Provides categorized submenus for Wireless & Networking, Bluetooth & Peripherals, Display & Screen Sleep, CPU & Performance Profiles (444 MHz max, 333 MHz balanced, 111 MHz powersave), PS Button LED Modes, Storage Protection (`ro` / `rw`), Memory & ZRAM, Gamepad & Virtual Keyboard, Desktop & Boot Preferences, and System Power.
+  - Supports non-interactive scriptable subcommands (`status`, `wifi`, `bluetooth`, `display`, `cpu`, `storage`, `led`, `swap`, `autostart`, `reboot`, `poweroff`).
+  - Integrated into the IceWM graphical desktop (`alpine-desktop`) application menu and settings, and registered in `welcome.sh` and `vita-help`.
+
+### 🌐 Web Management Portal & Wireless File Transfer (`vita-webui`)
+- **Zero-Dependency Native HTTP Server (`vita-webui-server`):**
+  - Engineered a high-performance, lightweight embedded C web server compiled statically with zero external dependencies, running with a memory footprint under 1 MB.
+  - Listens on port 8080 (`http://vita.local:8080` or `http://<VITA_IP>:8080`) and serves a responsive single-page web application featuring PlayStation slate styling (`#0b0e14`, `#00d2ff`, and `#0070d1`).
+  - Implemented `/api/status` endpoint delivering live system telemetry: CPU clock, cpufreq governor, load averages, RAM and ZRAM usage, storage partition capacity, mount mode (`ro` / `rw`), Wi-Fi IP and SSID, Bluetooth radio state, hardware model, and system uptime.
+- **Drag-and-Drop Web File Manager with Storage Safety Elevation:**
+  - Full browser-based file management for `/mnt/ux0/` (or any subfolder) with direct chunked file streaming downloads (`/download`) and interactive directory creation/deletion.
+  - Streaming multipart/form-data upload pipeline (`/api/upload`) that writes directly to disk in 16 KB chunks without buffering entire payloads into RAM, preventing Out-Of-Memory (OOM) issues during large ROM or zip transfers.
+  - Intelligent storage elevation: automatically detects read-only protected storage partitions (`/mnt/ux0`), temporarily remounts `rw` for uploads, flushes data to flash media via `sync()`, and safely restores read-only protection.
+- **In-Browser Web Terminal & Hardware Quick Actions:**
+  - Interactive command execution terminal (`/api/terminal`) allowing users to run shell commands and inspect output directly from a phone, tablet, or PC without SSH keys or telnet.
+  - Web-based system controls: one-click CPU clock switching (444 MHz max, 333 MHz balanced, 111 MHz powersave), PS Button LED triggers, display sleep/wake, and clean reboot to VitaOS.
+- **CLI Management Utility & Boot Service (`vita-webui` & `S60vita-webui`):**
+  - Created `/usr/bin/vita-webui` management tool supporting interactive handheld TUI menus and subcommands (`status`, `start [port]`, `stop`, `restart [port]`, `enable`, `disable`, `url`).
+  - Added sysvinit service `/etc/init.d/S60vita-webui` providing automatic background daemon initialization at boot, configurable via `/etc/vita-webui.conf` or `/mnt/ux0/linux/webui.conf`.
+  - Fully integrated into `vita-config` under Wireless & Networking and registered in `vita-help` and `welcome.sh`.
+
+### 📶 Native C + X11 Desktop GUIs & Wi-Fi Stack
+- **Zero-Dependency Native C + X11 Applications (`vita-wifi-gui`, `vita-cpu-gui`, `vita-reboot-gui`, `vita-welcome-gui`):**
+  - Replaced slow GTK/`yad` dialogs with four lightweight, static ARMv7 C + X11 binaries (`x11_mini`) that open and render instantaneously on both the Buildroot host and inside the Alpine `musl` chroot.
+  - **`vita-wifi-gui` (`vita-wifi gui`):** Instant-open graphical Wi-Fi manager displaying live SSID, IPv4 address, RSSI signal bars, 2.4 GHz scan polling, masked password entry modal, Connect/Disconnect, and Radio ON/OFF toggle.
+  - **`vita-cpu-gui` (`vita-cpu gui`):** Native CPU Power Profiles selector reading `cpufreq` sysfs directly with one-tap cards for 444 MHz Max, 333 MHz Balanced, On-Demand, and 111 MHz Powersave.
+  - **`vita-reboot-gui` (`vita-reboot`):** Instant confirmation dialog for returning to PlayStation Vita LiveArea.
+  - **`vita-welcome-gui` (`vita-desktop-welcome`):** Fast desktop quick-start guide with persisted startup toggle and one-click terminal launcher.
+- **Chroot Wi-Fi IPC & IceWM System Tray Applet (`vita-wifi-widget`):**
+  - Bind-mounted `/tmp` and `/var/run/wpa_supplicant` into the Alpine chroot in `alpine-desktop` so `wpa_cli` reply sockets (`wpa_ctrl_*`) communicate instantaneously with the host `wpa_supplicant` daemon.
+  - Integrated a live system tray applet into the IceWM taskbar (`/usr/bin/vita-wifi-widget`) alongside `vita-cpu-widget`.
+  - Automatically updates icon states every 3 seconds according to wireless link conditions: excellent (>=75%), good (>=50%), ok (>=25%), weak (<25%), disconnected, or radio disabled.
+  - Real-time hover tooltip displaying active network SSID, exact dBm, signal percentage, and assigned IPv4 address.
+  - 1-tap launcher to open the full Graphical Wi-Fi Manager, plus a right-click context menu for quick disconnection, signal telemetry, radio toggling, and Control Center navigation.
+- **Automatic Background Reconnection & Roaming Daemon (`vita-wifi-daemon`):**
+  - Implemented `/usr/bin/vita-wifi-daemon` running in the background to guard wireless connectivity across network dropouts, screen blanking/sleep, and AP roaming.
+  - Detects dropped connections (`DISCONNECTED` / `INACTIVE` states) and automatically triggers reassociation and reconnection to known networks in `wpa_supplicant.conf`.
+  - Monitors DHCP lease health and automatically re-requests or renews IP addresses if the interface loses its lease or default gateway ping fails.
+  - Respects battery-saving power states (`/tmp/wifi_disabled`) when the user explicitly turns off Wi-Fi.
+  - Automatically launched at system boot via `/etc/init.d/S45wifi`.
+- **Desktop Environment Integration (`alpine-desktop`):**
+  - Integrated `vita-wifi.desktop` application launcher into the IceWM application menu, `Internet` submenu, `Settings` submenu, and `/root/Desktop` desktop shortcuts.
+  - Configured `~/.icewm/startup` to launch `vita-wifi-widget` automatically on desktop startup.
+  - Updated `deploy_desktop_helpers()` to automatically mirror all `vita-*` tools into the container filesystem.
+
+### 🔄 In-App Bootstrapper GitHub Release Update Checker (`LinuxOnVita.vpk`)
+- **Direct GitHub Releases Integration & One-Click Download:**
+  - Integrated built-in network update checking directly into the handheld VitaOS bootstrapper application (`LinuxOnVita.vpk`).
+  - Added dedicated header touch button `[UPDATES: Check GitHub]` and gamepad shortcut (`L-TRIGGER` / `L1`) in the main bootstrapper screen.
+  - Implemented high-performance HTTP client utilizing `libcurl` (v8.17.0) and OpenSSL (v1.1.1t) via VitaSDK with POSIX threading support.
+  - Resolved legacy PlayStation Vita firmware (3.60/3.65) expired SSL certificate limitations and modern TLS handshake constraints (`TLSv1.2` / `TLSv1.3`) via custom SSL peer configuration.
+  - Automatically queries the GitHub Releases API (`https://api.github.com/repos/devwithzachary/LinuxOnVita/releases/latest`) with resilient fallback to direct asset download if API rate limits are encountered.
+  - Displays real-time download progress modal dialogs with transfer speed, megabytes downloaded, percentage, and user cancellation handling (`CIRCLE` or touch).
+  - Streams downloaded release assets directly to `ux0:data/LinuxOnVita.vpk` in chunks, ready for instant installation in VitaShell without requiring PC or USB cable transfers.
+
+
+
 ## [v1.5.0] - 2026-10-23
 
 ### Hardware & Kernel Architecture

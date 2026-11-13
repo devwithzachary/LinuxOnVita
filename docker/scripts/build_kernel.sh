@@ -86,6 +86,19 @@ if [ -d "${PORT_DIR}" ]; then
     "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_CPU_FREQ_GOV_ONDEMAND
     "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_CPU_FREQ_GOV_CONSERVATIVE
     "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_ARM_VITA_CPUFREQ
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_BT
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_BT_BREDR
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_BT_RFCOMM
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_BT_RFCOMM_TTY
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_BT_BNEP
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_BT_HIDP
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_BT_LE
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_BT_MRVL
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_BT_MRVL_SDIO
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_BT_HCIVHCI
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_UHID
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_RFKILL
+    "${PORT_DIR}/linux_vita/scripts/config" --file "${PORT_DIR}/linux_vita/.config" --enable CONFIG_RFKILL_INPUT
     
     echo "Compiling zImage and DTBs..."
     make build CROSS_COMPILE="${CROSS_COMPILE}"

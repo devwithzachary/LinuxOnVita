@@ -43,25 +43,28 @@ While original proof-of-concept projects proved that modern Linux can boot on th
 ## 📚 Documentation & Roadmap
 
 > [!TIP]
-> * Looking for the comprehensive user manual? Check out the **[Complete User Guide](USER_GUIDE.md)** for detailed walkthroughs on every built-in utility (`vita-wifi`, `vita-brightness`, `vita-swap`, `vita-doom`, `alpine-desktop`), on-screen touch typing, physical gamepad controls, remote SSH access, and package management.
+> * Looking for the comprehensive user manual? Check out the **[Complete User Guide](USER_GUIDE.md)** for detailed walkthroughs on every built-in utility (`vita-wifi`, `vita-bluetooth`, `vita-webui`, `vita-brightness`, `vita-swap`, `vita-doom`, `alpine-desktop`), on-screen touch typing, physical gamepad controls, remote SSH access, and package management.
 > * Want to see what is coming next? Check out the **[Project Roadmap](ROADMAP.md)** for upcoming release plans from v1.4.0 through v1.8.0 and beyond.
 
 ---
 
 ## ✨ Features
 
+- **Web-Based Management Portal & Wireless File Transfer (`vita-webui`):** Zero-dependency native HTTP server listening on port 8080 (`http://vita.local:8080` or `http://<VITA_IP>:8080`) featuring live telemetry dashboards (CPU, RAM, storage, Wi-Fi), drag-and-drop file transfers directly to `/mnt/ux0/` with storage protection auto-elevation, an in-browser web terminal, and hardware controls.
+- **Handheld Control Center TUI (`vita-config` / `config`):** Unified, interactive handheld configuration console (inspired by `raspi-config`) with live dashboard telemetry (Hardware Model, CPU Profile, Wi-Fi, Bluetooth, Storage, Display) and submenus for networking, bluetooth, model-aware display backlight, CPU profiles, storage safety, and desktop preferences.
+- **Bluetooth Subsystem & Peripheral Manager (`vita-bluetooth`):** Marvell 88W8787 combo Bluetooth driver enablement (`CONFIG_BT_MRVL_SDIO=y`) with BlueZ 5 daemon, automatic discovery, one-touch peripheral pairing (keyboards, mice, gamepads, audio), and desktop GUI integration.
 - **Interactive First-Boot Setup Wizard (`vita-setup`):** Automated guided onboarding wizard on first boot for Wi-Fi scanning, storage protection mode selection, ZRAM memory optimization, permanent Alpine container creation, desktop autostart, and PS Button LED configuration.
 - **Display Sleep, Auto-Dimming & Power Management (`vita-powerd`):** OLED and LCD burn-in protection daemon with 3-minute dimming, 5-minute display blanking / sleep (keeping background tasks running), and Power button sleep / graceful shutdown integration.
 - **Hardware Power & Dynamic CPU Frequency Scaling (`vita-cpu` / `vita-power`):** Dynamic clock frequency control across 111, 166, 222, 333, and 444 MHz operating points via native kernel driver (`vita-cpufreq`), standard cpufreq governors, CLI utility, touch GUI dialog, and an IceWM desktop taskbar widget.
 - **PlayStation Button Blue LED Control (`vita-led`):** Native hardware LED control supporting heartbeat pulse, storage/disk I/O activity, solid glow, or low-distraction disabled mode.
 - **Sony Memory Card Independence:** Boot Linux directly from SD2Vita (`ux0:`) or internal eMMC storage (`ur0:`) without requiring a proprietary Sony memory card, powered by in-memory kernel pre-staging.
-- **Touchscreen Graphical Bootstrapper (`LinuxOnVita.vpk`):** Modern touch-driven handheld UI with double-buffered tear-free rendering at 60 FPS, smart partition recommendation badges (`ux0:` SD2Vita, `ur0:` internal eMMC), modal progress dialogs, and a full-screen graphical boot log viewer.
+- **Touchscreen Graphical Bootstrapper & In-App Update Checker (`LinuxOnVita.vpk`):** Modern touch-driven handheld UI with double-buffered tear-free rendering at 60 FPS, smart partition recommendation badges (`ux0:` SD2Vita, `ur0:` internal eMMC), modal progress dialogs, a full-screen graphical boot log viewer, and built-in GitHub release update checking with one-click download directly to `ux0:data/LinuxOnVita.vpk` via `libcurl`.
 - **Virtual Network Tunnels & Mesh VPNs (`CONFIG_TUN` & WireGuard):** Built-in kernel support for TUN devices and WireGuard, enabling Tailscale, ZeroTier, and secure overlay networks, plus the native `vita-tun` management tool.
 - **Built-in Touch Keyboard (`fbkeyboard`):** Type directly on the console screen with an on-framebuffer virtual keyboard featuring dual ABC / ?123 layouts, Caps Lock double-tap, long-press key repeat, hardware PS button visibility toggle, and damage auto-healing.
 - **Physical Gamepad Navigation (`vita-input-mapper`):** Complete console shell and desktop navigation with D-Pad, face buttons, Select mapped to Escape (`KEY_ESC`), Start mapped to Enter/Super, Volume buttons for backlight stepping, and shoulder triggers synthesized through `/dev/uinput`.
 - **Fixed Controller Logic:** Corrected inverted button mask issues and initialized analog sticks via Syscon for smooth twin-stick controls in games and terminal navigation.
 - **Full Display Brightness:** Patched baremetal bootloaders to initialize displays at 100% brightness on both OLED and LCD models, plus runtime backlight adjustment on PS Vita 2000 via `vita-brightness`.
-- **Interactive On-Device Wi-Fi Manager (`vita-wifi`):** Scan, connect, and switch wireless networks directly on the console with an ASCII signal table. Saves credentials permanently to your storage partition while respecting read-only storage safety.
+- **Interactive Wi-Fi Manager, Desktop GUI & System Tray Applet (`vita-wifi`):** Scan, connect, and switch wireless networks directly on the console with an ASCII signal table, touch GUI manager (`vita-wifi gui`), and an IceWM system tray applet (`vita-wifi-widget`) with real-time signal strength indicators and an automatic background reconnection daemon (`vita-wifi-daemon`). Saves credentials permanently while respecting read-only storage safety.
 - **Fast Boot & OpenSSH:** Boots straight into the Linux terminal. Wi-Fi connects automatically with OpenSSH and mDNS (`vita.local`), ready in ~12 seconds.
 - **Alpine Linux Chroot (`alpine-chroot`):** Run an isolated, persistent Alpine Linux userland on storage with full `apk add` package management and automated space pre-allocation checks.
 - **Turnkey Graphical Desktop & Autostart (`alpine-desktop`, `vita-autostart`):** Run an ultra-lightweight IceWM desktop environment on `/dev/fb0` with analog mouse emulation, touchscreen gestures, bundled apps, and the option to boot directly into the desktop with a 3-second failsafe countdown.
@@ -157,7 +160,7 @@ For full usage instructions, gamepad shortcuts, and Wi-Fi setup, see the **[Comp
 | **Hardware Power & CPU Clocks** | **Working** | Dynamic frequency scaling (111-444 MHz) via `vita-cpufreq` and `vita-cpu` |
 | **Power Management & Sleep** | **Working** | Automated dimming/sleep, burn-in protection, and power button shutdown (`vita-powerd`) |
 | **PlayStation Blue LED** | **Working** | Dynamic triggers (heartbeat, disk I/O, activity, solid on/off) via `vita-led` |
-| **Bluetooth** | **Not yet supported** | Marvell SD8787 Bluetooth driver not enabled in kernel config |
+| **Bluetooth** | **Working** | Marvell SD8787 (BT 2.1+EDR / 3.0+HS) via `btmrvl_sdio` with BlueZ 5, `vita-bluetooth` manager, and audio profiles |
 | **Audio** | **Not yet supported** | Vita audio codec lacks an active Linux ALSA driver |
 | **3D GPU Acceleration** | **Not supported** | PowerVR SGX543MP4+ lacks open-source Linux drivers (software rendering via simplefb) |
 

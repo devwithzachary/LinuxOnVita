@@ -1,0 +1,196 @@
+#!/bin/sh
+# vita-wifi-daemon: Background Wi-Fi Reconnection & Roaming Monitor for PS Vita Linux
+#
+# Continuously monitors wireless connectivity in the background:
+#   * Automatically re-associates across network dropouts, AP roaming, and screen sleep
+#   * Re-requests DHCP lease if IP address is lost or dropped
+#   * Verifies default gateway reachability and recovers stale connections
+#   * Respects battery-saving disabled state (/tmp/wifi_disabled)
+#
+# Licensed under the GNU General Public License v3.0 (GPL-3.0)
+
+PIDFILE="/var/run/vita-wifi-daemon.pid"
+LOGFILE="/tmp/vita-wifi-daemon.log"
+INTERVAL=15
+
+get_iface() {
+    if [ -e "/sys/class/net/mlan0" ] || ip link show mlan0 >/dev/null 2>&1; then
+        echo "mlan0"
+        return 0
+    fi
+    if [ -e "/sys/class/net/wlan0" ] || ip link show wlan0 >/dev/null 2>&1; then
+        echo "wlan0"
+        return 0
+    fi
+    return 1
+}
+
+is_running() {
+    if [ -f "$PIDFILE" ]; then
+        local pid
+        pid=$(cat "$PIDFILE" 2>/dev/null || true)
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+log_msg() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOGFILE" 2>/dev/null || true
+}
+
+daemon_loop() {
+    log_msg "Starting PlayStation Vita Wi-Fi background reconnection daemon..."
+    local disc_count=0
+    local gw_fail_count=0
+
+    while true; do
+        sleep "$INTERVAL"
+
+        # Check if Wi-Fi has been manually turned off by user to save battery
+        if [ -f "/tmp/wifi_disabled" ]; then
+            disc_count=0
+            gw_fail_count=0
+            continue
+        fi
+
+        local iface
+        iface=$(get_iface) || continue
+
+        local operstate="DOWN"
+        [ -f "/sys/class/net/$iface/operstate" ] && operstate=$(cat "/sys/class/net/$iface/operstate" 2>/dev/null || echo "DOWN")
+        if [ "$operstate" = "DOWN" ]; then
+            continue
+        fi
+
+        # Ensure wpa_supplicant is running
+        if ! pidof wpa_supplicant >/dev/null 2>&1; then
+            log_msg "wpa_supplicant stopped unexpectedly. Restarting on $iface..."
+            mkdir -p /var/run/wpa_supplicant
+            ip link set "$iface" up 2>/dev/null || true
+            local conf="/etc/wpa_supplicant.conf"
+            for candidate in \
+                /mnt/ux0/linux/wpa_supplicant.conf \
+                /mnt/ur0/linux/wpa_supplicant.conf \
+                /mnt/xmc0/linux/wpa_supplicant.conf \
+                /mnt/uma0/linux/wpa_supplicant.conf \
+                /etc/wpa_supplicant.conf; do
+                if [ -f "$candidate" ]; then
+                    conf="$candidate"
+                    break
+                fi
+            done
+            wpa_supplicant -B -i "$iface" -c "$conf" -O /var/run/wpa_supplicant 2>/dev/null || true
+            sleep 2
+            continue
+        fi
+
+        local wpa_out
+        wpa_out=$(wpa_cli -i "$iface" status 2>/dev/null || true)
+        local wpa_state
+        wpa_state=$(echo "$wpa_out" | grep "^wpa_state=" | cut -d= -f2 || true)
+
+        if [ "$wpa_state" = "DISCONNECTED" ] || [ "$wpa_state" = "INACTIVE" ]; then
+            disc_count=$((disc_count + 1))
+            # If disconnected for 2 checks (30s), trigger reassociation
+            if [ "$disc_count" -ge 2 ]; then
+                log_msg "Connection dropped ($wpa_state for ${disc_count} cycles). Reassociating on $iface..."
+                wpa_cli -i "$iface" reassociate >/dev/null 2>&1 || wpa_cli -i "$iface" reconnect >/dev/null 2>&1 || true
+                disc_count=0
+            fi
+            gw_fail_count=0
+        elif [ "$wpa_state" = "COMPLETED" ]; then
+            disc_count=0
+            local cur_ip
+            cur_ip=$(ip -4 addr show "$iface" 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2 || true)
+
+            if [ -z "$cur_ip" ]; then
+                log_msg "Associated with SSID but missing IPv4 address. Requesting DHCP lease..."
+                udhcpc -i "$iface" -b -R -q 2>/dev/null || true
+                gw_fail_count=0
+            else
+                # Verify default gateway reachability
+                local gw
+                gw=$(ip route show default dev "$iface" 2>/dev/null | awk '{print $3}' | head -n1 || true)
+                if [ -n "$gw" ]; then
+                    if ! ping -c 1 -W 2 "$gw" >/dev/null 2>&1; then
+                        gw_fail_count=$((gw_fail_count + 1))
+                        if [ "$gw_fail_count" -ge 3 ]; then
+                            log_msg "Gateway $gw unreachable after 3 attempts. Renewing DHCP lease..."
+                            killall -SIGUSR1 udhcpc 2>/dev/null || udhcpc -i "$iface" -n -q -R 2>/dev/null || true
+                            gw_fail_count=0
+                        fi
+                    else
+                        gw_fail_count=0
+                    fi
+                fi
+            fi
+        fi
+    done
+}
+
+cmd_start() {
+    if is_running; then
+        echo "vita-wifi-daemon is already running (PID: $(cat "$PIDFILE"))."
+        return 0
+    fi
+    echo "Starting vita-wifi-daemon in background..."
+    daemon_loop &
+    local dpid=$!
+    mkdir -p /var/run
+    echo "$dpid" > "$PIDFILE" 2>/dev/null || true
+}
+
+cmd_stop() {
+    if [ -f "$PIDFILE" ]; then
+        local pid
+        pid=$(cat "$PIDFILE" 2>/dev/null || true)
+        if [ -n "$pid" ]; then
+            kill "$pid" 2>/dev/null || true
+            rm -f "$PIDFILE" 2>/dev/null || true
+            echo "Stopped vita-wifi-daemon (PID: $pid)."
+            return 0
+        fi
+    fi
+    killall vita-wifi-daemon 2>/dev/null || true
+    echo "vita-wifi-daemon stopped."
+}
+
+cmd_status() {
+    if is_running; then
+        echo "vita-wifi-daemon is RUNNING (PID: $(cat "$PIDFILE"))."
+        if [ -f "$LOGFILE" ]; then
+            echo ""
+            echo "Recent daemon logs:"
+            tail -n 5 "$LOGFILE"
+        fi
+    else
+        echo "vita-wifi-daemon is STOPPED."
+    fi
+}
+
+ACTION="${1:-start}"
+shift 2>/dev/null || true
+
+case "$ACTION" in
+    start)
+        cmd_start
+        ;;
+    stop)
+        cmd_stop
+        ;;
+    restart)
+        cmd_stop
+        sleep 1
+        cmd_start
+        ;;
+    status)
+        cmd_status
+        ;;
+    *)
+        echo "Usage: vita-wifi-daemon {start|stop|restart|status}"
+        exit 1
+        ;;
+esac
+

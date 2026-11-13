@@ -17,14 +17,18 @@ if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
 fi
 
 # If running in graphical desktop and not forced, ask for confirmation
-if [ -n "$DISPLAY" ] && [ "$1" != "-f" ] && [ "$1" != "--now" ] && command -v yad >/dev/null 2>&1; then
-    yad --question \
-        --title="Reboot to VitaOS" \
-        --window-icon="system-reboot" \
-        --text="Reboot console and return to PlayStation Vita LiveArea?" \
-        --button="Cancel:1" \
-        --button="Reboot:0" \
-        --center --width=380 2>/dev/null || exit 0
+if [ -n "$DISPLAY" ] && [ "$1" != "-f" ] && [ "$1" != "--now" ]; then
+    if [ -x /usr/bin/vita-reboot-gui ]; then
+        /usr/bin/vita-reboot-gui || exit 0
+    elif command -v yad >/dev/null 2>&1; then
+        yad --question \
+            --title="Reboot to VitaOS" \
+            --window-icon="system-reboot" \
+            --text="Reboot console and return to PlayStation Vita LiveArea?" \
+            --button="Cancel:1" \
+            --button="Reboot:0" \
+            --center --width=380 2>/dev/null || exit 0
+    fi
 fi
 
 echo "Flushing disk caches and syncing filesystems..."
