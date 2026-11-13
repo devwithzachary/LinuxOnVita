@@ -492,11 +492,10 @@ cmd_status_gui() {
     if [ -n "$DISPLAY" ] && command -v yad >/dev/null 2>&1; then
         local status_text
         status_text=$(cmd_status | sed 's/\x1b\[[0-9;]*m//g')
-        yad --title="PlayStation Vita Wi-Fi Telemetry" \
+        printf "%s\n" "$status_text" | yad --title="PlayStation Vita Wi-Fi Telemetry" \
             --window-icon="network-wireless" \
             --width=460 --height=320 --center \
             --text-info --fontname="Monospace 9" \
-            <<< "$status_text" \
             --button="OK:0"
     else
         cmd_status
@@ -504,6 +503,9 @@ cmd_status_gui() {
 }
 
 cmd_gui() {
+    if [ -n "$DISPLAY" ] && [ -x /usr/bin/vita-wifi-gui ]; then
+        exec /usr/bin/vita-wifi-gui
+    fi
     if [ -z "$DISPLAY" ] || ! command -v yad >/dev/null 2>&1; then
         cmd_menu
         return $?
@@ -540,6 +542,9 @@ cmd_gui() {
             cur_rssi=$(echo "$sig_poll" | grep "^RSSI=" | cut -d= -f2 || true)
         fi
 
+        local safe_cur_ssid=""
+        [ -n "$cur_ssid" ] && safe_cur_ssid=$(printf "%s" "$cur_ssid" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+
         local status_markup=""
         if [ -n "$cur_ssid" ] && [ -n "$cur_ip" ]; then
             local sig_text=""
@@ -549,9 +554,11 @@ cmd_gui() {
                 [ $pct -lt 0 ] && pct=0
                 sig_text=" | Signal: <b>${pct}%</b> (${cur_rssi} dBm)"
             fi
-            status_markup="Connected to <b><span color='#00bb00'>${cur_ssid}</span></b>\nIP Address: <b>${cur_ip}</b>${sig_text}"
+            status_markup="Connected to <b><span color='#00bb00'>${safe_cur_ssid}</span></b>\nIP Address: <b>${cur_ip}</b>${sig_text}"
         elif [ -n "$cur_ssid" ]; then
-            status_markup="Associated with <b><span color='#ffaa00'>${cur_ssid}</span></b> (Waiting for IP...)"
+            status_markup="Associated with <b><span color='#ffaa00'>${safe_cur_ssid}</span></b> (Waiting for IP...)"
+        elif [ -n "$cur_ip" ]; then
+            status_markup="Connected (<b><span color='#00bb00'>Online</span></b>)\nIP Address: <b>${cur_ip}</b>"
         elif [ -f "/tmp/wifi_disabled" ]; then
             status_markup="<span color='#cc0000'>Wi-Fi Radio Power OFF</span> (Disabled)"
         else
@@ -562,7 +569,8 @@ cmd_gui() {
         local raw=""
         raw=$(wpa_cli -i "$iface" scan_results 2>/dev/null || true)
 
-        local rows=()
+        local tmp_list="/tmp/vita-wifi-yad-$$.txt"
+        : > "$tmp_list"
         local count=0
 
         if [ -n "$raw" ]; then
@@ -616,7 +624,7 @@ cmd_gui() {
 
             while IFS="$(printf '\t')" read -r r_sel r_ssid r_sig r_sec r_bssid; do
                 [ -z "$r_ssid" ] && continue
-                rows+=("$r_sel" "$r_ssid" "$r_sig" "$r_sec" "$r_bssid")
+                printf "%s\n%s\n%s\n%s\n%s\n" "$r_sel" "$r_ssid" "$r_sig" "$r_sec" "$r_bssid" >> "$tmp_list"
                 count=$((count + 1))
             done << EOF
 $parsed
@@ -624,24 +632,24 @@ EOF
         fi
 
         if [ $count -eq 0 ]; then
-            rows+=("FALSE" "(No networks found - click Rescan)" "[    ] 0%" "None" "00:00:00:00:00:00")
+            printf "FALSE\n(No networks found - click Rescan)\n[    ] 0%%\nNone\n00:00:00:00:00:00\n" >> "$tmp_list"
         fi
 
-        local choice
+        local choice=""
+        local exit_code=0
         choice=$(yad --title="PlayStation Vita Wi-Fi Manager" \
                      --window-icon="network-wireless" \
                      --width=540 --height=400 --center \
                      --text="<b>PlayStation Vita Wireless Network Manager</b>\n${status_markup}" \
                      --list --radiolist \
                      --column="Select" --column="SSID" --column="Signal" --column="Security" --column="BSSID" \
-                     "${rows[@]}" \
                      --button="Connect:0" \
                      --button="Rescan:2" \
                      --button="Disconnect:3" \
                      --button="Manual SSID:4" \
                      --button="Radio ON/OFF:5" \
-                     --button="Close:1")
-        local exit_code=$?
+                     --button="Close:1" < "$tmp_list") || exit_code=$?
+        rm -f "$tmp_list"
 
         case "$exit_code" in
             0)
@@ -661,14 +669,13 @@ EOF
                                --width=380 --center \
                                --text="Enter WPA passphrase for <b>${sel_ssid}</b>:\n<small>(Minimum 8 characters)</small>" \
                                --entry --hide-text \
-                               --button="Connect:0" --button="Cancel:1")
-                    [ $? -ne 0 ] && continue
+                               --button="Connect:0" --button="Cancel:1") || continue
                     if [ -n "$pass" ] && [ ${#pass} -lt 8 ]; then
                         yad --warning --title="Invalid Passphrase" \
                             --window-icon="network-wireless" \
                             --width=320 --center \
                             --text="WPA passphrases must be at least 8 characters." \
-                            --button="OK:0"
+                            --button="OK:0" || true
                         continue
                     fi
                 fi
@@ -678,7 +685,7 @@ EOF
                     --window-icon="network-wireless" \
                     --width=380 --center \
                     --text="Associating with <b>${sel_ssid}</b> and requesting IP address..." \
-                    --auto-close --no-buttons
+                    --auto-close --no-buttons || true
 
                 local new_ip=""
                 new_ip=$(ip -4 addr show "$iface" 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2 || true)
@@ -687,25 +694,26 @@ EOF
                         --window-icon="network-wireless" \
                         --width=380 --center \
                         --text="<b>Successfully connected to ${sel_ssid}!</b>\n\nIP Address: <b>${new_ip}</b>\nSSH Access: <code>ssh root@${new_ip}</code>" \
-                        --button="OK:0"
+                        --button="OK:0" || true
                 else
                     yad --error --title="Connection Incomplete" \
                         --window-icon="network-wireless" \
                         --width=380 --center \
                         --text="Could not complete connection to <b>${sel_ssid}</b>.\nPlease verify your passphrase and signal range." \
-                        --button="OK:0"
+                        --button="OK:0" || true
                 fi
                 ;;
             2)
                 (
                     wpa_cli -i "$iface" scan >/dev/null 2>&1 || true
                     sleep 2
+                    echo "100"
                 ) | yad --progress --pulsate \
                         --title="Scanning Wi-Fi" \
                         --window-icon="network-wireless" \
                         --width=340 --center \
                         --text="Scanning for nearby 2.4 GHz wireless networks..." \
-                        --auto-close --no-buttons
+                        --auto-close --no-buttons || true
                 ;;
             3)
                 cmd_disconnect
@@ -713,10 +721,10 @@ EOF
                     --window-icon="network-wireless" \
                     --width=320 --center \
                     --text="Disconnected from Wi-Fi network." \
-                    --button="OK:0"
+                    --button="OK:0" || true
                 ;;
             4)
-                local form_out
+                local form_out=""
                 form_out=$(yad --title="Connect to Hidden / Manual Network" \
                                --window-icon="network-wireless" \
                                --width=380 --center \
@@ -724,8 +732,7 @@ EOF
                                --form \
                                --field="Network SSID:" "" \
                                --field="Passphrase (leave blank for Open):":H "" \
-                               --button="Connect:0" --button="Cancel:1")
-                [ $? -ne 0 ] && continue
+                               --button="Connect:0" --button="Cancel:1") || continue
 
                 local man_ssid man_pass
                 man_ssid=$(echo "$form_out" | awk -F'|' '{print $1}')
@@ -737,7 +744,7 @@ EOF
                         --window-icon="network-wireless" \
                         --width=380 --center \
                         --text="Associating with <b>${man_ssid}</b>..." \
-                        --auto-close --no-buttons
+                        --auto-close --no-buttons || true
                 fi
                 ;;
             5)

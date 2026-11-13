@@ -344,13 +344,22 @@ fi
 [ -f /etc/resolv.conf ] && cp /etc/resolv.conf "${TARGET}/etc/resolv.conf" 2>/dev/null || true
 
 # Bind system pseudo-filesystems
-mkdir -p "${TARGET}/proc" "${TARGET}/sys" "${TARGET}/dev" "${TARGET}/dev/pts" "${TARGET}/dev/shm" "${TARGET}/run"
+mkdir -p "${TARGET}/proc" "${TARGET}/sys" "${TARGET}/dev" "${TARGET}/dev/pts" "${TARGET}/dev/shm" "${TARGET}/run" "${TARGET}/tmp"
 grep -qs " ${TARGET}/proc " /proc/mounts || mount -t proc proc "${TARGET}/proc"
 grep -qs " ${TARGET}/sys " /proc/mounts || mount -t sysfs sysfs "${TARGET}/sys"
 grep -qs " ${TARGET}/dev " /proc/mounts || mount --bind /dev "${TARGET}/dev"
 grep -qs " ${TARGET}/dev/pts " /proc/mounts || mount -t devpts devpts "${TARGET}/dev/pts" -o mode=0620,gid=5,ptmxmode=0666 2>/dev/null || true
 grep -qs " ${TARGET}/dev/shm " /proc/mounts || mount -t tmpfs tmpfs "${TARGET}/dev/shm" -o mode=1777 2>/dev/null || true
 grep -qs " ${TARGET}/run " /proc/mounts || mount -t tmpfs tmpfs "${TARGET}/run" -o mode=0755 2>/dev/null || true
+grep -qs " ${TARGET}/tmp " /proc/mounts || mount --bind /tmp "${TARGET}/tmp" 2>/dev/null || true
+if [ -d /var/run/wpa_supplicant ]; then
+    mkdir -p "${TARGET}/run/wpa_supplicant"
+    grep -qs " ${TARGET}/run/wpa_supplicant " /proc/mounts || mount --bind /var/run/wpa_supplicant "${TARGET}/run/wpa_supplicant" 2>/dev/null || true
+    if [ ! -L "${TARGET}/var/run" ]; then
+        mkdir -p "${TARGET}/var/run/wpa_supplicant"
+        grep -qs " ${TARGET}/var/run/wpa_supplicant " /proc/mounts || mount --bind /var/run/wpa_supplicant "${TARGET}/var/run/wpa_supplicant" 2>/dev/null || true
+    fi
+fi
 
 cleanup_chroot() {
     # Restore vita-input-mapper to standard console mode on exit
@@ -370,6 +379,9 @@ cleanup_chroot() {
     chroot "${TARGET}" killall udevd 2>/dev/null || true
 
     # Unmount bind mounts
+    umount "${TARGET}/var/run/wpa_supplicant" 2>/dev/null || true
+    umount "${TARGET}/run/wpa_supplicant" 2>/dev/null || true
+    umount "${TARGET}/tmp"     2>/dev/null || true
     umount "${TARGET}/run"     2>/dev/null || true
     umount "${TARGET}/dev/shm" 2>/dev/null || true
     umount "${TARGET}/dev/pts" 2>/dev/null || true
@@ -413,6 +425,10 @@ deploy_desktop_helpers() {
     [ -f /usr/bin/vita-help ] && cp /usr/bin/vita-help "${TARGET}/usr/bin/vita-help" 2>/dev/null || true
     [ -f /usr/bin/vita-diagnostics ] && cp /usr/bin/vita-diagnostics "${TARGET}/usr/bin/vita-diagnostics" 2>/dev/null || true
     [ -f /usr/bin/vita-webui ] && cp /usr/bin/vita-webui "${TARGET}/usr/bin/vita-webui" 2>/dev/null || true
+    [ -f /usr/bin/vita-wifi-gui ] && cp /usr/bin/vita-wifi-gui "${TARGET}/usr/bin/vita-wifi-gui" 2>/dev/null || true
+    [ -f /usr/bin/vita-cpu-gui ] && cp /usr/bin/vita-cpu-gui "${TARGET}/usr/bin/vita-cpu-gui" 2>/dev/null || true
+    [ -f /usr/bin/vita-reboot-gui ] && cp /usr/bin/vita-reboot-gui "${TARGET}/usr/bin/vita-reboot-gui" 2>/dev/null || true
+    [ -f /usr/bin/vita-welcome-gui ] && cp /usr/bin/vita-welcome-gui "${TARGET}/usr/bin/vita-welcome-gui" 2>/dev/null || true
     chmod +x "${TARGET}/usr/bin/vita-"* 2>/dev/null || true
     chmod +x "${TARGET}/usr/bin/vita-desktop-welcome" \
              "${TARGET}/usr/bin/toggle-keyboard" \
@@ -1220,7 +1236,8 @@ if [ $NEEDS_SETUP -eq 1 ]; then
             shared-mime-info \
             librsvg \
             gdk-pixbuf \
-            gtk-update-icon-cache
+            gtk-update-icon-cache \
+            wpa_supplicant
     "
 
     # Generate D-Bus machine ID
@@ -1248,6 +1265,12 @@ fi
 configure_xorg
 deploy_desktop_helpers
 configure_icewm
+
+# Ensure wpa_cli is available inside existing containers for vita-wifi / vita-wifi-widget
+if ! chroot "${TARGET}" sh -c "command -v wpa_cli >/dev/null 2>&1"; then
+    echo "[alpine-desktop] Installing wpa_supplicant (wpa_cli) for Wi-Fi GUI..."
+    chroot "${TARGET}" apk add --no-cache wpa_supplicant >/dev/null 2>&1 || true
+fi
 
 # Ensure Swap is active for smooth desktop multitasking
 /etc/init.d/S00mount start >/dev/null 2>&1 || true

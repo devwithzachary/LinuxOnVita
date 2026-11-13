@@ -61,16 +61,19 @@ YAD_PID=$!
             tooltip="PlayStation Vita Wi-Fi: Radio OFF\nClick or tap to open Wi-Fi Manager"
         else
             cur_ssid=""
-            wpa_state="DISCONNECTED"
-            if pidof wpa_supplicant >/dev/null 2>&1; then
-                wpa_out=$(wpa_cli -i "$iface" status 2>/dev/null || true)
+            wpa_state=""
+            wpa_sock="/var/run/wpa_supplicant"
+            [ ! -d "$wpa_sock" ] && [ -d /run/wpa_supplicant ] && wpa_sock="/run/wpa_supplicant"
+            if command -v wpa_cli >/dev/null 2>&1 && pidof wpa_supplicant >/dev/null 2>&1; then
+                wpa_out=$(wpa_cli -p "$wpa_sock" -i "$iface" status 2>/dev/null || true)
                 cur_ssid=$(echo "$wpa_out" | grep "^ssid=" | cut -d= -f2- || true)
                 wpa_state=$(echo "$wpa_out" | grep "^wpa_state=" | cut -d= -f2- || true)
             fi
 
+            cur_ip=$(ip -4 addr show "$iface" 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2 || true)
+
             if [ "$wpa_state" = "COMPLETED" ] && [ -n "$cur_ssid" ]; then
-                cur_ip=$(ip -4 addr show "$iface" 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2 || true)
-                sig_poll=$(wpa_cli -i "$iface" signal_poll 2>/dev/null || true)
+                sig_poll=$(wpa_cli -p "$wpa_sock" -i "$iface" signal_poll 2>/dev/null || true)
                 cur_rssi=$(echo "$sig_poll" | grep "^RSSI=" | cut -d= -f2 || true)
 
                 pct=0
@@ -90,10 +93,14 @@ YAD_PID=$!
                     icon="network-wireless-signal-weak"
                 fi
 
-                tooltip="PlayStation Vita Wi-Fi: ${cur_ssid}\nSignal: ${cur_rssi:-N/A} dBm (${pct}%)\nIP Address: ${cur_ip:-Acquiring DHCP...}\nClick or tap to open Wi-Fi Manager"
+                safe_ssid=$(printf "%s" "$cur_ssid" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+                tooltip="PlayStation Vita Wi-Fi: ${safe_ssid}\nSignal: ${cur_rssi:-N/A} dBm (${pct}%)\nIP Address: ${cur_ip:-Acquiring DHCP...}\nClick or tap to open Wi-Fi Manager"
+            elif [ "$operstate" = "UP" ] && [ -n "$cur_ip" ]; then
+                icon="network-wireless-signal-good"
+                tooltip="PlayStation Vita Wi-Fi: Connected\nIP Address: ${cur_ip}\nClick or tap to open Wi-Fi Manager"
             else
                 icon="network-wireless-offline"
-                tooltip="PlayStation Vita Wi-Fi: Disconnected\nClick or tap to scan & connect"
+                tooltip="PlayStation Vita Wi-Fi: Disconnected\nClick or tap to scan and connect"
             fi
         fi
 

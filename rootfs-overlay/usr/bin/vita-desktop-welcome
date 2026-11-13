@@ -20,6 +20,10 @@ if [ "$SHOW_WELCOME" = "false" ]; then
     CHK_STATE="FALSE"
 fi
 
+if [ -n "$DISPLAY" ] && [ -x /usr/bin/vita-welcome-gui ]; then
+    exec /usr/bin/vita-welcome-gui
+fi
+
 if ! command -v yad >/dev/null 2>&1; then
     echo "LinuxOnVita Desktop Welcome Guide requires yad."
     exit 0

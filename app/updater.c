@@ -259,6 +259,51 @@ static int find_vpk_asset_url(const char *json, char *url_out, size_t url_out_le
     return -1;
 }
 
+/* Parse a version string like "v1.6.0" or "1.5.0" into major, minor, patch */
+static int parse_version(const char *ver, int *major, int *minor, int *patch) {
+    if (!ver || !*ver) {
+        return -1;
+    }
+    if (*ver == 'v' || *ver == 'V') {
+        ver++;
+    }
+    int maj = 0, min = 0, pat = 0;
+    int parsed = sscanf(ver, "%d.%d.%d", &maj, &min, &pat);
+    if (parsed < 2) {
+        return -1;
+    }
+    *major = maj;
+    *minor = min;
+    *patch = (parsed >= 3) ? pat : 0;
+    return 0;
+}
+
+/* Returns > 0 if latest > current, 0 if equal, < 0 if latest < current */
+static int compare_versions(const char *latest, const char *current) {
+    int l_maj = 0, l_min = 0, l_pat = 0;
+    int c_maj = 0, c_min = 0, c_pat = 0;
+
+    if (parse_version(latest, &l_maj, &l_min, &l_pat) < 0 ||
+        parse_version(current, &c_maj, &c_min, &c_pat) < 0) {
+        return (strcmp(latest, current) == 0) ? 0 : 1;
+    }
+
+    if (l_maj != c_maj) return (l_maj > c_maj) ? 1 : -1;
+    if (l_min != c_min) return (l_min > c_min) ? 1 : -1;
+    if (l_pat != c_pat) return (l_pat > c_pat) ? 1 : -1;
+
+    /* Handle pre-release tags such as -BETA1 vs final release */
+    const char *l_pre = strchr(latest, '-');
+    const char *c_pre = strchr(current, '-');
+    if (!l_pre && c_pre) return 1;  /* Final release is newer than beta */
+    if (l_pre && !c_pre) return -1; /* Final release installed is newer than beta */
+    if (l_pre && c_pre) {
+        int cmp = strcmp(l_pre, c_pre);
+        return (cmp > 0) ? 1 : ((cmp < 0) ? -1 : 0);
+    }
+    return 0;
+}
+
 /* Check GitHub for new releases and handle download */
 void check_for_updates(void) {
     gui_draw_progress_modal("CHECKING FOR UPDATES", "Initializing network...", 0.15f, "Connecting to network stack...", NULL);
@@ -354,11 +399,19 @@ void check_for_updates(void) {
         }
     }
 
-    /* Check if already on latest version */
-    if (strcmp(latest_tag, CURRENT_APP_VERSION) == 0) {
+    /* Check if already on latest or newer version */
+    int cmp = compare_versions(latest_tag, CURRENT_APP_VERSION);
+    if (cmp <= 0) {
         char msg[128];
-        snprintf(msg, sizeof(msg), "You have the latest version installed (%s).", CURRENT_APP_VERSION);
-        gui_draw_progress_modal("UP TO DATE", msg, 1.0f, "No newer release available on GitHub.", "PRESS CROSS TO RE-DOWNLOAD | CIRCLE TO RETURN");
+        char sub[128];
+        if (cmp < 0) {
+            snprintf(msg, sizeof(msg), "Installed (%s) is newer than GitHub (%s).", CURRENT_APP_VERSION, latest_tag);
+            snprintf(sub, sizeof(sub), "You are running a pre-release or development build.");
+        } else {
+            snprintf(msg, sizeof(msg), "You have the latest version installed (%s).", CURRENT_APP_VERSION);
+            snprintf(sub, sizeof(sub), "No newer release available on GitHub.");
+        }
+        gui_draw_progress_modal("UP TO DATE", msg, 1.0f, sub, "PRESS CROSS TO RE-DOWNLOAD | CIRCLE TO RETURN");
 
         uint32_t btn = gui_wait_button_press(SCE_CTRL_CROSS | SCE_CTRL_CIRCLE | SCE_CTRL_START);
         if (btn & (SCE_CTRL_CIRCLE | SCE_CTRL_START)) {

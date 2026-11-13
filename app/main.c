@@ -916,7 +916,7 @@ static void render_main_ui(const MountFileStatus *status, int installed, int has
 
   /* Header Bar */
   gui_draw_text(24, 16, "LinuxOnVita", GUI_COLOR_ACCENT_CYAN, 2);
-  gui_draw_badge(210, 18, "v1.6.0", GUI_COLOR_CARD_BG, GUI_COLOR_ACCENT_CYAN);
+  gui_draw_badge(210, 18, CURRENT_APP_VERSION, GUI_COLOR_CARD_BG, GUI_COLOR_ACCENT_CYAN);
   gui_draw_text(24, 38, "PlayStation Vita Linux Bootstrapper & Installer", GUI_COLOR_TEXT_MUTED, 1);
   gui_draw_action_button(r_update, "UPDATES", "Check GitHub", "L-TRIG", GUI_COLOR_CARD_BG, pressed_btn == 6);
   gui_draw_action_button(r_exit, "EXIT", NULL, "START", GUI_COLOR_CARD_BG, pressed_btn == 5);

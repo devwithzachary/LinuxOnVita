@@ -59,8 +59,16 @@ if [ -d "${TOOLS_DIR}" ]; then
     cp "${TOOLS_DIR}/vita-tun/vita-tun" "${ROOTFS_OVERLAY}/usr/bin/"
     cp "${TOOLS_DIR}/vita-powerd/vita-powerd" "${ROOTFS_OVERLAY}/usr/bin/"
     cp "${TOOLS_DIR}/vita-webui/vita-webui-server" "${ROOTFS_OVERLAY}/usr/bin/"
+    cp "${TOOLS_DIR}/vita-gui/vita-wifi-gui" "${ROOTFS_OVERLAY}/usr/bin/"
+    cp "${TOOLS_DIR}/vita-gui/vita-cpu-gui" "${ROOTFS_OVERLAY}/usr/bin/"
+    cp "${TOOLS_DIR}/vita-gui/vita-reboot-gui" "${ROOTFS_OVERLAY}/usr/bin/"
+    cp "${TOOLS_DIR}/vita-gui/vita-welcome-gui" "${ROOTFS_OVERLAY}/usr/bin/"
     arm-linux-gnueabihf-strip "${ROOTFS_OVERLAY}/usr/bin/vita-powerd" 2>/dev/null || true
     arm-linux-gnueabihf-strip "${ROOTFS_OVERLAY}/usr/bin/vita-webui-server" 2>/dev/null || true
+    arm-linux-gnueabihf-strip "${ROOTFS_OVERLAY}/usr/bin/vita-wifi-gui" 2>/dev/null || true
+    arm-linux-gnueabihf-strip "${ROOTFS_OVERLAY}/usr/bin/vita-cpu-gui" 2>/dev/null || true
+    arm-linux-gnueabihf-strip "${ROOTFS_OVERLAY}/usr/bin/vita-reboot-gui" 2>/dev/null || true
+    arm-linux-gnueabihf-strip "${ROOTFS_OVERLAY}/usr/bin/vita-welcome-gui" 2>/dev/null || true
     if [ -f "${TOOLS_DIR}/fbdoom/fbdoom" ]; then
         arm-linux-gnueabihf-strip "${TOOLS_DIR}/fbdoom/fbdoom" 2>/dev/null || true
         cp "${TOOLS_DIR}/fbdoom/fbdoom" "${ROOTFS_OVERLAY}/usr/bin/"

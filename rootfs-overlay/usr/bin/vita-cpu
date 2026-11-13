@@ -277,6 +277,9 @@ cmd_set() {
 
 # Graphical Touch Dialog (YAD) or TUI Dialog
 cmd_gui() {
+    if [ -n "$DISPLAY" ] && [ -x /usr/bin/vita-cpu-gui ]; then
+        exec /usr/bin/vita-cpu-gui
+    fi
     cur_mhz=$(get_cur_freq_mhz)
     gov=$(get_cur_governor)
 
