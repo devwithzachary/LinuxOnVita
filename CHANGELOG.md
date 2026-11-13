@@ -3,7 +3,7 @@
 All notable changes to LinuxOnVita are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) conventions.
 
-## [v1.6.0] - 2026-10-30
+## [v1.6.0] - 2026-11-13
 
 ### 📡 Wireless Freedom, Bluetooth & Peripherals
 - **Hardware Bluetooth Subsystem Enablement (`btmrvl_sdio` & `bluez`):**
@@ -22,7 +22,7 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
 ### 🧭 Shell UX & Dedicated Command Reference (`vita-help`)
 - **Streamlined Login Banner & Dedicated Help Utility:**
   - Condensed the interactive login welcome banner (`/etc/profile.d/welcome.sh`) to a minimal 11-line card, preserving terminal viewport space on the 544p display above virtual keyboards (`fbkeyboard`).
-  - Introduced the dedicated `/usr/bin/vita-help` reference utility (symlinked to `/usr/bin/help` with shell builtin fallback) providing a comprehensive, colorized breakdown of all 14 built-in Vita Linux utilities and topic queries (e.g. `help wifi`, `help bluetooth`, `help desktop`).
+  - Introduced the dedicated `/usr/bin/vita-help` reference utility (symlinked to `/usr/bin/help` with shell builtin fallback) formatted in a compact 17-line two-column layout so all commands fit on screen above `fbkeyboard`, with topic queries (e.g. `help wifi`, `help bluetooth`, `help desktop`).
   - Added clear hardware documentation and live scan warnings explaining the Marvell 88W8787 Bluetooth 2.1/3.0 Classic architecture to clarify modern BLE-only peripheral limitations.
 
 ### 🎮 Handheld Control Center TUI (`vita-config`)
@@ -52,14 +52,15 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) co
   - Added sysvinit service `/etc/init.d/S60vita-webui` providing automatic background daemon initialization at boot, configurable via `/etc/vita-webui.conf` or `/mnt/ux0/linux/webui.conf`.
   - Fully integrated into `vita-config` under Wireless & Networking and registered in `vita-help` and `welcome.sh`.
 
-### 📶 Desktop Wi-Fi Manager (GUI) & Background Reconnection Daemon
-- **Graphical Touch Wi-Fi Manager (`vita-wifi gui`):**
-  - Built a touch-optimized GTK dialog manager utilizing `yad`, tailored specifically for the 960x544 display and analog stick mouse navigation.
-  - Features real-time connection status headers with live SSID, IP address, and RSSI dBm/percentage.
-  - Interactive radio scan list displaying all nearby 2.4 GHz access points with dynamic signal strength bars (`[====]`), percentage, security protocols (WPA2, WPA3, Open), and BSSID.
-  - Streamlined one-touch connection flow with masked passphrase input dialogs, animated association progress bars, and instant IP assignment confirmations.
-  - Support for connecting to hidden/manual network SSIDs, active network disconnection, and 1-tap radio power toggling.
-- **IceWM System Tray Network Applet (`vita-wifi-widget`):**
+### 📶 Native C + X11 Desktop GUIs & Wi-Fi Stack
+- **Zero-Dependency Native C + X11 Applications (`vita-wifi-gui`, `vita-cpu-gui`, `vita-reboot-gui`, `vita-welcome-gui`):**
+  - Replaced slow GTK/`yad` dialogs with four lightweight, static ARMv7 C + X11 binaries (`x11_mini`) that open and render instantaneously on both the Buildroot host and inside the Alpine `musl` chroot.
+  - **`vita-wifi-gui` (`vita-wifi gui`):** Instant-open graphical Wi-Fi manager displaying live SSID, IPv4 address, RSSI signal bars, 2.4 GHz scan polling, masked password entry modal, Connect/Disconnect, and Radio ON/OFF toggle.
+  - **`vita-cpu-gui` (`vita-cpu gui`):** Native CPU Power Profiles selector reading `cpufreq` sysfs directly with one-tap cards for 444 MHz Max, 333 MHz Balanced, On-Demand, and 111 MHz Powersave.
+  - **`vita-reboot-gui` (`vita-reboot`):** Instant confirmation dialog for returning to PlayStation Vita LiveArea.
+  - **`vita-welcome-gui` (`vita-desktop-welcome`):** Fast desktop quick-start guide with persisted startup toggle and one-click terminal launcher.
+- **Chroot Wi-Fi IPC & IceWM System Tray Applet (`vita-wifi-widget`):**
+  - Bind-mounted `/tmp` and `/var/run/wpa_supplicant` into the Alpine chroot in `alpine-desktop` so `wpa_cli` reply sockets (`wpa_ctrl_*`) communicate instantaneously with the host `wpa_supplicant` daemon.
   - Integrated a live system tray applet into the IceWM taskbar (`/usr/bin/vita-wifi-widget`) alongside `vita-cpu-widget`.
   - Automatically updates icon states every 3 seconds according to wireless link conditions: excellent (>=75%), good (>=50%), ok (>=25%), weak (<25%), disconnected, or radio disabled.
   - Real-time hover tooltip displaying active network SSID, exact dBm, signal percentage, and assigned IPv4 address.

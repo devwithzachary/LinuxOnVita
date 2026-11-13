@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 /* Current application release version */
-#define CURRENT_APP_VERSION "v1.6.0-BETA5"
+#define CURRENT_APP_VERSION "v1.6.0"
 
 /* GitHub Repository Release Endpoints */
 #define GITHUB_RELEASES_API "https://api.github.com/repos/devwithzachary/LinuxOnVita/releases/latest"
