@@ -77,7 +77,7 @@ GpuProbe.vpk.out: /build/tools/vita-gpu-probe/kernel/gpu_probe.skprx
 
 GpuProbe.vpk_param.sfo: GpuProbe.self
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=/build/tools/vita-gpu-probe/app/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Generating param.sfo for GpuProbe.vpk"
-	/usr/local/vitasdk/bin/vita-mksfoex -d PARENTAL_LEVEL=1 -s APP_VER=01.00 -s TITLE_ID=GPUPROBE0 "GPU Probe" /build/tools/vita-gpu-probe/app/build/GpuProbe.vpk_param.sfo
+	/usr/local/vitasdk/bin/vita-mksfoex -d PARENTAL_LEVEL=1 -d PARENTAL_LEVEL=1 -s APP_VER=01.01 -s TITLE_ID=GPUPROBE0 "GPU Probe" /build/tools/vita-gpu-probe/app/build/GpuProbe.vpk_param.sfo
 
 GpuProbe.vpk-vpk: CMakeFiles/GpuProbe.vpk-vpk
 GpuProbe.vpk-vpk: GpuProbe.vpk.out

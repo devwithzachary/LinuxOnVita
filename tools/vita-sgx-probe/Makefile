@@ -1,4 +1,5 @@
 obj-m += vita_sgx_probe.o
+obj-m += vita_gpu_diag.o
 
 KDIR ?= ../../sources/vita-linux-port/linux_vita
 ARCH ?= arm
@@ -9,4 +10,3 @@ all:
 
 clean:
 	$(MAKE) -C $(KDIR) M=$(CURDIR) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) clean
-

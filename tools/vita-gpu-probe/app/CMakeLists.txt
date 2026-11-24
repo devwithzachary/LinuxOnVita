@@ -14,9 +14,9 @@ include("$ENV{VITASDK}/share/vita.cmake" REQUIRED)
 
 set(VITA_APP_NAME "GPU Probe")
 set(VITA_TITLEID  "GPUPROBE0")
-set(VITA_VERSION  "01.00")
+set(VITA_VERSION  "01.01")
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Os")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu17 -Wall -Wextra -Os")
 set(VITA_MKSFOEX_FLAGS "${VITA_MKSFOEX_FLAGS} -d PARENTAL_LEVEL=1")
 
 add_executable(${PROJECT_NAME}
@@ -28,6 +28,7 @@ target_link_libraries(${PROJECT_NAME}
   SceCtrl_stub
   SceDisplay_stub
   SceGxm_stub
+  ScePower_stub
   taihen_stub
   SceSysmem_stub
 )
@@ -39,4 +40,3 @@ vita_create_vpk(${PROJECT_NAME}.vpk ${VITA_TITLEID} ${PROJECT_NAME}.self
   NAME ${VITA_APP_NAME}
   FILE ../kernel/gpu_probe.skprx gpu_probe.skprx
 )
-

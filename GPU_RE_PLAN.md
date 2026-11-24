@@ -128,25 +128,31 @@ Confirmed in `sources/vita-libbaremetal/libbaremetal/src/iftu.c`, `dsi.c`, and `
 - `DSI_BASE_ADDR`: `0xE5050000` (`DSI_REGS(i)` at `0xE5050000 + i * 0x10000`)
 - `FB_ADDR`: `0x20000000` (CDRAM framebuffer initialized at `960x544` 32bpp by `baremetal-loader.skprx`)
 
-### 5.3 PowerVR SGX543MP4+ Core
-Confirmed via HENkaku Vita Development Wiki:
+### 5.3 PowerVR SGX543MP4+ Core & Interrupts
+Confirmed via HENkaku Vita Development Wiki (`SceGpuEs4` & `SceKernelIntrMgr`):
 - `SceSGX543Reg`: Physical MMIO range `0xE8400000 - 0xE841FFFF` (128 KB)
 - VitaOS kernel driver: `SceGpuEs4` (shares architecture with Imagination GPL `pvrsrvkm`)
+- **Hardware Interrupts (`GIC_SPI = code - 32`):**
+  - `SceGpuLisr` (SGX543 GPU IRQ): VitaOS code `52` -> `GIC_SPI 20`
+  - `SceDisplayVbStartMainLCD` (OLED/LCD VBlank): VitaOS code `213` -> `GIC_SPI 181`
+  - `SceDisplayVbStartHDMI` (PSTV HDMI VBlank): VitaOS code `210` -> `GIC_SPI 178`
 
 ---
 
-## 6. Phase 1 Trace Findings (Verified on Physical PS Vita)
+## 6. Phase 1 & Phase 2A Trace Findings (Verified on Physical PS Vita)
 
-Captured via read-only `GpuProbe.vpk` (`SCE_KERNEL_MEMBLOCK_TYPE_KERNEL_IO_SO_R`) before and after `sceGxmInitialize()`:
+Captured via read-only `GpuProbe.vpk` (`gpu_trace_before.txt` / `gpu_trace_after.txt`) in VitaOS and `vita_sgx_probe.ko` (`linux_pervasive_trace.txt`) in Linux:
 
-### 6.1 Pervasive GPU Clock, Gate & Reset State
-- **`PERVASIVE_RESET + 0x0010` (`0xE3101010`):** `0x00000000` (GPU cores out of reset).
-- **`PERVASIVE_GATE + 0x0010` (`0xE3102010`):** `0x000F000F` (4-core GPU clock gates enabled).
-- **`PERVASIVE_BASECLK + 0x0010` (`0xE3103010`):**
-  - Before `sceGxmInitialize()`: `0x00000000`
-  - After `sceGxmInitialize()`: `0x00030003` (stock `corefreq` / `mpfreq` clock divider setting).
+### 6.1 Pervasive GPU Clock, Gate & Reset State Diff
 
-### 6.2 PowerVR SGX543MP4+ Live Identification (`0xE8400000`)
+| Register | Physical Address | VitaOS (Before GXM) | VitaOS (After GXM) | Linux Boot State | Notes |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `PERVASIVE_RESET + 0x10` | `0xE3101010` | `0x00000000` | `0x00000000` | **`0x00000001`** | Held in reset (`bit 0 = 1`) after standby boot; `scePervasiveGpuResetDisableForDriver` clears bit 0 |
+| `PERVASIVE_GATE + 0x10` | `0xE3102010` | `0x000F000F` | `0x000F000F` | **`0x00000000`** | 4-core GPU clock gate disabled (`0`) after standby boot |
+| `PERVASIVE_BASECLK + 0x10` | `0xE3103010` | `0x00000000` | `0x00030003` | **`0x00030003`** | Stock `corefreq` / `mpfreq` divider already retained in Linux! |
+
+### 6.2 PowerVR SGX543MP4+ & GPU RegBus Live Identification (in VitaOS)
+- **`GPU_REGBUS` (`0xED800000`):** `+0x0000 = 0x01006437` (SonicsSX wrapper), `+0x0018 = 0x00130001`, `+0x001C = 0x00010214`
 - **`+0x0000` (`EUR_CR_CLKGATECTL`):** `0x002AAAAA`
 - **`+0x0004` (`EUR_CR_CLKGATECTL2`):** `0x0A8A8AAA`
 - **`+0x0020` (`EUR_CR_CORE_ID`):** `0x01174403` (SGX543 MP4+)
@@ -154,16 +160,21 @@ Captured via read-only `GpuProbe.vpk` (`SCE_KERNEL_MEMBLOCK_TYPE_KERNEL_IO_SO_R`
 - **`+0x0100`:** `0x0000000F` (4 active MP cores)
 - **`+0x0C38` / `+0x0C50` (BIF MMU Directory Bases):** `0x41234000` / `0x41A3A000`
 
+### 6.3 Phase 2B Power Rail (`DD4`/`VDDG`), TrustZone SMC & Standby Findings
+- **Pervasive Wake Alone (`GATE=0x000F000F`, `RESET=0x00000000`):** Reading `0xE8400020` in Linux triggers an AXI slave abort (`imprecise external abort 0x1406`) cleanly without crashing SSH/Linux.
+- **TrustZone `SMC 0x114` (`smc_bus_freq_op`) Works Natively in Linux 6.12:**
+  - Both VitaOS and Linux return `bus_lvl = 0x6` (`222 MHz`) and `gpu_xbar_lvl = 0x3` (`111 MHz`).
+- **Elmo PMIC Power Status (`Syscon 0x0883`) & Stock `DD4/VDDG` Voltage IDs (`Syscon 0x088E`):**
+  - Linux `0x0883` returns `f9 97 40 00 11 40 14 00` (byte 0 `0xF9` = `1111_1001`, confirming `DD3/VDDC` and `DD4/VDDG` rails were switched off during `kscePowerRequestStandby()`).
+  - Live VitaOS `ScePower` hook (`gpu_trace_power.txt`) captured stock `sceSysconCtrlVoltageForDriver(type=4, vid)` values on Vita 1000 (`0x80000042`): `vid = 0x5C` (`111 MHz`), `0x60` (step), `0x68` (`222 MHz`).
+  - Sending `0x088E` (`0x5C04`, `cmd_len = 3`) alone returned `res = 0x03` and left `0x0883` at `f9 97 ...`, confirming a separate Syscon rail-enable command (`0x884`/`0x885`/`0x88B`..`0x88D`) switches the `DD4` buck converter on/off alongside `0x88E`.
+
 ---
 
-## 7. Immediate Next Steps (Phase 2: Linux Read-Only Probe)
+## 7. Immediate Next Steps (Next Session: Capture `DD4/VDDG` Rail Switch)
 
-1. Write a minimal, manually-loaded Linux kernel module (`vita_sgx_probe.ko`, never auto-loaded) that:
-   - Maps `PERVASIVE_RESET` (`0xE3101000`), `PERVASIVE_GATE` (`0xE3102000`), `PERVASIVE_BASECLK` (`0xE3103000`), and `SceSGX543Reg` (`0xE8400000`).
-   - Checks/applies the exact stock VitaOS GPU clock/gate/reset values (`0x000F000F` gate, `0x00030003` baseclk, `0x00000000` reset) ONLY if not already set.
-   - Reads `EUR_CR_CORE_ID` (`+0x0020`) and `EUR_CR_CORE_REVISION` (`+0x0024`) and prints them to `dmesg`.
-   - Restores/gates off cleanly on `rmmod`.
-2. Load `vita_sgx_probe.ko` manually over SSH (`insmod`) and verify `dmesg` reports `0x01174403` and `0x00020106` cleanly without any bus abort.
+1. Use `ksceSysconSetDebugHandlers()` (`SceSysconPacket` TX/RX callback) in `GpuProbe` or `baremetal-loader.skprx` (during `kscePowerRequestStandby()`, logged to scratchpad SRAM `0x1F007C00`) to capture the exact 2-byte Syscon rail-enable packet that switches `DD4/VDDG` (`0xF9` <-> `0xFD`) on and off.
+2. Replay that verified `DD4/VDDG` rail-enable packet + `0x88E` (`vid=0x5C`) in `vita_gpu_diag.ko`, confirm `Elmo 0x883` reports `DD4` active, and read `EUR_CR_CORE_ID` (`0x01174403`) in Linux `dmesg`.
 
 ---
 

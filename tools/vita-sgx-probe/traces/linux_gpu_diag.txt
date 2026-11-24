@@ -1,0 +1,9 @@
+[ 5321.021219] vita_gpu_diag: querying Elmo PMIC power status via Syscon 0x883...
+[ 5321.074800] vita_gpu_diag: syscon cmd 0x883 ret=0 hdr=[24 00 len=0a res=00]
+[ 5321.100890] vita_gpu_diag: Elmo power status (cmd 0x883 data): f9 97 40 00 11 40 14 00
+[ 5336.969083] vita_gpu_diag: unloaded
+[ 5344.341240] vita_gpu_diag: querying Elmo PMIC power status via Syscon 0x883...
+[ 5344.484936] vita_gpu_diag: syscon cmd 0x883 ret=0 hdr=[24 00 len=0a res=00]
+[ 5344.511039] vita_gpu_diag: Elmo power status (cmd 0x883 data): f9 97 40 00 11 40 14 00
+[ 5344.511084] vita_gpu_diag: querying TrustZone SMC 0x114 (bus & GPU xbar)...
+[ 5344.511111] vita_gpu_diag: SMC 0x114 bus_freq_lvl=0x00000006 gpu_xbar_lvl=0x00000003

@@ -2,11 +2,13 @@ TARGET = gpu_probe
 OBJS   = gpu_probe.o
 
 LIBS = -lSceSysclibForDriver_stub -lSceSysmemForDriver_stub \
-	-lSceIofilemgrForDriver_stub -lSceThreadmgrForDriver_stub
+	-lSceIofilemgrForDriver_stub -lSceThreadmgrForDriver_stub \
+	-lSceSysconForDriver_stub -lScePowerForDriver_stub \
+	-ltaihenForKernel_stub
 
 PREFIX  = arm-vita-eabi
 CC      = $(PREFIX)-gcc
-CFLAGS  = -Wl,-q -Wall -Wextra -O2 -nostartfiles -mcpu=cortex-a9 -mthumb-interwork
+CFLAGS  = -std=gnu17 -Wl,-q -Wall -Wextra -O2 -nostartfiles -mcpu=cortex-a9 -mthumb-interwork
 
 all: $(TARGET).skprx
 
@@ -21,4 +23,3 @@ $(TARGET).elf: $(OBJS)
 
 clean:
 	@rm -f $(TARGET).skprx $(TARGET).velf $(TARGET).elf $(OBJS)
-

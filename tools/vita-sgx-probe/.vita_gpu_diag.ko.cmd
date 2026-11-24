@@ -1,0 +1,1 @@
+savedcmd_/build/tools/vita-sgx-probe/vita_gpu_diag.ko := arm-linux-gnueabihf-ld -r -EL -z noexecstack --build-id=sha1  -T scripts/module.lds -o /build/tools/vita-sgx-probe/vita_gpu_diag.ko /build/tools/vita-sgx-probe/vita_gpu_diag.o /build/tools/vita-sgx-probe/vita_gpu_diag.mod.o /build/tools/vita-sgx-probe/.module-common.o

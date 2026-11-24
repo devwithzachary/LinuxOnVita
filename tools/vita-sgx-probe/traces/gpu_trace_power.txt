@@ -1,0 +1,9 @@
+LinuxOnVita Read-Only ScePower -> SceSyscon Trace
+Hook UIDs: send=0x42E5F volt=0x42E5B 884=0x42F4D 885=0x42FA3 88b=0x42F9D 88c=0x42F99 88d=0x42F91
+sceSysconCtrlVoltageForDriver(type=4, vid=0x00000068)
+sceSysconCtrlVoltageForDriver(type=4, vid=0x00000060)
+sceSysconCtrlVoltageForDriver(type=4, vid=0x0000005C)
+
+Clocks (MHz): ARM=333 BUS=222 SYS=190 GPU_XBAR=111
+SMC 0x114: bus_lvl=0x00000006 gpu_xbar_lvl=0x00000003
+GPU_REGBUS +0x0000: 01006437, +0x0018: 00130001, +0x001C: 00010214

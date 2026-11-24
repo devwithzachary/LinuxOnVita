@@ -778,6 +778,8 @@ deps_/build/tools/vita-sgx-probe/vita_sgx_probe.o := \
   include/linux/logic_pio.h \
     $(wildcard include/config/INDIRECT_PIO) \
   include/linux/fwnode.h \
+  include/linux/delay.h \
+  arch/arm/include/asm/delay.h \
 
 /build/tools/vita-sgx-probe/vita_sgx_probe.o: $(deps_/build/tools/vita-sgx-probe/vita_sgx_probe.o)
 

@@ -1,13 +1,16 @@
 /*
- * main.c - LinuxOnVita Phase 1 Read-Only GPU Probe App (GPUPROBE0)
+ * main.c - LinuxOnVita Read-Only GPU & Power Rail Probe App (GPUPROBE0 v1.01)
  *
- * Copies bundled gpu_probe.skprx to ux0:data/gpu_probe.skprx temporarily,
- * captures Pervasive + IFTU MMIO before sceGxmInitialize(), then captures
- * Pervasive + IFTU + SceSGX543Reg after sceGxmInitialize(), and cleans up.
+ * Captures:
+ *   1. ux0:data/gpu_trace_before.txt (Elmo 0x883, clocks, SMC 0x114, Pervasive, P2)
+ *   2. ux0:data/gpu_trace_power.txt  (Sony's ScePower -> SceSyscon calls during
+ *      sceGxmInitialize + standard stock GPU/Xbar clock transitions)
+ *   3. ux0:data/gpu_trace_after.txt  (Elmo 0x883, GPU RegBus 0xED800000, SGX543)
  */
 
 #include <psp2/ctrl.h>
 #include <psp2/gxm.h>
+#include <psp2/power.h>
 #include <psp2/io/fcntl.h>
 #include <psp2/io/stat.h>
 #include <psp2/kernel/processmgr.h>
@@ -56,13 +59,21 @@ static SceUID run_probe(const char *mode) {
 	return taiLoadStartKernelModuleForUser(TMP_SKPRX, &argg);
 }
 
+static int stop_probe(SceUID mod_id) {
+	tai_module_args_t argg;
+	memset(&argg, 0, sizeof(argg));
+	argg.size = sizeof(argg);
+	argg.pid  = KERNEL_PID;
+	return taiStopUnloadKernelModuleForUser(mod_id, &argg, NULL, NULL);
+}
+
 int main(int argc, char *argv[]) {
 	(void)argc;
 	(void)argv;
 
 	psvDebugScreenInit();
 	printf("==================================================\n");
-	printf("  LinuxOnVita - Phase 1 Read-Only GPU Probe\n");
+	printf("  LinuxOnVita - GPU & Power Rail Probe v1.01\n");
 	printf("==================================================\n\n");
 
 	int rc = copy_file("app0:gpu_probe.skprx", TMP_SKPRX);
@@ -71,11 +82,14 @@ int main(int argc, char *argv[]) {
 		goto done;
 	}
 
-	printf("[1/3] Capturing BEFORE SceGxmInitialize...\n");
+	printf("[1/4] Capturing BEFORE SceGxmInitialize...\n");
 	SceUID m1 = run_probe("before");
 	printf("      Result: 0x%08X -> ux0:data/gpu_trace_before.txt\n", m1);
 
-	printf("[2/3] Calling sceGxmInitialize()...\n");
+	printf("[2/4] Starting Syscon hook & calling sceGxmInitialize()...\n");
+	SceUID m_hook = run_probe("hook");
+	printf("      Hook module UID: 0x%08X\n", m_hook);
+
 	SceGxmInitializeParams gxm_params;
 	memset(&gxm_params, 0, sizeof(gxm_params));
 	gxm_params.flags                        = 0;
@@ -87,8 +101,21 @@ int main(int argc, char *argv[]) {
 	rc = sceGxmInitialize(&gxm_params);
 	printf("      sceGxmInitialize() = 0x%08X\n", rc);
 
+	/* Exercise official stock VitaOS ScePower APIs so hooks observe DD4/VDDG */
+	scePowerSetGpuClockFrequency(222);
+	scePowerSetGpuXbarClockFrequency(166);
+	sceKernelDelayThread(20 * 1000);
+	scePowerSetGpuClockFrequency(111);
+	scePowerSetGpuXbarClockFrequency(111);
+	sceKernelDelayThread(20 * 1000);
+
+	if (m_hook >= 0) {
+		int s_rc = stop_probe(m_hook);
+		printf("[3/4] Stopped hook (0x%08X) -> ux0:data/gpu_trace_power.txt\n", s_rc);
+	}
+
 	if (rc >= 0) {
-		printf("[3/3] Capturing AFTER SceGxmInitialize (incl. SceSGX543Reg)...\n");
+		printf("[4/4] Capturing AFTER SceGxmInitialize...\n");
 		SceUID m2 = run_probe("after");
 		printf("      Result: 0x%08X -> ux0:data/gpu_trace_after.txt\n", m2);
 		sceGxmTerminate();
@@ -101,6 +128,7 @@ int main(int argc, char *argv[]) {
 
 	printf("\nDone! Files saved on ux0:data/:\n");
 	printf("  - ux0:data/gpu_trace_before.txt\n");
+	printf("  - ux0:data/gpu_trace_power.txt\n");
 	printf("  - ux0:data/gpu_trace_after.txt\n");
 
 done:
@@ -117,4 +145,3 @@ done:
 	sceKernelExitProcess(0);
 	return 0;
 }
-

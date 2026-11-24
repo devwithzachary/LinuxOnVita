@@ -6,5 +6,5 @@ C_DEFINES =
 
 C_INCLUDES = 
 
-C_FLAGS =  -Wl,-q -Wall -Wextra -Os
+C_FLAGS =  -Wl,-q -std=gnu17 -Wall -Wextra -Os
 
