@@ -1,0 +1,1 @@
+/usr/local/vitasdk/bin/arm-vita-eabi-gcc  -Wl,-q -Wall -Wextra -Os -Wl,-z,nocopyreloc CMakeFiles/GpuProbe.dir/main.c.obj CMakeFiles/GpuProbe.dir/build/app/debugScreenFont.c.obj -o GpuProbe  -lSceCtrl_stub -lSceDisplay_stub -lSceGxm_stub -ltaihen_stub -lSceSysmem_stub 
