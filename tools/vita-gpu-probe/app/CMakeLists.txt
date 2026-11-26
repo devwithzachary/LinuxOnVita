@@ -14,7 +14,7 @@ include("$ENV{VITASDK}/share/vita.cmake" REQUIRED)
 
 set(VITA_APP_NAME "GPU Probe")
 set(VITA_TITLEID  "GPUPROBE0")
-set(VITA_VERSION  "01.01")
+set(VITA_VERSION  "01.03")
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu17 -Wall -Wextra -Os")
 set(VITA_MKSFOEX_FLAGS "${VITA_MKSFOEX_FLAGS} -d PARENTAL_LEVEL=1")

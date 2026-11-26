@@ -161,23 +161,73 @@ Captured via read-only `GpuProbe.vpk` (`gpu_trace_before.txt` / `gpu_trace_after
 - **`+0x0C38` / `+0x0C50` (BIF MMU Directory Bases):** `0x41234000` / `0x41A3A000`
 
 ### 6.3 Phase 2B Power Rail (`DD4`/`VDDG`), TrustZone SMC & Standby Findings
-- **Pervasive Wake Alone (`GATE=0x000F000F`, `RESET=0x00000000`):** Reading `0xE8400020` in Linux triggers an AXI slave abort (`imprecise external abort 0x1406`) cleanly without crashing SSH/Linux.
+- **Pervasive Wake Alone (`GATE=0x000F000F`, `RESET=0x00000000`):** Reading `0xE8400020` in Linux while `VDDG` is off triggers an AXI slave abort (`imprecise external abort 0x1406`) cleanly without crashing SSH/Linux.
 - **TrustZone `SMC 0x114` (`smc_bus_freq_op`) Works Natively in Linux 6.12:**
   - Both VitaOS and Linux return `bus_lvl = 0x6` (`222 MHz`) and `gpu_xbar_lvl = 0x3` (`111 MHz`).
-- **Elmo PMIC Power Status (`Syscon 0x0883`) & Stock `DD4/VDDG` Voltage IDs (`Syscon 0x088E`):**
-  - Linux `0x0883` returns `f9 97 40 00 11 40 14 00` (byte 0 `0xF9` = `1111_1001`, confirming `DD3/VDDC` and `DD4/VDDG` rails were switched off during `kscePowerRequestStandby()`).
-  - Live VitaOS `ScePower` hook (`gpu_trace_power.txt`) captured stock `sceSysconCtrlVoltageForDriver(type=4, vid)` values on Vita 1000 (`0x80000042`): `vid = 0x5C` (`111 MHz`), `0x60` (step), `0x68` (`222 MHz`).
-  - Sending `0x088E` (`0x5C04`, `cmd_len = 3`) alone returned `res = 0x03` and left `0x0883` at `f9 97 ...`, confirming a separate Syscon rail-enable command (`0x884`/`0x885`/`0x88B`..`0x88D`) switches the `DD4` buck converter on/off alongside `0x88E`.
+- **Elmo PMIC Power Status (`Syscon 0x0883`), `0x0891`, & Stock `DD4/VDDG` Wire Encoding (`Syscon 0x088E`):**
+  - Live VitaOS `0x0883`: `f9 97 40 00 11 c0 14 00`; Linux boot `0x0883`: `f9 97 40 00 11 40 14 00`.
+  - Full 72-packet `kscePowerRequestStandby()` spy capture (`SPY[slot=000..071]`) + `SceSyscon@0x00C1DB70` (`0x04EC7579`) disassembly proved `byte[0] = 0xF9` (`DD4/VDDG` external buck rail) remains active across standby, while `byte[5]` (`0xC0` -> `0x40`) is PS button LED state toggled by `Syscon 0x0891(0x40, 0)` at `SPY[slot=068]`.
+  - Live VitaOS `ScePower` hook + raw SPI packet trace (`gpu_trace_power.txt`) proved `sceSysconCtrlVoltageForDriver(type=4, vid)` (`SceSyscon@0x00C1DAAD`) sends inverted DAC code `raw = 0x8C - vid`:
+    - `vid = 0x5C` (`111 MHz`) -> `tx = [8E 08 03 | 04 30 32]` (`data = 0x3004`, returns `res = 0x00` in Linux)
+    - `vid = 0x60` (step) -> `tx = [8E 08 03 | 04 2C 36]` (`data = 0x2C04`)
+    - `vid = 0x68` (`222 MHz`) -> `tx = [8E 08 03 | 04 24 3E]` (`data = 0x2404`)
+- **Complete VitaOS GPU Power-Domain Mechanism (Disassembled from `SceGpuEs4`, `ScePower`, `SceLowio`):**
+  - Neither `ScePower` nor `SceGpuEs4` calls `SceSyscon` `0x0884`/`0x0885` from non-secure kernel mode.
+  - Instead, `SceGpuEs4` `PVRSRV` power callbacks toggle the on-die SGX543 power domain and isolation cells via `SceLowio` TrustZone **`SMC 0x110`** (`0x00C08000`):
+    - **`SysDevicePostPowerState` (`0x0207D4A8`, leaving D3 -> D0):** calls `ScePervasiveForDriver::0x84EAB5BC` (`SceLowio@0x00C083F4`) -> `smc(0x110, r0=0, r1=1)`.
+    - **`SysDevicePrePowerState` (`0x0207D488`, entering D3):** calls `ScePervasiveForDriver::0xE8656ADF` (`SceLowio@0x00C08400`) -> `smc(0x110, r0=0, r1=0)`.
+  - Pervasive GPU clock/reset helpers in `SceLowio`:
+    - `0x00C09064` (`0x6AF0196F`): writes `(mp_div << 16) | core_div` (`0x00030003` at 111 MHz) to `PERVASIVE_BASECLK + 0x10` (`0xE3103010`), bracketed by `SceGrab` bus pause `smc(0x11B, 0xF00, 0/1)`.
+    - `0x00C08AFC` (`0x39E51AE2`): sets `0x000F000F` in `PERVASIVE_GATE + 0x10` (`0xE3102010`).
+    - `0x00C08514` (`0x8A85E36B`): clears bit 0 in `PERVASIVE_RESET + 0x10` (`0xE3101010`).
+
+### 6.4 Phase 2C On-Device `SMC 0x110` Verification & `SceGrab` (`SMC 0x11B`) Discovery
+- **Verified on Physical PS Vita (`vita_sgx_wake.ko` with `read_sgx=0`):**
+  - `Syscon 0x088E` (`0x3004`) returned `res = 0x00`.
+  - `TrustZone SMC 0x110(domain=0, state=1)` returned `0x00000000` and atomically inside TrustZone transitioned:
+    - `PERVASIVE_MISC + 0x34` (`0xE3100034` isolation clamp): `0x00000001 -> 0x00000000`
+    - `PERVASIVE_GATE + 0x10` (`0xE3102010` 4-core clock gate): `0x00000000 -> 0x000F000F`
+    - `PERVASIVE_RESET + 0x10` (`0xE3101010` GPU reset): `0x00000001 -> 0x00000000`
+  - `GPU_REGBUS` (`0xED800000` SonicsSX Target Agent) became cleanly readable in Linux: `+0x00 = 0x01006437`, `+0x18 = 0x00130001`, `+0x1C = 0x00010214`.
+  - `rmmod vita_sgx_wake` cleanly called `SMC 0x110(domain=0, state=0) -> 0x00000000`.
+- **Why `0xE8400020` (`SceSGX543Reg`) Still Faulted & Missing Post-Soft-Reset Steps:**
+  - `baremetal-loader.skprx` hooks `ksceSysconResetDevice` at the end of `kscePowerRequestStandby()` (after all VitaOS suspend callbacks ran) and rewrites `SUSPEND` -> `SOFT_RESET` into `payload.bin` -> `zImage`, bypassing both `ScePower` module boot (`0x018AB99C`) and `ScePower` resume (`0x018ABB84`).
+  - Disassembly of `ScePower` (`0x018ABB0A..0x018ABB18` / `0x018ABCE2..0x018ABCF0`) and `SceGpuEs4` (`0x020765B8`) identified the remaining post-reset steps before `0xE8400020` core reads:
+    1. Set GPU XBAR clock via `SMC 0x114(r0=2, r1=2)` (`ScePervasiveForDriver::0x7D02215D`).
+    2. Unpause the `0xF00` GPU AXI/XBAR Grab bridge via `SMC 0x11B(r0=0xF00, r1=0)` -> `PERVASIVE_BASECLK + 0x10 = 0x00030003` -> `SMC 0x11B(r0=0xF00, r1=1)` (`SceGrabForDriver::0xB22EE8BC`).
+    3. `SceGpuEs4` `SGXInitialise` (`0x020765B8` / `0x0207659A`) also pulses Hydra Master soft reset (`+0x4080 = 0x7FF -> 0`) and enables internal SGX clock gating (`+0x0000 = 0x002AAAAA`, `+0x0004 = 0x0A8A8AAA`) before reading core registers.
 
 ---
 
-## 7. Immediate Next Steps (Next Session: Capture `DD4/VDDG` Rail Switch)
+## 7. Current Session Handoff & Immediate Resume Checklist
 
-1. Use `ksceSysconSetDebugHandlers()` (`SceSysconPacket` TX/RX callback) in `GpuProbe` or `baremetal-loader.skprx` (during `kscePowerRequestStandby()`, logged to scratchpad SRAM `0x1F007C00`) to capture the exact 2-byte Syscon rail-enable packet that switches `DD4/VDDG` (`0xF9` <-> `0xFD`) on and off.
-2. Replay that verified `DD4/VDDG` rail-enable packet + `0x88E` (`vid=0x5C`) in `vita_gpu_diag.ko`, confirm `Elmo 0x883` reports `DD4` active, and read `EUR_CR_CORE_ID` (`0x01174403`) in Linux `dmesg`.
+### Status Summary (End of Day - 2026-11-24)
+- **Phase 0 & Phase 1:** Complete. Stock VitaOS Pervasive, IFTU, SGX543MP4+, Syscon `0x088E` voltage scaling, and full 72-packet standby SPI sequence captured and verified on physical PS Vita 1000 hardware.
+- **Phase 2 (SGX543 Power & Bus Bring-Up in Linux 6.12):** ~85% complete:
+  - **Verified on hardware in Linux 6.12:**
+    - External GPU rail voltage (`Syscon 0x088E`, `0x3004` = 111 MHz) returns `res = 0x00`.
+    - On-die SGX543 power domain (`TrustZone SMC 0x110(0, 1)`) returns `0x00000000`, atomically clears isolation clamp `MISC + 0x34` (`1 -> 0`), enables 4-core clock gate `GATE + 0x10` (`0x000F000F`), deasserts `RESET + 0x10` (`1 -> 0`), and powers `GPU_REGBUS` (`0xED800000` reads `0x01006437` cleanly in Linux!).
+    - Clean power-down (`SMC 0x110(0, 0)`) verified on `rmmod`.
+  - **Built & ready for first test next session (`tools/vita-sgx-probe/vita_sgx_wake.ko` v3):**
+    - Adds the missing post-`SOFT_RESET` `ScePower` calls (`SMC 0x114(2, 2)` GPU XBAR clock + `SMC 0x11B(0xF00, 0 -> 1)` `SceGrab` AXI/XBAR bridge unpause) and `SceGpuEs4` Hydra Master soft-reset / `EUR_CR_CLKGATECTL` init (`+0x4080`, `+0x0000`, `+0x0004`).
+    - Uses an interactive `/proc/vita_sgx_wake` command interface (`status`, `read_master`, `read_id`, `init_sgx`, `grab_reopen`, `dom1_on`, `dom1_off`) so `module_init` never touches `0xE8400000` and the module can never wedge in `MODULE_STATE_COMING`.
+
+### Exact Commands to Resume Next Session
+1. Boot PS Vita cleanly into Linux and copy the pre-built v3 module from PC:
+   - `scp /home/zachary/Code/vita-linux/tools/vita-sgx-probe/vita_sgx_wake.ko root@192.168.0.123:/tmp/`
+2. Load module and inspect XBAR/Grab/`GPU_REGBUS` state on Vita SSH:
+   - `insmod /tmp/vita_sgx_wake.ko`
+   - `dmesg | grep vita_sgx_wake | tail -n 15`
+3. Probe SGX543 registers in subshells via `/proc/vita_sgx_wake`:
+   - `(echo read_master > /proc/vita_sgx_wake) && dmesg | grep vita_sgx_wake | tail -n 5`
+   - `(echo read_id > /proc/vita_sgx_wake) && dmesg | grep vita_sgx_wake | tail -n 6`
+   - If needed: `(echo init_sgx > /proc/vita_sgx_wake) && dmesg | grep vita_sgx_wake | tail -n 6`
+   - Clean unload: `rmmod vita_sgx_wake`
+4. Once `EUR_CR_CORE_ID` (`0x01174403`) & `EUR_CR_CORE_REVISION` (`0x00020106`) read cleanly in Linux `dmesg`, move straight to **Phase 3: Standalone DRM/KMS Display Driver (`vita-drm`)** (`IFTU` `0xE5020000`/`0xE5022000`, CDRAM `0x20000000`, VBlank IRQ `GIC_SPI 181` / `178`).
 
 ---
 
 ## 8. Post-GPU Follow-Up Items
+- **SD2Vita (`ux0`) Dynamic MMC Device Discovery (`S05vita` & `vita-storage`):** Depending on MMC host probe ordering at boot, internal eMMC can enumerate as `/dev/mmcblk1` (`p1..p12`, `boot0/1`, `rpmb`) instead of `/dev/mmcblk0`, pushing SD2Vita to `/dev/mmcblk2`. Update `S05vita` and `vita-storage` to identify and skip the `[SCE]` eMMC device (`[ -b "${dev}p12" ]`) when scanning for `ux0` so `/dev/mmcblk2` (and `/dev/mmcblk2p1`) mounts automatically at `/mnt/ux0` on every boot.
 - **`vita-reboot` / `vita-reboot-gui` in CLI:** User reported `vita-reboot-gui: failed to open X11 window` when running `reboot` in Linux CLI (likely `$DISPLAY` set without an active X11 server, or `vita-reboot` needs to verify X11 socket `/tmp/.X11-unix/X0` / `x11_open` fallback before aborting). Fix after current GPU debugging session.
 

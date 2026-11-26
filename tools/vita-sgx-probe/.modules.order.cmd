@@ -1,1 +1,1 @@
-savedcmd_/build/tools/vita-sgx-probe/modules.order := {   echo /build/tools/vita-sgx-probe/vita_sgx_probe.o;   echo /build/tools/vita-sgx-probe/vita_gpu_diag.o; :; } > /build/tools/vita-sgx-probe/modules.order
+savedcmd_/build/tools/vita-sgx-probe/modules.order := {   echo /build/tools/vita-sgx-probe/vita_sgx_probe.o;   echo /build/tools/vita-sgx-probe/vita_gpu_diag.o;   echo /build/tools/vita-sgx-probe/vita_sgx_wake.o; :; } > /build/tools/vita-sgx-probe/modules.order

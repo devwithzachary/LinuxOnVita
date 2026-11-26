@@ -1,0 +1,8 @@
+LinuxOnVita v1.03 Kernel Module Segment & Export Dump
+
+MODULE SceSyscon: modid=0x000100F1 nid=0x28256CDE text_base=0x00C18000 text_size=0x0000C000 (wrote=0x0000C000) exports=[0x00C204FC..0x00C2053C] imports=[0x00C2053C..0x00C206A4]
+MODULE ScePower: modid=0x00010AE3 nid=0x5542F5AB text_base=0x018A8000 text_size=0x0000B000 (wrote=0x0000B000) exports=[0x018B063C..0x018B06BC] imports=[0x018B06BC..0x018B09D4]
+MODULE SceLowio: modid=0x000100EB nid=0xEE520DFD text_base=0x00C08000 text_size=0x0000B000 (wrote=0x0000B000) exports=[0x00C0F32C..0x00C0F46C] imports=[0x00C0F46C..0x00C0F58C]
+MODULE SceDisplay: modid=0x000100FD nid=0x1799B7AD text_base=0x00C28000 text_size=0x0000B000 (wrote=0x0000B000) exports=[0x00C2FC4C..0x00C2FCAC] imports=[0x00C2FCAC..0x00C3000C]
+MODULE SceGpuEs4: modid=0x00030B23 nid=0xC0F361A3 text_base=0x02070000 text_size=0x00011000 (wrote=0x00011000) exports=[0x0207DBDC..0x0207DC3C] imports=[0x0207DC3C..0x0207DEA0]
+MODULE SceExcpmgr: modid=0x000100A7 nid=0xB5616C8A text_base=0x00A0C000 text_size=0x00004000 (wrote=0x00004000) exports=[0x00A0E90C..0x00A0E94C] imports=[0x00A0E94C..0x00A0EAB4]

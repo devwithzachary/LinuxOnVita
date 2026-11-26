@@ -20,6 +20,8 @@ CMakeFiles/GpuProbe.dir/main.c.obj: ../main.c \
   /usr/local/vitasdk/arm-vita-eabi/include/sys/_stdint.h \
   /usr/local/vitasdk/arm-vita-eabi/include/psp2/types.h \
   /usr/local/vitasdk/arm-vita-eabi/include/psp2/gxm.h \
+  /usr/local/vitasdk/arm-vita-eabi/include/psp2/power.h \
+  /usr/local/vitasdk/arm-vita-eabi/include/psp2common/power.h \
   /usr/local/vitasdk/arm-vita-eabi/include/psp2/io/fcntl.h \
   /usr/local/vitasdk/arm-vita-eabi/include/psp2common/kernel/iofilemgr.h \
   /usr/local/vitasdk/arm-vita-eabi/include/psp2/io/stat.h \
@@ -91,9 +93,7 @@ CMakeFiles/GpuProbe.dir/main.c.obj: ../main.c \
 
 /usr/local/vitasdk/arm-vita-eabi/include/sys/_pthreadtypes.h:
 
-/usr/local/vitasdk/arm-vita-eabi/include/string.h:
-
-/usr/local/vitasdk/arm-vita-eabi/include/psp2/kernel/threadmgr/eventflag.h:
+/usr/local/vitasdk/arm-vita-eabi/include/machine/endian.h:
 
 /usr/local/vitasdk/arm-vita-eabi/include/psp2common/kernel/iofilemgr.h:
 
@@ -101,13 +101,13 @@ CMakeFiles/GpuProbe.dir/main.c.obj: ../main.c \
 
 /usr/local/vitasdk/arm-vita-eabi/include/psp2common/ctrl.h:
 
+/usr/local/vitasdk/arm-vita-eabi/include/psp2common/power.h:
+
+/usr/local/vitasdk/arm-vita-eabi/include/psp2common/types.h:
+
 /usr/local/vitasdk/arm-vita-eabi/include/sys/string.h:
 
 /usr/local/vitasdk/arm-vita-eabi/include/psp2/gxm.h:
-
-/usr/local/vitasdk/arm-vita-eabi/include/machine/_default_types.h:
-
-/usr/local/vitasdk/arm-vita-eabi/include/psp2/kernel/threadmgr/lw_mutex.h:
 
 /usr/local/vitasdk/arm-vita-eabi/include/psp2/kernel/cpu.h:
 
@@ -129,15 +129,17 @@ CMakeFiles/GpuProbe.dir/main.c.obj: ../main.c \
 
 /build/app/debugScreenFont.c:
 
-/usr/local/vitasdk/arm-vita-eabi/include/psp2/kernel/threadmgr/lw_cond.h:
-
 /usr/local/vitasdk/arm-vita-eabi/include/psp2/display.h:
 
 /usr/local/vitasdk/arm-vita-eabi/include/psp2/ctrl.h:
 
 /usr/local/vitasdk/arm-vita-eabi/include/stdio.h:
 
-/usr/local/vitasdk/arm-vita-eabi/include/psp2common/types.h:
+/usr/local/vitasdk/arm-vita-eabi/include/psp2/power.h:
+
+/usr/local/vitasdk/arm-vita-eabi/include/sys/_timeval.h:
+
+/usr/local/vitasdk/arm-vita-eabi/include/newlib.h:
 
 /usr/local/vitasdk/arm-vita-eabi/include/stdint.h:
 
@@ -169,7 +171,21 @@ CMakeFiles/GpuProbe.dir/main.c.obj: ../main.c \
 
 /usr/local/vitasdk/arm-vita-eabi/include/psp2/io/stat.h:
 
+/usr/local/vitasdk/arm-vita-eabi/include/psp2/kernel/threadmgr/lw_mutex.h:
+
+/usr/local/vitasdk/arm-vita-eabi/include/machine/_default_types.h:
+
+/usr/local/vitasdk/arm-vita-eabi/include/string.h:
+
+/usr/local/vitasdk/arm-vita-eabi/include/psp2/kernel/threadmgr/eventflag.h:
+
 /usr/local/vitasdk/arm-vita-eabi/include/bits/posix_opt.h:
+
+/usr/local/vitasdk/arm-vita-eabi/include/psp2/kernel/threadmgr/lw_cond.h:
+
+/usr/local/vitasdk/lib/gcc/arm-vita-eabi/15.2.0/include/stdarg.h:
+
+/usr/local/vitasdk/arm-vita-eabi/include/psp2/kernel/threadmgr/msgpipe.h:
 
 /usr/local/vitasdk/arm-vita-eabi/include/psp2/kernel/threadmgr/mutex.h:
 
@@ -178,14 +194,6 @@ CMakeFiles/GpuProbe.dir/main.c.obj: ../main.c \
 /usr/local/vitasdk/arm-vita-eabi/include/psp2/kernel/threadmgr/signal.h:
 
 /usr/local/vitasdk/arm-vita-eabi/include/_ansi.h:
-
-/usr/local/vitasdk/arm-vita-eabi/include/sys/_timeval.h:
-
-/usr/local/vitasdk/arm-vita-eabi/include/newlib.h:
-
-/usr/local/vitasdk/arm-vita-eabi/include/psp2/kernel/threadmgr/msgpipe.h:
-
-/usr/local/vitasdk/lib/gcc/arm-vita-eabi/15.2.0/include/stdarg.h:
 
 /usr/local/vitasdk/arm-vita-eabi/include/taihen.h:
 
@@ -208,8 +216,6 @@ CMakeFiles/GpuProbe.dir/main.c.obj: ../main.c \
 /usr/local/vitasdk/arm-vita-eabi/include/machine/_types.h:
 
 /usr/local/vitasdk/arm-vita-eabi/include/sys/lock.h:
-
-/usr/local/vitasdk/arm-vita-eabi/include/machine/endian.h:
 
 /usr/local/vitasdk/arm-vita-eabi/include/psp2common/kernel/threadmgr.h:
 

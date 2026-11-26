@@ -1,5 +1,6 @@
 obj-m += vita_sgx_probe.o
 obj-m += vita_gpu_diag.o
+obj-m += vita_sgx_wake.o
 
 KDIR ?= ../../sources/vita-linux-port/linux_vita
 ARCH ?= arm

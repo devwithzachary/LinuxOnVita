@@ -22,6 +22,8 @@ CMakeFiles/GpuProbe.dir/main.c.obj
  /usr/local/vitasdk/arm-vita-eabi/include/sys/_stdint.h
  /usr/local/vitasdk/arm-vita-eabi/include/psp2/types.h
  /usr/local/vitasdk/arm-vita-eabi/include/psp2/gxm.h
+ /usr/local/vitasdk/arm-vita-eabi/include/psp2/power.h
+ /usr/local/vitasdk/arm-vita-eabi/include/psp2common/power.h
  /usr/local/vitasdk/arm-vita-eabi/include/psp2/io/fcntl.h
  /usr/local/vitasdk/arm-vita-eabi/include/psp2common/kernel/iofilemgr.h
  /usr/local/vitasdk/arm-vita-eabi/include/psp2/io/stat.h

@@ -1,9 +1,31 @@
-LinuxOnVita Read-Only ScePower -> SceSyscon Trace
-Hook UIDs: send=0x42E5F volt=0x42E5B 884=0x42F4D 885=0x42FA3 88b=0x42F9D 88c=0x42F99 88d=0x42F91
-sceSysconCtrlVoltageForDriver(type=4, vid=0x00000068)
-sceSysconCtrlVoltageForDriver(type=4, vid=0x00000060)
-sceSysconCtrlVoltageForDriver(type=4, vid=0x0000005C)
+LinuxOnVita v1.02 Raw Syscon SPI Packet Trace
+ksceSysconSetDebugHandlers rc=0x00000000, volt_hook=0x00082885
 
-Clocks (MHz): ARM=333 BUS=222 SYS=190 GPU_XBAR=111
-SMC 0x114: bus_lvl=0x00000006 gpu_xbar_lvl=0x00000003
-GPU_REGBUS +0x0000: 01006437, +0x0018: 00130001, +0x001C: 00010214
+PKT cmd=0x0301 tx=[01 03 len=01 | FA FF FF FF FF FF] rx=[10 00 len=3E res=00 | FF FF FF FF]
+PKT cmd=0x0301 tx=[01 03 len=01 | FA FF FF FF FF FF] rx=[10 00 len=3E res=00 | FF FF FF FF]
+PKT cmd=0x0301 tx=[01 03 len=01 | FA FF FF FF FF FF] rx=[10 00 len=3E res=00 | FF FF FF FF]
+-> CALL sceSysconCtrlVoltageForDriver(type=4, vid=0x00000068)
+PKT cmd=0x088E tx=[8E 08 len=03 | 04 24 3E FF FF FF] rx=[10 00 len=02 res=80 | 6D 5A FF FF]
+PKT cmd=0x0004 tx=[04 00 len=01 | FA 00 00 00 00 00] rx=[30 00 len=08 res=00 | 01 04 00 00]
+PKT cmd=0x0004 tx=[04 00 len=01 | FA 00 00 00 00 00] rx=[30 00 len=08 res=00 | 01 04 00 00]
+PKT cmd=0x0301 tx=[01 03 len=01 | FA FF FF FF FF FF] rx=[30 00 len=3E res=00 | FF FF FF FF]
+PKT cmd=0x088E tx=[8E 08 len=03 | 04 24 3E FF FF FF] rx=[30 00 len=02 res=00 | CD 5A FF FF]
+PKT cmd=0x0301 tx=[01 03 len=01 | FA FF FF FF FF FF] rx=[10 00 len=3E res=00 | FF FF FF FF]
+PKT cmd=0x0301 tx=[01 03 len=01 | FA FF FF FF FF FF] rx=[10 00 len=3E res=00 | FF FF FF FF]
+-> CALL sceSysconCtrlVoltageForDriver(type=4, vid=0x00000060)
+PKT cmd=0x088E tx=[8E 08 len=03 | 04 2C 36 FF FF FF] rx=[10 00 len=02 res=80 | 6D 5A FF FF]
+PKT cmd=0x0301 tx=[01 03 len=01 | FA FF FF FF FF FF] rx=[10 00 len=3E res=00 | FF FF FF FF]
+PKT cmd=0x0004 tx=[04 00 len=01 | FA 00 00 00 00 00] rx=[30 00 len=08 res=00 | 01 04 00 00]
+PKT cmd=0x0004 tx=[04 00 len=01 | FA 00 00 00 00 00] rx=[30 00 len=08 res=00 | 01 04 00 00]
+PKT cmd=0x0301 tx=[01 03 len=01 | FA FF FF FF FF FF] rx=[30 00 len=3E res=00 | FF FF FF FF]
+PKT cmd=0x088E tx=[8E 08 len=03 | 04 2C 36 FF FF FF] rx=[30 00 len=02 res=00 | CD 5A FF FF]
+-> CALL sceSysconCtrlVoltageForDriver(type=4, vid=0x0000005C)
+PKT cmd=0x0301 tx=[01 03 len=01 | FA FF FF FF FF FF] rx=[10 00 len=3E res=00 | FF FF FF FF]
+PKT cmd=0x088E tx=[8E 08 len=03 | 04 30 32 FF FF FF] rx=[10 00 len=02 res=80 | 6D 5A FF FF]
+PKT cmd=0x0004 tx=[04 00 len=01 | FA 00 00 00 00 00] rx=[30 00 len=08 res=00 | 01 04 00 00]
+PKT cmd=0x0004 tx=[04 00 len=01 | FA 00 00 00 00 00] rx=[30 00 len=08 res=00 | 01 04 00 00]
+PKT cmd=0x0301 tx=[01 03 len=01 | FA FF FF FF FF FF] rx=[30 00 len=3E res=00 | FF FF FF FF]
+PKT cmd=0x088E tx=[8E 08 len=03 | 04 30 32 FF FF FF] rx=[30 00 len=02 res=00 | CD 5A FF FF]
+PKT cmd=0x0301 tx=[01 03 len=01 | FA FF FF FF FF FF] rx=[10 00 len=3E res=00 | FF FF FF FF]
+
+Post-hook Elmo 0x0883 (rc=0x00000000): hdr=[30 00 0A 00] data=F9 97 40 00 11 C0 14 00
