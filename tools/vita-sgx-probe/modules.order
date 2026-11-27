@@ -2,3 +2,4 @@
 /build/tools/vita-sgx-probe/vita_gpu_diag.o
 /build/tools/vita-sgx-probe/vita_sgx_wake.o
 /build/tools/vita-sgx-probe/vita_iftu_probe.o
+/build/tools/vita-sgx-probe/vita_sgx_phase4.o

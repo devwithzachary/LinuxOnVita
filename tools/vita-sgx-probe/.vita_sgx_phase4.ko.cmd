@@ -1,0 +1,1 @@
+savedcmd_/build/tools/vita-sgx-probe/vita_sgx_phase4.ko := arm-linux-gnueabihf-ld -r -EL -z noexecstack --build-id=sha1  -T scripts/module.lds -o /build/tools/vita-sgx-probe/vita_sgx_phase4.ko /build/tools/vita-sgx-probe/vita_sgx_phase4.o /build/tools/vita-sgx-probe/vita_sgx_phase4.mod.o /build/tools/vita-sgx-probe/.module-common.o

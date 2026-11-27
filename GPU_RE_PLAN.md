@@ -237,19 +237,54 @@ Captured via read-only `GpuProbe.vpk` (`gpu_trace_before.txt` / `gpu_trace_after
   - Supports PS Vita 1000 OLED (`960x544`), PS Vita 2000 LCD (`960x544`), and PlayStation TV HDMI (`1280x720`, `dst_x = 26, dst_y = 15`).
   - Backed by a dedicated 28 MB CDRAM `shared-dma-pool` (`0x20400000 .. 0x21FFFFFF`), preserving early `simple-framebuffer` (`0x20000000`) until VBlank handoff and leaving 96 MB of CDRAM (`0x22000000 .. 0x27FFFFFF`) free for Phase 4/5 SGX543 VRAM.
   - Exposes both `/dev/dri/card0` (atomic KMS, hardware VBlank, `XRGB8888`/`ARGB8888`/`XBGR8888`/`ABGR8888`/`RGB565`/`BGR565`) and `/dev/fb0` (`drm_fbdev_dma_setup`, including DPMS blanking via `/sys/class/graphics/fb0/blank`), plus `/usr/bin/vita-drm-test` for hardware VSync validation.
+- **Verified `vita-drm` Kernel Driver Live on Physical PS Vita 1000 (`v1.7.0-BETA1`):**
+  - Reserved 28 MB CDRAM pool `vram@20400000` (`0x20400000 .. 0x21FFFFFF`) bound cleanly to `e5020000.display` (`vita-drm 1.0.0` on `minor 0`, `card0-DSI-1`, and `fb0: vita-drmdrmfb`).
+  - `vita-drm-test` completed 120 tear-free hardware VSync CDRAM page flips in `3.071 s` (`39.07 FPS`, frame interval `min=25.50 ms`, `avg=25.59 ms`, `max=25.69 ms`, `0.19 ms` jitter) across consecutive runs, and `/sys/class/graphics/fb0/blank` DPMS blank/unblank verified cleanly.
+- **Phase 4 `SceGpuEs4` Disassembly Findings (`kdump_SceGpuEs4.bin`, DDK `1.7.17.5029`):**
+  - **Hydra MP4+ 128 KB Register Banking (`0xE8400000 .. 0xE841FFFF`):**
+- **`+0x001C` (`EUR_CR_POWER`):** `0x00000000` (both USSE pipes enabled per core; note `+0x0080` is `EUR_CR_SOFT_RESET`).
+    - `0x00000 .. 0x03FFF`: Broadcast / core-common bank (`+0x0000` `CLKGATECTL`, `+0x001C` `POWER`, `+0x0080` `SOFT_RESET`, `+0x0110..+0x0134` `EVENT_*`, `+0x0144` `TIMER`, `+0x0ACC` `EVENT_TIMER`, `+0x0C00..+0x0CD0` `BIF_*`).
+    - `0x04000 .. 0x07FFF`: Hydra Master bank (`+0x4000` `MASTER_CORE`, `+0x4004` `MASTER_CLKGATECTL`, `+0x4020` `MASTER_CLKGATECTL2`, `+0x4080` `MASTER_SOFT_RESET`, `+0x412C..+0x4134` `MASTER_EVENT_*`, `+0x4174..+0x41FC` `MASTER_PTLA_*`, `+0x4C00..+0x4CD0` `MASTER_BIF_*`, `+0x4D00..+0x4D34` `MASTER_SLC_*`).
+    - `0x08000 + core * 0x4000` (`core = 0..3`): Per-core SGX543 banks (`0x8000`, `0xC000`, `0x10000`, `0x14000`), including Core 0 EDM kicks `+0x8AC0` (`EUR_CR_EVENT_KICK2`) and `+0x8AC8` (`EUR_CR_EVENT_KICK`) and per-core BIF fault registers `+0x8C04`/`+0x8C08`.
+  - **SGX543 Interrupt Handling (`SceGpuLisr` `0x0207715A`, `GIC_SPI 20` / VitaOS intr `0x34 = 52`):**
+    - Hydra Master events (`EUR_CR_MASTER_EVENT_STATUS` `+0x412C`, `HOST_ENABLE` `+0x4130`, `HOST_CLEAR` `+0x4134`) and Core events (`+0x012C` / `+0x0130` / `+0x0134`) assert `GIC_SPI 20` when enabled together with `MASTER_INTERRUPT` (`0x80000000U`), including `TIMER` (`0x20000000U`), `TWOD_COMPLETE` (`0x08000000U`), and `SW_EVENT` (`0x00004000U`).
+    - Cleared via `writel(status | 0x80000000U, +0x4134)` and `writel(status | 0x80000000U, +0x0134)`.
+  - **SGX543 BIF 2-Level MMU (`SGXResetInitBIF` `0x02076628`, `sgxmmu.h`):**
+    - Standard 32-bit SGX MMU (`ADDR_MASK = 0xFFFFF000U`, `ALIGNSHIFT = 0`): 4 KB Page Directory (`1024` x 32-bit PDEs, `4 MB` per PDE, `pd_idx = vaddr >> 22`, 4 KB PT PDE = `pt_phys | 0x1U`) and 4 KB Page Table (`1024` x 32-bit PTEs, `pt_idx = (vaddr >> 12) & 0x3FF`, RW coherent PTE = `page_phys | 0x9U` where `bit 0 = VALID`, `bit 3 = CACHECONSISTENT`).
+    - Master BIF `EUR_CR_MASTER_BIF_BANK0` (`+0x4C78`) selects directory list indices for `TA[7:4]`, `3D[15:12]`, and `PTLA[19:16]`; `EUR_CR_MASTER_BIF_CTRL_INVAL` (`+0x4C34 = 0x8`) and `EUR_CR_BIF_CTRL_INVAL` (`+0x0C34 = 0x8`) invalidate TLB/directory caches (`FLUSH_COMPLETE = 0x00080000` in `+0x4C04`/`+0x0C04`).
+
+### 6.8 Phase 4 Live Hardware Verification (`vita_sgx_phase4.ko` on PS Vita 1000)
+- **Verified 100% live on physical PS Vita 1000 OLED in Linux 6.12 (`tools/vita-sgx-probe/vita_sgx_phase4.c`):**
+  1. **Step 4A - `GIC_SPI 20` Hardware Interrupt & `EUR_CR_TIMER` (`irq_test`):**
+     - Mapped `/soc/gpu@e8400000` `GIC_SPI 20` (`IRQ_TYPE_LEVEL_HIGH`) to Linux `virq = 33`.
+     - Confirmed `EUR_CR_TIMER` (`+0x0144` / `+0x8144`) increments by `+9` ticks per `1 ms` at `111 MHz` (`111 MHz / 12288 = 9.03 ticks/ms`).
+     - Armed `EUR_CR_EVENT_TIMER` (`+0x0ACC = 0x01001000`); `GIC_SPI 20` fired cleanly in `137 us` (`timer_irqs = 1`, `last_m_stat = 0xA0000000`, `last_c_stat = 0xA0000000`, `storm = 0`).
+  2. **Step 4B - 2-Level BIF MMU Virtual-to-Physical Translation (`mmu_test`):**
+     - Allocated coherent 4 KB Page Directory (`PD_PA = 0x5F044000`) and 4 KB Page Tables mapping SGX VA `0x50000000` (`PD[0x140]`) -> `64 KB` coherent system DRAM (`0x5F050000`) and SGX VA `0x50400000` (`PD[0x141]`) -> `256 KB` physical CDRAM (`0x22000000`).
+     - Programmed `EUR_CR_MASTER_BIF_DIR_LIST_BASE0` (`+0x4C84`) and `EUR_CR_BIF_DIR_LIST_BASE0` (`+0x0C84`), invalidated BIF TLBs (`+0x4C34 = 8`, `+0x0C34 = 8`), and verified `MASTER_BIF_STAT = 0x00080000` (`FLUSH_COMPLETE`), `BIF_FAULT = 0x00000000`.
+  3. **Step 4C - Hydra Master PTLA 2D Hardware Fill, Blit & Live OLED Scanout (`blit_test` & `oled_test`):**
+     - Submitted 36-word PTLA 2D hardware colour fill stream (`EUR_CR_MASTER_PTLA_SLAVE_CMD_0` `+0x4180`, including mandatory dummy `SRC_SURF_BH` + `EURASIA_PTLA_FLUSH_BH` `0x80000000U`) drawing four `64x64` `ARGB8888` quadrants (`0xFFFF0000`, `0xFF00FF00`, `0xFF0000FF`, `0xFFFFFFFF`) to SGX VA `0x50000000` (DRAM): completed in `150 us` with `TWOD_COMPLETE` (`0x88000000`) IRQ on `GIC_SPI 20` and `0` BIF faults.
+     - Submitted 10-word PTLA 2D strided blit copying `128x128` (`64 KB`) from SGX VA `0x50000000` (DRAM) -> SGX VA `0x50400000` (`0x22000000` CDRAM): completed in `164 us` with `TWOD_COMPLETE` IRQ on `GIC_SPI 20`, `SLC_CTRL_FLUSH_INV` (`+0x4D34 = 0x10`), `0` BIF faults, and **`16384/16384` exact pixel matches** in both DRAM and CDRAM.
+     - Mapped active `960x544` `vita-drm` CDRAM framebuffer (`0x20400000`, `stride = 3840`) at SGX VA `0x50800000` (`PD[0x142]`) and executed `oled_test` (`255 us`, `twod_irqs = 5`, `BIF_FAULT = 0`): visually confirmed the GPU-rendered `128x128` RGBW badge live at `(796, 28)` on the PS Vita 1000 OLED screen, followed by clean `rmmod` power-down.
 
 ---
 
-## 7. Current Session Status & Active Phase
+## 7. Current Session Status & Active Phase (Phase 5)
 
 ### Status Summary (2026-11-27)
-- **Phase 0, Phase 1, & Phase 2:** **100% COMPLETE & VERIFIED ON HARDWARE.** PowerVR SGX543MP4+ wakes cleanly in Linux 6.12 (`EUR_CR_CORE_ID = 0x01174403`, `EUR_CR_CORE_REVISION = 0x00020106`, 4 MP cores active) and powers down cleanly on `rmmod`.
-- **Phase 3 (`vita-drm` Display Driver):** **BUILT, READY FOR ON-DEVICE KERNEL VERIFICATION (`v1.7.0-BETA1`).**
-- **Next Up (Phase 4):** Wire SGX543 hardware IRQ (`GIC_SPI 20`), BIF 2-level MMU page tables, and minimal hardware render/clear test in Linux 6.12.
+- **Phase 0, Phase 1, & Phase 2 (Power/Clock/Hydra Bring-Up):** **100% COMPLETE & VERIFIED ON HARDWARE.**
+- **Phase 3 (`vita-drm` Atomic KMS Display Driver):** **100% COMPLETE & VERIFIED ON HARDWARE.**
+- **Phase 4 (SGX543 `GIC_SPI 20` IRQ, 2-Level BIF MMU & PTLA Hardware Render/Blit):** **100% COMPLETE & VERIFIED ON HARDWARE.** First-ever GPU-accelerated pixels rendered through the 2-level BIF MMU into both DRAM and CDRAM and displayed live on the PS Vita OLED panel under Linux 6.12.
+- **Active Phase (Phase 5 - Kernel 2D Integration & 3D OpenGL ES Stack Architecture):**
+  1. **Track 5A (100% Open-Source GPLv2 Kernel + Desktop 2D Acceleration, Zero Blobs):**
+     - Integrate SGX543 power/clock management, 2-level BIF MMU, and Hydra Master **PTLA 2D blitter/scaler/YUV engine** into `vita-drm` / `drivers/gpu/drm/vita/` (enabling `/soc/gpu@e8400000` in `vita.dtsi`), unlocking cached-DRAM -> CDRAM DMA page-flips, hardware 2D rectangle fills/copies/scaling/rotation, YUV420 video blits, and Xorg EXA 2D desktop acceleration (`xf86-video-vita`).
+  2. **Track 5B (Full 3D OpenGL ES 1.1 / 2.0 & EGL Stack Evaluation):**
+     - Cross-audit `openpvrsgx-devgroup/linux_openpvrsgx` Dual MIT/GPLv2 `1.7.862890` (`services4/srvkm` + `srvinit` USSE microkernel) together with `GrapheneCt/PVR_PSP2` (full Imagination DDK 1.7 `eurasiacon` OpenGL ES 1/2, EGL, `glslcompiler`, `usc2` USSE compiler, and `pds`/`usegen` C source targeting PS Vita's exact `SGX543MP4+` rev `2.1.6`) to determine the cleanest buildable path to native Linux `armhf` `libEGL.so` + `libGLESv2.so` on Linux 6.12.
 
 ---
 
 ## 8. Post-GPU Follow-Up Items
-- **SD2Vita (`ux0`) Dynamic MMC Device Discovery (`S05vita` & `vita-storage`):** **IMPLEMENTED** in `v1.7.0-BETA1` (`S05vita` and `vita-storage` dynamically detect the `[SCE]` eMMC device via `${d}p12`, skip it when probing `ux0`, and mount `/dev/mmcblk2p1` / `/dev/mmcblk2` cleanly regardless of MMC enumeration order).
-- **`vita-reboot` / `vita-reboot-gui` in CLI:** **IMPLEMENTED** in `v1.7.0-BETA1` (`vita-reboot` checks for an active Xorg socket `/tmp/.X11-unix/X0` before invoking `vita-reboot-gui`, and `vita-reboot-gui` returns exit code `2` if X11 cannot be opened so CLI reboots never abort).
+- **SD2Vita (`ux0`) Dynamic MMC Device Discovery (`S05vita` & `vita-storage`):** **VERIFIED ON HARDWARE** in `v1.7.0-BETA1` (`ux0` mounted read-only at `/mnt/ux0` on `/dev/mmcblk1`).
+- **`vita-reboot` / `vita-reboot-gui` in CLI:** **IMPLEMENTED** in `v1.7.0-BETA1` (`vita-reboot` checks for `/tmp/.X11-unix/X0` before invoking `vita-reboot-gui`).
+- **Wi-Fi Boot DHCP Race Fix (`S45wifi`, `vita-wifi-daemon`, `vita-wifi`):** **IMPLEMENTED** in `v1.7.0-BETA2` (waits for `wpa_state=COMPLETED`, disables `mwifiex` 802.11 power-save `ps 0`, uses `-B` broadcast fallback, and prevents overlapping `udhcpc` daemons).
 
