@@ -44,6 +44,7 @@ daemon_loop() {
     log_msg "Starting PlayStation Vita Wi-Fi background reconnection daemon..."
     local disc_count=0
     local gw_fail_count=0
+    local no_ip_count=0
 
     while true; do
         sleep "$INTERVAL"
@@ -52,6 +53,7 @@ daemon_loop() {
         if [ -f "/tmp/wifi_disabled" ]; then
             disc_count=0
             gw_fail_count=0
+            no_ip_count=0
             continue
         fi
 
@@ -83,6 +85,7 @@ daemon_loop() {
             done
             wpa_supplicant -B -i "$iface" -c "$conf" -O /var/run/wpa_supplicant 2>/dev/null || true
             sleep 2
+            wpa_cli -i "$iface" set ps 0 >/dev/null 2>&1 || true
             continue
         fi
 
@@ -93,23 +96,41 @@ daemon_loop() {
 
         if [ "$wpa_state" = "DISCONNECTED" ] || [ "$wpa_state" = "INACTIVE" ]; then
             disc_count=$((disc_count + 1))
+            no_ip_count=0
             # If disconnected for 2 checks (30s), trigger reassociation
             if [ "$disc_count" -ge 2 ]; then
                 log_msg "Connection dropped ($wpa_state for ${disc_count} cycles). Reassociating on $iface..."
+                wpa_cli -i "$iface" set ps 0 >/dev/null 2>&1 || true
                 wpa_cli -i "$iface" reassociate >/dev/null 2>&1 || wpa_cli -i "$iface" reconnect >/dev/null 2>&1 || true
                 disc_count=0
             fi
             gw_fail_count=0
         elif [ "$wpa_state" = "COMPLETED" ]; then
             disc_count=0
+            wpa_cli -i "$iface" set ps 0 >/dev/null 2>&1 || true
             local cur_ip
             cur_ip=$(ip -4 addr show "$iface" 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2 || true)
 
             if [ -z "$cur_ip" ]; then
-                log_msg "Associated with SSID but missing IPv4 address. Requesting DHCP lease..."
-                udhcpc -i "$iface" -b -R -q 2>/dev/null || true
+                no_ip_count=$((no_ip_count + 1))
+                if pidof udhcpc >/dev/null 2>&1; then
+                    if [ "$no_ip_count" -ge 2 ]; then
+                        log_msg "Still missing IPv4 address after ${no_ip_count} checks. Restarting udhcpc (-B) on $iface..."
+                        killall udhcpc 2>/dev/null || true
+                        sleep 1
+                        udhcpc -i "$iface" -p "/var/run/udhcpc.${iface}.pid" -B -t 5 -T 3 -A 5 -b -R 2>/dev/null || true
+                        no_ip_count=0
+                    else
+                        log_msg "Associated with SSID but missing IPv4 address. Nudging running udhcpc (SIGUSR1)..."
+                        killall -SIGUSR1 udhcpc 2>/dev/null || true
+                    fi
+                else
+                    log_msg "Associated with SSID and udhcpc not running. Starting udhcpc on $iface..."
+                    udhcpc -i "$iface" -p "/var/run/udhcpc.${iface}.pid" -B -t 5 -T 3 -A 5 -b -R 2>/dev/null || true
+                fi
                 gw_fail_count=0
             else
+                no_ip_count=0
                 # Verify default gateway reachability
                 local gw
                 gw=$(ip route show default dev "$iface" 2>/dev/null | awk '{print $3}' | head -n1 || true)
@@ -118,7 +139,11 @@ daemon_loop() {
                         gw_fail_count=$((gw_fail_count + 1))
                         if [ "$gw_fail_count" -ge 3 ]; then
                             log_msg "Gateway $gw unreachable after 3 attempts. Renewing DHCP lease..."
-                            killall -SIGUSR1 udhcpc 2>/dev/null || udhcpc -i "$iface" -n -q -R 2>/dev/null || true
+                            if pidof udhcpc >/dev/null 2>&1; then
+                                killall -SIGUSR1 udhcpc 2>/dev/null || true
+                            else
+                                udhcpc -i "$iface" -p "/var/run/udhcpc.${iface}.pid" -B -t 5 -T 3 -A 5 -b -R 2>/dev/null || true
+                            fi
                             gw_fail_count=0
                         fi
                     else

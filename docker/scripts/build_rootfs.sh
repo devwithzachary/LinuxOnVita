@@ -63,6 +63,8 @@ if [ -d "${TOOLS_DIR}" ]; then
     cp "${TOOLS_DIR}/vita-gui/vita-cpu-gui" "${ROOTFS_OVERLAY}/usr/bin/"
     cp "${TOOLS_DIR}/vita-gui/vita-reboot-gui" "${ROOTFS_OVERLAY}/usr/bin/"
     cp "${TOOLS_DIR}/vita-gui/vita-welcome-gui" "${ROOTFS_OVERLAY}/usr/bin/"
+    cp "${TOOLS_DIR}/vita-drm-test/vita-drm-test" "${ROOTFS_OVERLAY}/usr/bin/"
+    arm-linux-gnueabihf-strip "${ROOTFS_OVERLAY}/usr/bin/vita-drm-test" 2>/dev/null || true
     arm-linux-gnueabihf-strip "${ROOTFS_OVERLAY}/usr/bin/vita-powerd" 2>/dev/null || true
     arm-linux-gnueabihf-strip "${ROOTFS_OVERLAY}/usr/bin/vita-webui-server" 2>/dev/null || true
     arm-linux-gnueabihf-strip "${ROOTFS_OVERLAY}/usr/bin/vita-wifi-gui" 2>/dev/null || true

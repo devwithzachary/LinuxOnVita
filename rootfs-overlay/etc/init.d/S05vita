@@ -34,17 +34,20 @@ start)
             mount -t vfat -o ro /dev/vita/ur0 /mnt/ur0 2>/dev/null || \
             mount -o ro /dev/vita/ur0 /mnt/ur0 2>/dev/null || true
         fi
-        for dev in /dev/mmcblk1p1 /dev/mmcblk1 /dev/mmcblk2p1 /dev/mmcblk2; do
-            if [ -b "$dev" ]; then
-                ln -sf "$dev" /dev/vita/ux0
-                if ! grep -qs ' /mnt/ux0 ' /proc/mounts; then
-                    mount -t exfat -o ro "$dev" /mnt/ux0 2>/dev/null || \
-                    mount -t vfat -o ro "$dev" /mnt/ux0 2>/dev/null || \
-                    mount -t ext4 -o ro "$dev" /mnt/ux0 2>/dev/null || \
-                    mount -o ro "$dev" /mnt/ux0 2>/dev/null || true
+        for disk in /dev/mmcblk[0-9]; do
+            [ -b "$disk" ] || continue
+            [ "$disk" = "$EMMC" ] && continue
+            [ -b "${disk}p12" ] && continue
+            for dev in "${disk}p1" "$disk"; do
+                [ -b "$dev" ] || continue
+                if mount -t exfat -o ro "$dev" /mnt/ux0 2>/dev/null || \
+                   mount -t vfat -o ro "$dev" /mnt/ux0 2>/dev/null || \
+                   mount -t ext4 -o ro "$dev" /mnt/ux0 2>/dev/null || \
+                   mount -o ro "$dev" /mnt/ux0 2>/dev/null; then
+                    ln -sf "$dev" /dev/vita/ux0
+                    break 2
                 fi
-                break
-            fi
+            done
         done
     fi
 

@@ -2,7 +2,7 @@ CROSS_COMPILE ?= arm-linux-gnueabihf-
 CC = $(CROSS_COMPILE)gcc
 CFLAGS ?= -O2 -Wall -Wextra -std=gnu99 -static
 
-TARGETS = fbkeyboard/fbkeyboard vita-input-mapper/vita-input-mapper fbdoom/fbdoom vita-tun/vita-tun vita-powerd/vita-powerd vita-webui/vita-webui-server vita-gui/vita-wifi-gui vita-gui/vita-cpu-gui vita-gui/vita-reboot-gui vita-gui/vita-welcome-gui
+TARGETS = fbkeyboard/fbkeyboard vita-input-mapper/vita-input-mapper fbdoom/fbdoom vita-tun/vita-tun vita-powerd/vita-powerd vita-webui/vita-webui-server vita-gui/vita-wifi-gui vita-gui/vita-cpu-gui vita-gui/vita-reboot-gui vita-gui/vita-welcome-gui vita-drm-test/vita-drm-test
 
 .PHONY: all clean fbdoom/fbdoom
 
@@ -35,9 +35,12 @@ vita-gui/vita-reboot-gui: vita-gui/vita-reboot-gui.c vita-gui/x11_mini.c ../app/
 vita-gui/vita-welcome-gui: vita-gui/vita-welcome-gui.c vita-gui/x11_mini.c ../app/debugScreenFont.c
 	$(CC) $(CFLAGS) -o $@ vita-gui/vita-welcome-gui.c vita-gui/x11_mini.c ../app/debugScreenFont.c
 
+vita-drm-test/vita-drm-test: vita-drm-test/vita-drm-test.c
+	$(CC) $(CFLAGS) -o $@ $<
+
 fbdoom/fbdoom:
 	$(MAKE) -C fbdoom CROSS_COMPILE=$(CROSS_COMPILE) NOSDL=1
 
 clean:
-	rm -f fbkeyboard/fbkeyboard vita-input-mapper/vita-input-mapper vita-tun/vita-tun vita-powerd/vita-powerd vita-webui/vita-webui-server vita-gui/vita-gui vita-gui/vita-wifi-gui vita-gui/vita-cpu-gui vita-gui/vita-reboot-gui vita-gui/vita-welcome-gui
+	rm -f fbkeyboard/fbkeyboard vita-input-mapper/vita-input-mapper vita-tun/vita-tun vita-powerd/vita-powerd vita-webui/vita-webui-server vita-gui/vita-gui vita-gui/vita-wifi-gui vita-gui/vita-cpu-gui vita-gui/vita-reboot-gui vita-gui/vita-welcome-gui vita-drm-test/vita-drm-test
 	$(MAKE) -C fbdoom clean || true

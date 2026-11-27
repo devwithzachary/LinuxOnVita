@@ -275,25 +275,49 @@ static void probe_sgx_init_and_id(void)
 {
 	void __iomem *sgx;
 
-	pr_info("vita_sgx_wake: Running stock SceGpuEs4 SGXReset + CLKGATECTL init at 0x%08lx...\n",
+	pr_info("vita_sgx_wake: Running stock gpuinit_es4 SGXStart + SceGpuEs4 SGXReset at 0x%08lx...\n",
 		SGX543_REGS_PA);
 	sgx = ioremap(SGX543_REGS_PA, SGX543_REGS_SIZE);
 	if (!sgx)
 		return;
 
-	/* Exact SceGpuEs4 0x020765B8 / 0x0207659A sequence */
-	writel(0x000007FFU, sgx + 0x4080);
+	/*
+	 * 1. gpuinit_es4 SGXStart: enable 4 Hydra MP cores and Master clock
+	 *    gating BEFORE any SGX register read (reading 0xE8400020 while
+	 *    Master clock gates are off aborts/hangs the bus).
+	 */
+	writel(0x00000003U, sgx + 0x4000); /* EUR_CR_MASTER_CORE = 3 (4 cores) */
+	writel(0x000002A9U, sgx + 0x4020); /* EUR_CR_MASTER_CLKGATECTL2 */
+	writel(0x000000AAU, sgx + 0x4004); /* EUR_CR_MASTER_CLKGATECTL */
+
+	/*
+	 * 2. SceGpuEs4 0x020765B8 / 0x0207659A SGXReset: pulse Master soft
+	 *    reset, configure BIF & SLC while in reset, then enable core
+	 *    clock gating.
+	 */
+	writel(0x000007FFU, sgx + 0x4080); /* EUR_CR_MASTER_SOFT_RESET */
+	wmb();
 	udelay(100);
-	writel(0x00000000U, sgx + 0x4080);
+	writel(0x00000000U, sgx + 0x4C00); /* EUR_CR_MASTER_BIF_CTRL */
+	writel(0x0004C800U, sgx + 0x4D00); /* EUR_CR_MASTER_SLC_CTRL */
+	writel(0x04000000U, sgx + 0x4D04); /* EUR_CR_MASTER_SLC_CTRL_BYPASS */
+	wmb();
+	udelay(100);
+	writel(0x00000000U, sgx + 0x4080); /* Release EUR_CR_MASTER_SOFT_RESET */
+	wmb();
 	udelay(100);
 	writel(STOCK_EUR_CR_CLKGATECTL, sgx + 0x0000);
 	writel(STOCK_EUR_CR_CLKGATECTL2, sgx + 0x0004);
+	wmb();
 	udelay(100);
 
 	pr_info("vita_sgx_wake: EUR_CR_CORE_ID       (+0x0020) = 0x%08x (expected 0x01174403)\n",
 		readl(sgx + 0x0020));
 	pr_info("vita_sgx_wake: EUR_CR_CORE_REVISION (+0x0024) = 0x%08x (expected 0x00020106)\n",
 		readl(sgx + 0x0024));
+	pr_info("vita_sgx_wake: EUR_CR_CLKGATECTL    (+0x0000) = 0x%08x / 0x%08x, MP(+0x0100)=0x%08x, MASTER(+0x4000)=0x%08x\n",
+		readl(sgx + 0x0000), readl(sgx + 0x0004),
+		readl(sgx + 0x0100), readl(sgx + 0x4000));
 	iounmap(sgx);
 }
 

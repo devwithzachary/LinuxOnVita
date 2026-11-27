@@ -303,7 +303,8 @@ EOF
 
     echo -n "Associating with '${target_ssid}'"
     local associated=0
-    for _ in $(seq 1 15); do
+    for _ in $(seq 1 20); do
+        wpa_cli -i "$iface" set ps 0 >/dev/null 2>&1 || true
         local state
         state=$(wpa_cli -i "$iface" status 2>/dev/null | grep "^wpa_state=" | cut -d= -f2 || true)
         if [ "$state" = "COMPLETED" ]; then
@@ -316,14 +317,21 @@ EOF
     echo ""
 
     if [ $associated -eq 1 ]; then
+        wpa_cli -i "$iface" set ps 0 >/dev/null 2>&1 || true
         echo -e "${C_GREEN}[OK] Successfully associated with '${target_ssid}'!${C_RESET}"
         echo "Requesting IP address via DHCP..."
-        udhcpc -i "$iface" -b -R 2>/dev/null || true
+        killall udhcpc 2>/dev/null || true
+        udhcpc -i "$iface" -p "/var/run/udhcpc.${iface}.pid" -t 5 -T 3 -A 5 -b -R 2>/dev/null || true
 
         local ip=""
-        for _ in $(seq 1 15); do
+        for d_try in $(seq 1 18); do
             ip=$(ip -4 addr show "$iface" 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2 || true)
             [ -n "$ip" ] && break
+            if [ "$d_try" -eq 9 ]; then
+                killall udhcpc 2>/dev/null || true
+                wpa_cli -i "$iface" set ps 0 >/dev/null 2>&1 || true
+                udhcpc -i "$iface" -p "/var/run/udhcpc.${iface}.pid" -B -t 5 -T 3 -A 5 -b -R 2>/dev/null || true
+            fi
             sleep 1
         done
 
@@ -462,6 +470,34 @@ cmd_on() {
     fi
     echo -e "${C_GREEN}[OK] Wi-Fi service started.${C_RESET}"
     echo "Run 'vita-wifi status' in a few seconds to verify connection."
+}
+
+cmd_dhcp() {
+    local iface
+    iface=$(get_iface) || {
+        echo -e "${C_RED}Error: Wireless interface (mlan0/wlan0) not found.${C_RESET}"
+        return 1
+    }
+    echo -e "${C_CYAN}Requesting DHCP lease on $iface...${C_RESET}"
+    [ -x /usr/bin/vita-wifi-daemon ] && /usr/bin/vita-wifi-daemon stop >/dev/null 2>&1 || true
+    killall udhcpc 2>/dev/null || true
+    wpa_cli -i "$iface" set ps 0 >/dev/null 2>&1 || true
+    udhcpc -i "$iface" -p "/var/run/udhcpc.${iface}.pid" -B -t 5 -T 3 -A 5 -b -R 2>/dev/null || true
+    local ip=""
+    for _ in $(seq 1 15); do
+        ip=$(ip -4 addr show "$iface" 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2 || true)
+        [ -n "$ip" ] && break
+        sleep 1
+    done
+    [ -x /usr/bin/vita-wifi-daemon ] && /usr/bin/vita-wifi-daemon start >/dev/null 2>&1 || true
+    if [ -n "$ip" ]; then
+        echo -e "${C_GREEN}[OK] Assigned IP Address: ${ip}${C_RESET}"
+        echo -e "     SSH Ready: ${C_BOLD}ssh root@${ip}${C_RESET}"
+        return 0
+    else
+        echo -e "${C_YELLOW}[!] Still waiting for DHCP response on $iface.${C_RESET}"
+        return 1
+    fi
 }
 
 cmd_disconnect() {
@@ -859,6 +895,9 @@ case "$ACTION" in
         ;;
     connect)
         cmd_connect "${1:-}" "${2:-}"
+        ;;
+    dhcp|renew)
+        cmd_dhcp
         ;;
     disconnect)
         cmd_disconnect

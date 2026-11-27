@@ -1,0 +1,779 @@
+diff --git a/arch/arm/boot/dts/pstv.dts b/arch/arm/boot/dts/pstv.dts
+index 03eb0d0..264a703 100644
+--- a/arch/arm/boot/dts/pstv.dts
++++ b/arch/arm/boot/dts/pstv.dts
+@@ -44,3 +44,8 @@
+ &sdif2 {
+ 	status = "okay";
+ };
++
++&display1 {
++	vita,panel-type = "hdmi";
++	status = "okay";
++};
+diff --git a/arch/arm/boot/dts/vita.dtsi b/arch/arm/boot/dts/vita.dtsi
+index 83ff7c0..9e973e1 100644
+--- a/arch/arm/boot/dts/vita.dtsi
++++ b/arch/arm/boot/dts/vita.dtsi
+@@ -69,6 +69,23 @@
+ 		reg = <0x40200000 0x1FE00000>;
+ 	};
+ 
++	reserved-memory {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		ranges;
++
++		/*
++		 * 28 MB CDRAM scanout pool starting at 0x20400000 so early
++		 * simple-framebuffer at 0x20000000 stays intact until VBlank
++		 * handoff, leaving 96 MB at 0x22000000..0x27FFFFFF for SGX543.
++		 */
++		cdram_scanout: vram@20400000 {
++			compatible = "shared-dma-pool";
++			reg = <0x20400000 0x01c00000>;
++			no-map;
++		};
++	};
++
+ 	l2: cache-controller@1A002000 {
+ 		compatible = "arm,pl310-cache";
+ 		reg = <0x1A002000 0x1000>;
+@@ -288,6 +305,45 @@
+ 			#reset-cells = <1>;
+ 			reg = <0xe3101000 0x1000>;
+ 		};
++
++		display0: display@e5020000 {
++			compatible = "vita,iftu-display";
++			reg = <0xe5020000 0x1000>,
++			      <0xe5022000 0x1000>,
++			      <0xe5050000 0x1000>;
++			reg-names = "plane", "creg", "dsi";
++			interrupts = <GIC_SPI 181 IRQ_TYPE_LEVEL_HIGH>;
++			memory-region = <&cdram_scanout>;
++			vita,width = <960>;
++			vita,height = <544>;
++			vita,dst-x = <0>;
++			vita,dst-y = <0>;
++			status = "disabled";
++		};
++
++		display1: display@e5030000 {
++			compatible = "vita,iftu-display";
++			reg = <0xe5030000 0x1000>,
++			      <0xe5032000 0x1000>,
++			      <0xe5060000 0x1000>;
++			reg-names = "plane", "creg", "dsi";
++			interrupts = <GIC_SPI 178 IRQ_TYPE_LEVEL_HIGH>;
++			memory-region = <&cdram_scanout>;
++			vita,width = <1280>;
++			vita,height = <720>;
++			vita,dst-x = <26>;
++			vita,dst-y = <15>;
++			status = "disabled";
++		};
++
++		gpu: gpu@e8400000 {
++			compatible = "vita,sgx543", "img,sgx543";
++			reg = <0xe8400000 0x20000>,
++			      <0xed800000 0x1000>;
++			reg-names = "sgx", "regbus";
++			interrupts = <GIC_SPI 20 IRQ_TYPE_LEVEL_HIGH>;
++			status = "disabled";
++		};
+ 	};
+ 
+ 	wlan_pwrseq: wlan-pwrseq {
+diff --git a/arch/arm/boot/dts/vita1000.dts b/arch/arm/boot/dts/vita1000.dts
+index de3dd07..ea77693 100644
+--- a/arch/arm/boot/dts/vita1000.dts
++++ b/arch/arm/boot/dts/vita1000.dts
+@@ -54,3 +54,7 @@
+ 	status = "okay";
+ };
+ 
++&display0 {
++	vita,panel-type = "oled";
++	status = "okay";
++};
+diff --git a/arch/arm/boot/dts/vita2000.dts b/arch/arm/boot/dts/vita2000.dts
+index c6e8b53..163fa72 100644
+--- a/arch/arm/boot/dts/vita2000.dts
++++ b/arch/arm/boot/dts/vita2000.dts
+@@ -53,3 +53,7 @@
+ 	status = "okay";
+ };
+ 
++&display0 {
++	vita,panel-type = "lcd";
++	status = "okay";
++};
+diff --git a/drivers/gpu/drm/Kconfig b/drivers/gpu/drm/Kconfig
+index 1cb5a4f..62e5a50 100644
+--- a/drivers/gpu/drm/Kconfig
++++ b/drivers/gpu/drm/Kconfig
+@@ -485,6 +485,8 @@ config DRM_HYPERV
+ config DRM_EXPORT_FOR_TESTS
+ 	bool
+ 
++source "drivers/gpu/drm/vita/Kconfig"
++
+ config DRM_LIB_RANDOM
+ 	bool
+ 	default n
+diff --git a/drivers/gpu/drm/Makefile b/drivers/gpu/drm/Makefile
+index 784229d..ef803f8 100644
+--- a/drivers/gpu/drm/Makefile
++++ b/drivers/gpu/drm/Makefile
+@@ -219,3 +219,4 @@ obj-y			+= solomon/
+ obj-$(CONFIG_DRM_SPRD) += sprd/
+ obj-$(CONFIG_DRM_LOONGSON) += loongson/
+ obj-$(CONFIG_DRM_POWERVR) += imagination/
++obj-$(CONFIG_DRM_VITA) += vita/
+diff --git a/drivers/gpu/drm/vita/Kconfig b/drivers/gpu/drm/vita/Kconfig
+new file mode 100644
+index 0000000..537aeb3
+--- /dev/null
++++ b/drivers/gpu/drm/vita/Kconfig
+@@ -0,0 +1,10 @@
++# SPDX-License-Identifier: GPL-2.0-only
++config DRM_VITA
++	tristate "PlayStation Vita IFTU/DSI Display Controller"
++	depends on DRM && OF && (ARCH_VITA || COMPILE_TEST)
++	select DRM_KMS_HELPER
++	select DRM_GEM_DMA_HELPER
++	help
++	  Choose this option for DRM/KMS display support on the Sony
++	  PlayStation Vita (1000 OLED, 2000 LCD) and PlayStation TV (HDMI)
++	  via the on-SoC IFTU plane compositor and DSI scanout engine.
+diff --git a/drivers/gpu/drm/vita/Makefile b/drivers/gpu/drm/vita/Makefile
+new file mode 100644
+index 0000000..40da24a
+--- /dev/null
++++ b/drivers/gpu/drm/vita/Makefile
+@@ -0,0 +1,2 @@
++# SPDX-License-Identifier: GPL-2.0-only
++obj-$(CONFIG_DRM_VITA) += vita_drm.o
+diff --git a/drivers/gpu/drm/vita/vita_drm.c b/drivers/gpu/drm/vita/vita_drm.c
+new file mode 100644
+index 0000000..a26ea89
+--- /dev/null
++++ b/drivers/gpu/drm/vita/vita_drm.c
+@@ -0,0 +1,616 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * PlayStation Vita IFTU / DSI Atomic DRM/KMS Display Driver
++ *
++ * Supports PlayStation Vita 1000 (OLED, 960x544), PlayStation Vita 2000
++ * (LCD, 960x544), and PlayStation TV (HDMI, 1280x720) using hardware
++ * double-buffered shadow plane configs in IFTU, hardware VBlank interrupts
++ * from SceDsi, and zero-DRAM-overhead CDRAM scanout buffer allocation.
++ */
++
++#include <linux/align.h>
++#include <linux/dma-mapping.h>
++#include <linux/interrupt.h>
++#include <linux/io.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/of_reserved_mem.h>
++#include <linux/platform_device.h>
++#include <linux/spinlock.h>
++
++#include <drm/drm_aperture.h>
++#include <drm/drm_atomic_helper.h>
++#include <drm/drm_connector.h>
++#include <drm/drm_drv.h>
++#include <drm/drm_fb_dma_helper.h>
++#include <drm/drm_fbdev_dma.h>
++#include <drm/drm_fourcc.h>
++#include <drm/drm_framebuffer.h>
++#include <drm/drm_gem_atomic_helper.h>
++#include <drm/drm_gem_dma_helper.h>
++#include <drm/drm_gem_framebuffer_helper.h>
++#include <drm/drm_modes.h>
++#include <drm/drm_module.h>
++#include <drm/drm_probe_helper.h>
++#include <drm/drm_simple_kms_helper.h>
++#include <drm/drm_vblank.h>
++
++#define VITA_CDRAM_BASE			0x20000000UL
++#define VITA_CDRAM_SIZE			0x08000000UL
++
++/* IFTU Plane registers (0xE5020000 Bus 0, 0xE5030000 Bus 1) */
++#define IFTU_PLANE_STATUS		0x004
++
++/* Double-buffered shadow configuration banks: bank 0 at +0x200, bank 1 at +0x300 */
++#define IFTU_CFG_BASE(cfg)		(0x200 + (cfg) * 0x100)
++#define IFTU_CFG_FB_PADDR		0x00
++#define IFTU_CFG_FB_PADDR1		0x04
++#define IFTU_CFG_FB_PADDR2		0x08
++#define IFTU_CFG_STRIDE0		0x20
++#define IFTU_CFG_SRC_X			0x24
++#define IFTU_CFG_SRC_Y			0x28
++#define IFTU_CFG_PIXELFMT		0x40
++#define IFTU_CFG_WIDTH			0x44
++#define IFTU_CFG_HEIGHT			0x48
++#define IFTU_CFG_CTRL			0x4C /* 0 = enabled, 1 = disabled */
++#define IFTU_CFG_LEFTOVER_STRIDE	0x54 /* (pitch_bytes - aligned_w * cpp) */
++#define IFTU_CFG_LEFTOVER_ALIGN		0x58
++#define IFTU_CFG_DST_FMT		0xA0
++#define IFTU_CFG_DST_W			0xA4
++#define IFTU_CFG_DST_H			0xA8
++#define IFTU_CFG_SRC_W			0xC0
++#define IFTU_CFG_SRC_H			0xC4
++#define IFTU_CFG_DST_X			0xC8
++#define IFTU_CFG_DST_Y			0xCC
++
++/* SceIftuPixelformat hardware codes */
++#define SCE_IFTU_FMT_BGR565		0x01
++#define SCE_IFTU_FMT_RGB565		0x02
++#define SCE_IFTU_FMT_BGRX8888		0x10 /* DRM_FORMAT_XBGR8888 / ABGR8888 */
++#define SCE_IFTU_FMT_RGBX8888		0x20 /* DRM_FORMAT_XRGB8888 / ARGB8888 */
++
++/* IFTU Control registers (0xE5022000 Bus 0, 0xE5032000 Bus 1) */
++#define IFTU_CREG_CTRL			0x00
++#define IFTU_CREG_CTRL2			0x04
++#define IFTU_CREG_P0_CFG_SEL		0x10
++
++/* DSI scanout & VBlank interrupt registers (0xE5050000 Bus 0, 0xE5060000 Bus 1) */
++#define DSI_REG_SCANLINE		0x4C
++#define DSI_REG_IRQ_STATUS		0x50
++#define DSI_REG_IRQ_ENABLE		0x54
++#define DSI_IRQ_VBLANK_BIT		BIT(1)
++
++enum vita_panel_kind {
++	VITA_PANEL_OLED = 0,
++	VITA_PANEL_LCD,
++	VITA_PANEL_HDMI,
++};
++
++struct vita_drm_device {
++	struct drm_device drm;
++	struct drm_simple_display_pipe pipe;
++	struct drm_connector connector;
++
++	void __iomem *plane_regs;
++	void __iomem *creg_regs;
++	void __iomem *dsi_regs;
++
++	spinlock_t hw_lock;
++	enum vita_panel_kind panel;
++	u32 width;
++	u32 height;
++	u32 dst_x;
++	u32 dst_y;
++};
++
++static inline struct vita_drm_device *
++pipe_to_vita_drm(struct drm_simple_display_pipe *pipe)
++{
++	return container_of(pipe, struct vita_drm_device, pipe);
++}
++
++static inline struct vita_drm_device *
++conn_to_vita_drm(struct drm_connector *conn)
++{
++	return container_of(conn, struct vita_drm_device, connector);
++}
++
++static const u32 vita_drm_formats[] = {
++	DRM_FORMAT_XRGB8888,
++	DRM_FORMAT_ARGB8888,
++	DRM_FORMAT_XBGR8888,
++	DRM_FORMAT_ABGR8888,
++	DRM_FORMAT_RGB565,
++	DRM_FORMAT_BGR565,
++};
++
++static u32 vita_drm_to_iftu_fmt(u32 fourcc)
++{
++	switch (fourcc) {
++	case DRM_FORMAT_XRGB8888:
++	case DRM_FORMAT_ARGB8888:
++		return SCE_IFTU_FMT_RGBX8888;
++	case DRM_FORMAT_XBGR8888:
++	case DRM_FORMAT_ABGR8888:
++		return SCE_IFTU_FMT_BGRX8888;
++	case DRM_FORMAT_RGB565:
++		return SCE_IFTU_FMT_RGB565;
++	case DRM_FORMAT_BGR565:
++		return SCE_IFTU_FMT_BGR565;
++	default:
++		return SCE_IFTU_FMT_RGBX8888;
++	}
++}
++
++static void vita_iftu_commit_fb(struct vita_drm_device *vdev,
++				struct drm_plane_state *pstate)
++{
++	struct drm_framebuffer *fb = pstate->fb;
++	dma_addr_t paddr;
++	unsigned long flags;
++	u32 cpp, aligned_w, aligned_h, row_bytes, leftover_stride;
++	u32 iftu_fmt, stat, active_cfg, next_cfg, base;
++
++	if (!fb)
++		return;
++
++	paddr = drm_fb_dma_get_gem_addr(fb, pstate, 0);
++	cpp = fb->format->cpp[0];
++	aligned_w = ALIGN(vdev->width, 16);
++	aligned_h = ALIGN(vdev->height, 8);
++	row_bytes = aligned_w * cpp;
++	leftover_stride = (fb->pitches[0] > row_bytes) ?
++			  (fb->pitches[0] - row_bytes) : 0;
++	iftu_fmt = vita_drm_to_iftu_fmt(fb->format->format);
++
++	spin_lock_irqsave(&vdev->hw_lock, flags);
++
++	/*
++	 * Bit 1 of IFTU_PLANE_STATUS reflects whether shadow config bank 1 is
++	 * currently scanning out (0 = bank 0 active, 1 = bank 1 active).
++	 * Always program the inactive bank and latch it via P0_CFG_SEL so the
++	 * hardware switches banks tear-free at the next VBlank.
++	 */
++	stat = readl(vdev->plane_regs + IFTU_PLANE_STATUS);
++	active_cfg = (stat >> 1) & 1;
++	next_cfg = active_cfg ^ 1;
++	base = IFTU_CFG_BASE(next_cfg);
++
++	writel((u32)paddr, vdev->plane_regs + base + IFTU_CFG_FB_PADDR);
++	writel(0, vdev->plane_regs + base + IFTU_CFG_FB_PADDR1);
++	writel(0, vdev->plane_regs + base + IFTU_CFG_FB_PADDR2);
++	writel(0, vdev->plane_regs + base + IFTU_CFG_STRIDE0);
++	writel(0, vdev->plane_regs + base + IFTU_CFG_SRC_X);
++	writel(0, vdev->plane_regs + base + IFTU_CFG_SRC_Y);
++	writel(iftu_fmt, vdev->plane_regs + base + IFTU_CFG_PIXELFMT);
++	writel(aligned_w, vdev->plane_regs + base + IFTU_CFG_WIDTH);
++	writel(aligned_h, vdev->plane_regs + base + IFTU_CFG_HEIGHT);
++	writel(leftover_stride, vdev->plane_regs + base + IFTU_CFG_LEFTOVER_STRIDE);
++	writel(0, vdev->plane_regs + base + IFTU_CFG_LEFTOVER_ALIGN);
++	writel(0, vdev->plane_regs + base + IFTU_CFG_CTRL);
++	writel(0x2000, vdev->plane_regs + base + IFTU_CFG_DST_FMT);
++	writel(vdev->width, vdev->plane_regs + base + IFTU_CFG_DST_W);
++	writel(vdev->height, vdev->plane_regs + base + IFTU_CFG_DST_H);
++	writel(0x10000, vdev->plane_regs + base + IFTU_CFG_SRC_W);
++	writel(0x10000, vdev->plane_regs + base + IFTU_CFG_SRC_H);
++	writel(vdev->dst_x, vdev->plane_regs + base + IFTU_CFG_DST_X);
++	writel(vdev->dst_y, vdev->plane_regs + base + IFTU_CFG_DST_Y);
++	wmb();
++
++	writel(next_cfg, vdev->creg_regs + IFTU_CREG_P0_CFG_SEL);
++	(void)readl(vdev->creg_regs + IFTU_CREG_P0_CFG_SEL);
++
++	spin_unlock_irqrestore(&vdev->hw_lock, flags);
++}
++
++static void vita_iftu_disable_plane(struct vita_drm_device *vdev)
++{
++	unsigned long flags;
++	u32 stat, active_cfg, next_cfg;
++
++	spin_lock_irqsave(&vdev->hw_lock, flags);
++
++	stat = readl(vdev->plane_regs + IFTU_PLANE_STATUS);
++	active_cfg = (stat >> 1) & 1;
++	next_cfg = active_cfg ^ 1;
++
++	writel(1, vdev->plane_regs + IFTU_CFG_BASE(next_cfg) + IFTU_CFG_CTRL);
++	writel(1, vdev->plane_regs + IFTU_CFG_BASE(active_cfg) + IFTU_CFG_CTRL);
++	wmb();
++	writel(next_cfg, vdev->creg_regs + IFTU_CREG_P0_CFG_SEL);
++	(void)readl(vdev->creg_regs + IFTU_CREG_P0_CFG_SEL);
++
++	spin_unlock_irqrestore(&vdev->hw_lock, flags);
++}
++
++static irqreturn_t vita_drm_irq_handler(int irq, void *data)
++{
++	struct vita_drm_device *vdev = data;
++	u32 stat = readl(vdev->dsi_regs + DSI_REG_IRQ_STATUS);
++
++	if (!stat)
++		return IRQ_NONE;
++
++	/* SceDsiForDriver W1C status acknowledge + posted write flush */
++	writel(stat, vdev->dsi_regs + DSI_REG_IRQ_STATUS);
++	(void)readl(vdev->dsi_regs + DSI_REG_IRQ_STATUS);
++
++	if (stat & DSI_IRQ_VBLANK_BIT)
++		drm_crtc_handle_vblank(&vdev->pipe.crtc);
++
++	return IRQ_HANDLED;
++}
++
++static int vita_pipe_enable_vblank(struct drm_simple_display_pipe *pipe)
++{
++	struct vita_drm_device *vdev = pipe_to_vita_drm(pipe);
++	unsigned long flags;
++	u32 stale, en;
++
++	spin_lock_irqsave(&vdev->hw_lock, flags);
++	stale = readl(vdev->dsi_regs + DSI_REG_IRQ_STATUS);
++	writel(stale, vdev->dsi_regs + DSI_REG_IRQ_STATUS);
++	en = readl(vdev->dsi_regs + DSI_REG_IRQ_ENABLE);
++	writel(en | DSI_IRQ_VBLANK_BIT, vdev->dsi_regs + DSI_REG_IRQ_ENABLE);
++	(void)readl(vdev->dsi_regs + DSI_REG_IRQ_ENABLE);
++	spin_unlock_irqrestore(&vdev->hw_lock, flags);
++
++	return 0;
++}
++
++static void vita_pipe_disable_vblank(struct drm_simple_display_pipe *pipe)
++{
++	struct vita_drm_device *vdev = pipe_to_vita_drm(pipe);
++	unsigned long flags;
++	u32 en;
++
++	spin_lock_irqsave(&vdev->hw_lock, flags);
++	en = readl(vdev->dsi_regs + DSI_REG_IRQ_ENABLE);
++	writel(en & ~DSI_IRQ_VBLANK_BIT, vdev->dsi_regs + DSI_REG_IRQ_ENABLE);
++	(void)readl(vdev->dsi_regs + DSI_REG_IRQ_ENABLE);
++	spin_unlock_irqrestore(&vdev->hw_lock, flags);
++}
++
++static enum drm_mode_status
++vita_pipe_mode_valid(struct drm_simple_display_pipe *pipe,
++		     const struct drm_display_mode *mode)
++{
++	struct vita_drm_device *vdev = pipe_to_vita_drm(pipe);
++
++	if (mode->hdisplay != vdev->width || mode->vdisplay != vdev->height)
++		return MODE_BAD;
++
++	return MODE_OK;
++}
++
++static void vita_pipe_enable(struct drm_simple_display_pipe *pipe,
++			     struct drm_crtc_state *crtc_state,
++			     struct drm_plane_state *plane_state)
++{
++	struct vita_drm_device *vdev = pipe_to_vita_drm(pipe);
++
++	if (plane_state && plane_state->fb)
++		vita_iftu_commit_fb(vdev, plane_state);
++
++	drm_crtc_vblank_on(&pipe->crtc);
++}
++
++static void vita_pipe_disable(struct drm_simple_display_pipe *pipe)
++{
++	struct vita_drm_device *vdev = pipe_to_vita_drm(pipe);
++	struct drm_crtc *crtc = &pipe->crtc;
++	struct drm_pending_vblank_event *event;
++
++	drm_crtc_vblank_off(crtc);
++	vita_iftu_disable_plane(vdev);
++
++	spin_lock_irq(&vdev->drm.event_lock);
++	event = crtc->state->event;
++	if (event) {
++		crtc->state->event = NULL;
++		drm_crtc_send_vblank_event(crtc, event);
++	}
++	spin_unlock_irq(&vdev->drm.event_lock);
++}
++
++static void vita_pipe_update(struct drm_simple_display_pipe *pipe,
++			     struct drm_plane_state *old_state)
++{
++	struct vita_drm_device *vdev = pipe_to_vita_drm(pipe);
++	struct drm_crtc *crtc = &pipe->crtc;
++	struct drm_plane_state *pstate = pipe->plane.state;
++	struct drm_pending_vblank_event *event;
++
++	if (pstate && pstate->fb && crtc->state && crtc->state->active)
++		vita_iftu_commit_fb(vdev, pstate);
++
++	if (crtc->state && crtc->state->event) {
++		spin_lock_irq(&vdev->drm.event_lock);
++		event = crtc->state->event;
++		crtc->state->event = NULL;
++		if (crtc->state->active && drm_crtc_vblank_get(crtc) == 0)
++			drm_crtc_arm_vblank_event(crtc, event);
++		else
++			drm_crtc_send_vblank_event(crtc, event);
++		spin_unlock_irq(&vdev->drm.event_lock);
++	}
++}
++
++static const struct drm_simple_display_pipe_funcs vita_pipe_funcs = {
++	.mode_valid	= vita_pipe_mode_valid,
++	.enable		= vita_pipe_enable,
++	.disable	= vita_pipe_disable,
++	.update		= vita_pipe_update,
++	.enable_vblank	= vita_pipe_enable_vblank,
++	.disable_vblank	= vita_pipe_disable_vblank,
++};
++
++static int vita_connector_get_modes(struct drm_connector *connector)
++{
++	struct vita_drm_device *vdev = conn_to_vita_drm(connector);
++	struct drm_display_mode *mode;
++
++	mode = drm_mode_create(connector->dev);
++	if (!mode)
++		return 0;
++
++	mode->type = DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED;
++	mode->hdisplay = vdev->width;
++	mode->vdisplay = vdev->height;
++
++	switch (vdev->panel) {
++	case VITA_PANEL_HDMI:
++		/* PlayStation TV 1280x720p @ 60 Hz (VIC 4) */
++		mode->clock = 74250;
++		mode->hsync_start = 1280 + 110;
++		mode->hsync_end = 1280 + 110 + 40;
++		mode->htotal = 1650;
++		mode->vsync_start = 720 + 5;
++		mode->vsync_end = 720 + 5 + 5;
++		mode->vtotal = 750;
++		connector->display_info.width_mm = 0;
++		connector->display_info.height_mm = 0;
++		break;
++	case VITA_PANEL_LCD:
++		/* PS Vita 2000 Slim 5.0" LCD 960x544p */
++		mode->clock = 46778;
++		mode->hsync_start = 960 + 20;
++		mode->hsync_end = 960 + 20 + 391;
++		mode->htotal = 1375;
++		mode->vsync_start = 544 + 4;
++		mode->vsync_end = 544 + 4 + 4;
++		mode->vtotal = 567;
++		connector->display_info.width_mm = 110;
++		connector->display_info.height_mm = 62;
++		break;
++	case VITA_PANEL_OLED:
++	default:
++		/* PS Vita 1000 5.0" OLED 960x544p */
++		mode->clock = 37422;
++		mode->hsync_start = 960 + 20;
++		mode->hsync_end = 960 + 20 + 66;
++		mode->htotal = 1050;
++		mode->vsync_start = 544 + 4;
++		mode->vsync_end = 544 + 4 + 4;
++		mode->vtotal = 594;
++		connector->display_info.width_mm = 110;
++		connector->display_info.height_mm = 62;
++		break;
++	}
++
++	drm_mode_set_name(mode);
++	drm_mode_probed_add(connector, mode);
++
++	return 1;
++}
++
++static const struct drm_connector_helper_funcs vita_connector_helper_funcs = {
++	.get_modes = vita_connector_get_modes,
++};
++
++static const struct drm_connector_funcs vita_connector_funcs = {
++	.reset			= drm_atomic_helper_connector_reset,
++	.fill_modes		= drm_helper_probe_single_connector_modes,
++	.destroy		= drm_connector_cleanup,
++	.atomic_duplicate_state	= drm_atomic_helper_connector_duplicate_state,
++	.atomic_destroy_state	= drm_atomic_helper_connector_destroy_state,
++};
++
++static const struct drm_mode_config_funcs vita_mode_config_funcs = {
++	.fb_create	= drm_gem_fb_create,
++	.atomic_check	= drm_atomic_helper_check,
++	.atomic_commit	= drm_atomic_helper_commit,
++};
++
++DEFINE_DRM_GEM_DMA_FOPS(vita_drm_fops);
++
++static const struct drm_driver vita_drm_driver = {
++	.driver_features = DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC,
++	.fops		 = &vita_drm_fops,
++	DRM_GEM_DMA_DRIVER_OPS,
++	.name		 = "vita-drm",
++	.desc		 = "Sony PlayStation Vita IFTU/DSI Display Driver",
++	.date		 = "20261127",
++	.major		 = 1,
++	.minor		 = 0,
++};
++
++static void vita_drm_release_rmem(void *dev)
++{
++	of_reserved_mem_device_release(dev);
++}
++
++static int vita_drm_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct device_node *np = dev->of_node;
++	struct vita_drm_device *vdev;
++	struct drm_device *drm;
++	const char *panel_str = NULL;
++	int irq, conn_type, ret;
++	u32 stale;
++
++	/* Hand off cleanly from early boot simple-framebuffer in CDRAM */
++	ret = drm_aperture_remove_conflicting_framebuffers(VITA_CDRAM_BASE,
++							   VITA_CDRAM_SIZE,
++							   &vita_drm_driver);
++	if (ret)
++		return ret;
++
++	vdev = devm_drm_dev_alloc(dev, &vita_drm_driver,
++				  struct vita_drm_device, drm);
++	if (IS_ERR(vdev))
++		return PTR_ERR(vdev);
++
++	drm = &vdev->drm;
++	spin_lock_init(&vdev->hw_lock);
++	platform_set_drvdata(pdev, vdev);
++
++	vdev->plane_regs = devm_platform_ioremap_resource_byname(pdev, "plane");
++	if (IS_ERR(vdev->plane_regs))
++		vdev->plane_regs = devm_platform_ioremap_resource(pdev, 0);
++	if (IS_ERR(vdev->plane_regs))
++		return PTR_ERR(vdev->plane_regs);
++
++	vdev->creg_regs = devm_platform_ioremap_resource_byname(pdev, "creg");
++	if (IS_ERR(vdev->creg_regs))
++		vdev->creg_regs = devm_platform_ioremap_resource(pdev, 1);
++	if (IS_ERR(vdev->creg_regs))
++		return PTR_ERR(vdev->creg_regs);
++
++	vdev->dsi_regs = devm_platform_ioremap_resource_byname(pdev, "dsi");
++	if (IS_ERR(vdev->dsi_regs))
++		vdev->dsi_regs = devm_platform_ioremap_resource(pdev, 2);
++	if (IS_ERR(vdev->dsi_regs))
++		return PTR_ERR(vdev->dsi_regs);
++
++	vdev->width = 960;
++	vdev->height = 544;
++	vdev->dst_x = 0;
++	vdev->dst_y = 0;
++	vdev->panel = VITA_PANEL_OLED;
++
++	of_property_read_u32(np, "vita,width", &vdev->width);
++	of_property_read_u32(np, "vita,height", &vdev->height);
++	of_property_read_u32(np, "vita,dst-x", &vdev->dst_x);
++	of_property_read_u32(np, "vita,dst-y", &vdev->dst_y);
++	if (!of_property_read_string(np, "vita,panel-type", &panel_str)) {
++		if (strcmp(panel_str, "lcd") == 0)
++			vdev->panel = VITA_PANEL_LCD;
++		else if (strcmp(panel_str, "hdmi") == 0)
++			vdev->panel = VITA_PANEL_HDMI;
++	}
++
++	ret = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(32));
++	if (ret)
++		return ret;
++
++	ret = of_reserved_mem_device_init(dev);
++	if (!ret) {
++		ret = devm_add_action_or_reset(dev, vita_drm_release_rmem, dev);
++		if (ret)
++			return ret;
++		dev_info(dev, "bound CDRAM scanout pool for %ux%u (%s)\n",
++			 vdev->width, vdev->height,
++			 panel_str ? panel_str : "oled");
++	} else if (ret != -ENODEV) {
++		return ret;
++	}
++
++	/* Mask DSI VBlank IRQ and clear stale W1C status before requesting IRQ */
++	writel(0, vdev->dsi_regs + DSI_REG_IRQ_ENABLE);
++	stale = readl(vdev->dsi_regs + DSI_REG_IRQ_STATUS);
++	writel(stale, vdev->dsi_regs + DSI_REG_IRQ_STATUS);
++	(void)readl(vdev->dsi_regs + DSI_REG_IRQ_STATUS);
++
++	irq = platform_get_irq(pdev, 0);
++	if (irq < 0)
++		return irq;
++
++	ret = devm_request_irq(dev, irq, vita_drm_irq_handler, 0,
++			       "vita-drm", vdev);
++	if (ret)
++		return dev_err_probe(dev, ret, "failed to request DSI VBlank IRQ\n");
++
++	ret = drmm_mode_config_init(drm);
++	if (ret)
++		return ret;
++
++	drm->mode_config.min_width = vdev->width;
++	drm->mode_config.max_width = 2048;
++	drm->mode_config.min_height = vdev->height;
++	drm->mode_config.max_height = 2048;
++	drm->mode_config.preferred_depth = 24;
++	drm->mode_config.funcs = &vita_mode_config_funcs;
++
++	conn_type = (vdev->panel == VITA_PANEL_HDMI) ?
++		    DRM_MODE_CONNECTOR_HDMIA : DRM_MODE_CONNECTOR_DSI;
++
++	drm_connector_helper_add(&vdev->connector, &vita_connector_helper_funcs);
++	ret = drm_connector_init(drm, &vdev->connector, &vita_connector_funcs,
++				 conn_type);
++	if (ret)
++		return ret;
++
++	ret = drm_vblank_init(drm, 1);
++	if (ret)
++		return ret;
++
++	ret = drm_simple_display_pipe_init(drm, &vdev->pipe, &vita_pipe_funcs,
++					   vita_drm_formats,
++					   ARRAY_SIZE(vita_drm_formats),
++					   NULL, &vdev->connector);
++	if (ret)
++		return ret;
++
++	drm_mode_config_reset(drm);
++	drm_kms_helper_poll_init(drm);
++
++	ret = drm_dev_register(drm, 0);
++	if (ret) {
++		drm_kms_helper_poll_fini(drm);
++		return ret;
++	}
++
++	drm_fbdev_dma_setup(drm, 32);
++
++	return 0;
++}
++
++static void vita_drm_remove(struct platform_device *pdev)
++{
++	struct vita_drm_device *vdev = platform_get_drvdata(pdev);
++
++	drm_dev_unregister(&vdev->drm);
++	drm_kms_helper_poll_fini(&vdev->drm);
++	drm_atomic_helper_shutdown(&vdev->drm);
++}
++
++static void vita_drm_shutdown(struct platform_device *pdev)
++{
++	struct vita_drm_device *vdev = platform_get_drvdata(pdev);
++
++	drm_atomic_helper_shutdown(&vdev->drm);
++}
++
++static const struct of_device_id vita_drm_of_match[] = {
++	{ .compatible = "vita,iftu-display" },
++	{ /* sentinel */ }
++};
++MODULE_DEVICE_TABLE(of, vita_drm_of_match);
++
++static struct platform_driver vita_drm_platform_driver = {
++	.probe		= vita_drm_probe,
++	.remove_new	= vita_drm_remove,
++	.shutdown	= vita_drm_shutdown,
++	.driver		= {
++		.name		= "vita-drm",
++		.of_match_table	= vita_drm_of_match,
++	},
++};
++
++drm_module_platform_driver(vita_drm_platform_driver);
++
++MODULE_AUTHOR("LinuxOnVita");
++MODULE_DESCRIPTION("Sony PlayStation Vita IFTU/DSI DRM/KMS Driver");
++MODULE_LICENSE("GPL");

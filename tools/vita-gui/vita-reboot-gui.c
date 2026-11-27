@@ -41,7 +41,7 @@ int main(void) {
     w = x11_open(WIN_W, WIN_H, "Reboot to VitaOS");
     if (!w) {
         fprintf(stderr, "vita-reboot-gui: failed to open X11 window\n");
-        return 1;
+        return 2;
     }
 
     render(w);

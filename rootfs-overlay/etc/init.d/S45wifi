@@ -46,7 +46,8 @@ start)
 
             mkdir -p /var/run/wpa_supplicant
 
-            # Kill any previous/stale instances
+            # Kill any previous/stale instances (including daemon before re-init)
+            [ -x /usr/bin/vita-wifi-daemon ] && /usr/bin/vita-wifi-daemon stop >/dev/null 2>&1 || true
             killall wpa_supplicant 2>/dev/null || true
             killall udhcpc 2>/dev/null || true
 
@@ -57,27 +58,42 @@ start)
                 echo "[WiFi] Launching wpa_supplicant on $IFACE using $WPA_CONF..."
                 wpa_supplicant -B -i "$IFACE" -c "${WPA_CONF}" -O /var/run/wpa_supplicant
 
-                # Wait up to 15s for 802.11 association (carrier state)
-                echo "[WiFi] Waiting for $IFACE association..."
+                # Wait up to 20s for full WPA2 4-way handshake (wpa_state=COMPLETED),
+                # not merely carrier=1 (which asserts before EAPOL completes on mwifiex).
+                echo "[WiFi] Waiting for $IFACE WPA handshake..."
                 k=0
-                while [ $k -lt 15 ]; do
-                    if [ "$(cat /sys/class/net/$IFACE/carrier 2>/dev/null || echo 0)" = "1" ]; then
-                        echo "[WiFi] $IFACE associated successfully!"
+                while [ $k -lt 20 ]; do
+                    wpa_cli -i "$IFACE" set ps 0 >/dev/null 2>&1 || true
+                    WPA_STATE=$(wpa_cli -i "$IFACE" status 2>/dev/null | grep "^wpa_state=" | cut -d= -f2 || true)
+                    if [ "$WPA_STATE" = "COMPLETED" ]; then
+                        echo "[WiFi] $IFACE handshake completed!"
                         break
                     fi
                     sleep 1
                     k=$((k + 1))
                 done
 
-                echo "[WiFi] Requesting DHCP lease on $IFACE..."
-                udhcpc -i "$IFACE" -b -R 2>/dev/null || true
+                # Keep 802.11 power save disabled on Marvell 88W8787 so DHCPOFFER/SSH packets are not dropped
+                wpa_cli -i "$IFACE" set ps 0 >/dev/null 2>&1 || true
 
-                # Wait for DHCP lease
+                echo "[WiFi] Requesting DHCP lease on $IFACE..."
+                udhcpc -i "$IFACE" -p "/var/run/udhcpc.${IFACE}.pid" -t 5 -T 3 -A 5 -b -R 2>/dev/null || true
+
+                # Wait for DHCP lease (fallback to broadcast flag -B if router drops unicast DHCPOFFER)
                 j=0
                 IP=""
                 while [ $j -lt 25 ]; do
                     IP=$(ip -4 addr show "$IFACE" 2>/dev/null | grep -o 'inet [0-9.]*' | cut -d' ' -f2)
                     [ -n "$IP" ] && break
+                    if [ "$j" -eq 10 ]; then
+                        WPA_STATE=$(wpa_cli -i "$IFACE" status 2>/dev/null | grep "^wpa_state=" | cut -d= -f2 || true)
+                        if [ "$WPA_STATE" = "COMPLETED" ]; then
+                            echo "[WiFi] Retrying DHCP with broadcast flag (-B) on $IFACE..."
+                            killall udhcpc 2>/dev/null || true
+                            wpa_cli -i "$IFACE" set ps 0 >/dev/null 2>&1 || true
+                            udhcpc -i "$IFACE" -p "/var/run/udhcpc.${IFACE}.pid" -B -t 5 -T 3 -A 5 -b -R 2>/dev/null || true
+                        fi
+                    fi
                     sleep 1
                     j=$((j + 1))
                 done

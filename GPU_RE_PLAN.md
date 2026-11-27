@@ -197,37 +197,59 @@ Captured via read-only `GpuProbe.vpk` (`gpu_trace_before.txt` / `gpu_trace_after
     2. Unpause the `0xF00` GPU AXI/XBAR Grab bridge via `SMC 0x11B(r0=0xF00, r1=0)` -> `PERVASIVE_BASECLK + 0x10 = 0x00030003` -> `SMC 0x11B(r0=0xF00, r1=1)` (`SceGrabForDriver::0xB22EE8BC`).
     3. `SceGpuEs4` `SGXInitialise` (`0x020765B8` / `0x0207659A`) also pulses Hydra Master soft reset (`+0x4080 = 0x7FF -> 0`) and enables internal SGX clock gating (`+0x0000 = 0x002AAAAA`, `+0x0004 = 0x0A8A8AAA`) before reading core registers.
 
+### 6.5 Phase 2D Complete SGX543MP4+ Bring-Up Verified in Linux 6.12
+- **Verified live on physical PS Vita 1000 in Linux 6.12 (`vita_sgx_wake.ko` v4):**
+  - Confirmed `XBAR_SMC` (`SMC 0x114(3, 0)`) boots as `0x0` (disabled) after `baremetal-loader`'s `SOFT_RESET`.
+  - Complete 5-step non-secure Linux wake sequence verified with zero bus aborts:
+    1. `Syscon 0x088E` (`tx_len = 3`, `data = 0x3004`): sets `VDDG` 111 MHz voltage (`res = 0x00`).
+    2. `SMC 0x114(r0 = 2, r1 = 2)`: enables 111 MHz GPU XBAR clock (`XBAR_SMC` transitions `0x0 -> 0x2`).
+    3. `SMC 0x110(r0 = 0, r1 = 1)`: powers on SGX543 domain (`MISC+0x34 = 0`, `GATE+0x10 = 0x000F000F`, `RESET+0x10 = 0`, `GPU_REGBUS 0xED800000 = 0x01006437`).
+    4. `SMC 0x11B(0xF00, 0)` -> `PERVASIVE_BASECLK+0x10 = 0x00030003` -> `SMC 0x11B(0xF00, 1)`: unpauses `0xF00` GPU AXI/XBAR Grab bridge.
+    5. `SGXStart` (`+0x4000 = 3`, `+0x4020 = 0x2A9`, `+0x4004 = 0xAA`) + `SGXReset` (`+0x4080 = 0x7FF`, `+0x4C00 = 0`, `+0x4D00 = 0x4C800`, `+0x4D04 = 0x04000000`, `+0x4080 = 0`, `+0x0000 = 0x002AAAAA`, `+0x0004 = 0x0A8A8AAA`):
+       - `EUR_CR_CORE_ID (+0x0020) = 0x01174403` (PowerVR SGX543MP4+)
+       - `EUR_CR_CORE_REVISION (+0x0024) = 0x00020106` (Revision `2.1.6`)
+       - `EUR_CR_CLKGATECTL (+0x0000) = 0x002AAAAA / 0x0A8A8AAA`, `MP(+0x0100) = 0x0000000F`, `MASTER(+0x4000) = 0x00000003`
+  - Clean power-down (`SMC 0x110(0, 0)`) verified on `rmmod`.
+
+### 6.6 Phase 3 Display Engine (`SceIftu` & `SceDsi`) Disassembly Findings
+- **Disassembled from `SceLowio` (`0x00C0BAA4..0x00C0E788`) and `SceDisplay` (`0x00C2D980..0x00C2EC80`):**
+  - **VBlank Hardware Interrupts (`SceDsi` ISR at `0x00C0BAA4`):**
+    - `SceDsi0` (`0xE5050000`, OLED/LCD): VitaOS intr `0xD5` (`213`) -> `GIC_SPI 181`.
+    - `SceDsi1` (`0xE5060000`, PSTV HDMI): VitaOS intr `0xD2` (`210`) -> `GIC_SPI 178`.
+    - `DSI + 0x50`: W1C interrupt status (`bit 1 = 0x2` is VBlank Start; acked via `val = readl(+0x50); writel(val, +0x50); readl(+0x50);`).
+    - `DSI + 0x54`: Interrupt enable mask (`bit 1 = 0x2` enables VBlank Start; already set to `0x2` by `libbaremetal` `dsi_start_display`).
+    - `DSI + 0x4C`: Current scanline register (`((readl(+0x4C) >> 16) & 0x1FFF) - 1`).
+  - **IFTU Per-Plane Interrupts (`0x00C10FC4` table):**
+    - `SceIftu0a` (`0xE5020000`): intr `204` (`GIC_SPI 172`), `SceIftu0b` (`0xE5021000`): intr `205` (`GIC_SPI 173`).
+    - `SceIftu1a` (`0xE5030000`): intr `206` (`GIC_SPI 174`), `SceIftu1b` (`0xE5031000`): intr `207` (`GIC_SPI 175`).
+  - **Tear-Free Double-Buffered Plane Config Flip (`sceIftuSetPlaneConfig` at `0x00C0DFEC`):**
+    - Each plane has two hardware shadow config banks: `config 0` at `plane_regs + 0x200` and `config 1` at `plane_regs + 0x300` (both pre-initialized by `libbaremetal` `display_iftu_setup`).
+    - `plane_regs + 0x04`: `bit 1` reports the currently active scanout config bank (`0` or `1`); `bit 0` reports whether a config switch is pending.
+    - Key `config` bank offsets: `+0x00 = FB_PADDR` (CDRAM physical address), `+0x20 = STRIDE0` (bytes per row, or `0` for packed width*bpp), `+0x40 = SRC_PIXELFMT` (`0x10` = `A8B8G8R8` / `DRM_FORMAT_XBGR8888`), `+0x44 = SRC_WIDTH`, `+0x48 = SRC_HEIGHT`, `+0x4C = CONTROL` (`0` = enabled, `1` = disabled).
+    - Writing `next_cfg` (`0` or `1`) to `IFTU_CREG + 0x10` (`PLANE0_CONFIG_SELECT`) latches the new config bank tear-free at the next hardware VBlank.
+
+### 6.7 Phase 3 Live Hardware Verification (`vita_iftu_probe.ko`) & `vita-drm` Implementation
+- **Verified live on physical PS Vita 1000 in Linux 6.12 (`vita_iftu_probe.ko`):**
+  - `GIC_SPI 181` (`virq 32`) delivered clean hardware VBlank interrupts at scanline `1` (`storm = 0`, W1C ack at `DSI0 + 0x50` with `DSI0 + 0x54 = 0x2`).
+  - Hardware double-buffered CDRAM page-flipping between `0x20000000` (`CFG0`, `P0+04 = 0x00000101`) and `0x20400000` (`CFG1`, `P0+04 = 0x00000002`) latched tear-free on VBlank via `IFTU_CREG0 + 0x10`, visually confirmed on OLED with an R/G/B test banner.
+  - Confirmed `SceIftu` pixelformat codes (`SCE_IFTU_PIXELFORMAT_BGR565 = 0x01`, `RGB565 = 0x02`, `BGRX8888 = 0x10`, `RGBX8888 = 0x20`) and row padding register (`CFG + 0x54 = leftover_stride`).
+- **Implemented Full Linux 6.12 Atomic KMS Driver (`drivers/gpu/drm/vita/vita_drm.c`):**
+  - Supports PS Vita 1000 OLED (`960x544`), PS Vita 2000 LCD (`960x544`), and PlayStation TV HDMI (`1280x720`, `dst_x = 26, dst_y = 15`).
+  - Backed by a dedicated 28 MB CDRAM `shared-dma-pool` (`0x20400000 .. 0x21FFFFFF`), preserving early `simple-framebuffer` (`0x20000000`) until VBlank handoff and leaving 96 MB of CDRAM (`0x22000000 .. 0x27FFFFFF`) free for Phase 4/5 SGX543 VRAM.
+  - Exposes both `/dev/dri/card0` (atomic KMS, hardware VBlank, `XRGB8888`/`ARGB8888`/`XBGR8888`/`ABGR8888`/`RGB565`/`BGR565`) and `/dev/fb0` (`drm_fbdev_dma_setup`, including DPMS blanking via `/sys/class/graphics/fb0/blank`), plus `/usr/bin/vita-drm-test` for hardware VSync validation.
+
 ---
 
-## 7. Current Session Handoff & Immediate Resume Checklist
+## 7. Current Session Status & Active Phase
 
-### Status Summary (End of Day - 2026-11-24)
-- **Phase 0 & Phase 1:** Complete. Stock VitaOS Pervasive, IFTU, SGX543MP4+, Syscon `0x088E` voltage scaling, and full 72-packet standby SPI sequence captured and verified on physical PS Vita 1000 hardware.
-- **Phase 2 (SGX543 Power & Bus Bring-Up in Linux 6.12):** ~85% complete:
-  - **Verified on hardware in Linux 6.12:**
-    - External GPU rail voltage (`Syscon 0x088E`, `0x3004` = 111 MHz) returns `res = 0x00`.
-    - On-die SGX543 power domain (`TrustZone SMC 0x110(0, 1)`) returns `0x00000000`, atomically clears isolation clamp `MISC + 0x34` (`1 -> 0`), enables 4-core clock gate `GATE + 0x10` (`0x000F000F`), deasserts `RESET + 0x10` (`1 -> 0`), and powers `GPU_REGBUS` (`0xED800000` reads `0x01006437` cleanly in Linux!).
-    - Clean power-down (`SMC 0x110(0, 0)`) verified on `rmmod`.
-  - **Built & ready for first test next session (`tools/vita-sgx-probe/vita_sgx_wake.ko` v3):**
-    - Adds the missing post-`SOFT_RESET` `ScePower` calls (`SMC 0x114(2, 2)` GPU XBAR clock + `SMC 0x11B(0xF00, 0 -> 1)` `SceGrab` AXI/XBAR bridge unpause) and `SceGpuEs4` Hydra Master soft-reset / `EUR_CR_CLKGATECTL` init (`+0x4080`, `+0x0000`, `+0x0004`).
-    - Uses an interactive `/proc/vita_sgx_wake` command interface (`status`, `read_master`, `read_id`, `init_sgx`, `grab_reopen`, `dom1_on`, `dom1_off`) so `module_init` never touches `0xE8400000` and the module can never wedge in `MODULE_STATE_COMING`.
-
-### Exact Commands to Resume Next Session
-1. Boot PS Vita cleanly into Linux and copy the pre-built v3 module from PC:
-   - `scp /home/zachary/Code/vita-linux/tools/vita-sgx-probe/vita_sgx_wake.ko root@192.168.0.123:/tmp/`
-2. Load module and inspect XBAR/Grab/`GPU_REGBUS` state on Vita SSH:
-   - `insmod /tmp/vita_sgx_wake.ko`
-   - `dmesg | grep vita_sgx_wake | tail -n 15`
-3. Probe SGX543 registers in subshells via `/proc/vita_sgx_wake`:
-   - `(echo read_master > /proc/vita_sgx_wake) && dmesg | grep vita_sgx_wake | tail -n 5`
-   - `(echo read_id > /proc/vita_sgx_wake) && dmesg | grep vita_sgx_wake | tail -n 6`
-   - If needed: `(echo init_sgx > /proc/vita_sgx_wake) && dmesg | grep vita_sgx_wake | tail -n 6`
-   - Clean unload: `rmmod vita_sgx_wake`
-4. Once `EUR_CR_CORE_ID` (`0x01174403`) & `EUR_CR_CORE_REVISION` (`0x00020106`) read cleanly in Linux `dmesg`, move straight to **Phase 3: Standalone DRM/KMS Display Driver (`vita-drm`)** (`IFTU` `0xE5020000`/`0xE5022000`, CDRAM `0x20000000`, VBlank IRQ `GIC_SPI 181` / `178`).
+### Status Summary (2026-11-27)
+- **Phase 0, Phase 1, & Phase 2:** **100% COMPLETE & VERIFIED ON HARDWARE.** PowerVR SGX543MP4+ wakes cleanly in Linux 6.12 (`EUR_CR_CORE_ID = 0x01174403`, `EUR_CR_CORE_REVISION = 0x00020106`, 4 MP cores active) and powers down cleanly on `rmmod`.
+- **Phase 3 (`vita-drm` Display Driver):** **BUILT, READY FOR ON-DEVICE KERNEL VERIFICATION (`v1.7.0-BETA1`).**
+- **Next Up (Phase 4):** Wire SGX543 hardware IRQ (`GIC_SPI 20`), BIF 2-level MMU page tables, and minimal hardware render/clear test in Linux 6.12.
 
 ---
 
 ## 8. Post-GPU Follow-Up Items
-- **SD2Vita (`ux0`) Dynamic MMC Device Discovery (`S05vita` & `vita-storage`):** Depending on MMC host probe ordering at boot, internal eMMC can enumerate as `/dev/mmcblk1` (`p1..p12`, `boot0/1`, `rpmb`) instead of `/dev/mmcblk0`, pushing SD2Vita to `/dev/mmcblk2`. Update `S05vita` and `vita-storage` to identify and skip the `[SCE]` eMMC device (`[ -b "${dev}p12" ]`) when scanning for `ux0` so `/dev/mmcblk2` (and `/dev/mmcblk2p1`) mounts automatically at `/mnt/ux0` on every boot.
-- **`vita-reboot` / `vita-reboot-gui` in CLI:** User reported `vita-reboot-gui: failed to open X11 window` when running `reboot` in Linux CLI (likely `$DISPLAY` set without an active X11 server, or `vita-reboot` needs to verify X11 socket `/tmp/.X11-unix/X0` / `x11_open` fallback before aborting). Fix after current GPU debugging session.
+- **SD2Vita (`ux0`) Dynamic MMC Device Discovery (`S05vita` & `vita-storage`):** **IMPLEMENTED** in `v1.7.0-BETA1` (`S05vita` and `vita-storage` dynamically detect the `[SCE]` eMMC device via `${d}p12`, skip it when probing `ux0`, and mount `/dev/mmcblk2p1` / `/dev/mmcblk2` cleanly regardless of MMC enumeration order).
+- **`vita-reboot` / `vita-reboot-gui` in CLI:** **IMPLEMENTED** in `v1.7.0-BETA1` (`vita-reboot` checks for an active Xorg socket `/tmp/.X11-unix/X0` before invoking `vita-reboot-gui`, and `vita-reboot-gui` returns exit code `2` if X11 cannot be opened so CLI reboots never abort).
 

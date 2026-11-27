@@ -2,7 +2,6 @@
 # vita-reboot: Reboot LinuxOnVita safely and return to Sony VitaOS LiveArea
 
 export _VITA_REBOOTING=1
-export DISPLAY="${DISPLAY:-:0}"
 
 # Protect reboot script from termination if parent SSH session or terminal closes
 trap '' HUP INT QUIT TERM
@@ -16,10 +15,13 @@ if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     exit 0
 fi
 
-# If running in graphical desktop and not forced, ask for confirmation
-if [ -n "$DISPLAY" ] && [ "$1" != "-f" ] && [ "$1" != "--now" ]; then
+# Only prompt with GUI dialog when an X11 server is actively listening and not forced
+if [ "$1" != "-f" ] && [ "$1" != "--now" ] && [ -S /tmp/.X11-unix/X0 ] && pidof Xorg >/dev/null 2>&1; then
+    export DISPLAY="${DISPLAY:-:0}"
     if [ -x /usr/bin/vita-reboot-gui ]; then
-        /usr/bin/vita-reboot-gui || exit 0
+        /usr/bin/vita-reboot-gui
+        gui_rc=$?
+        [ "$gui_rc" -eq 1 ] && exit 0
     elif command -v yad >/dev/null 2>&1; then
         yad --question \
             --title="Reboot to VitaOS" \

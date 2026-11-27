@@ -1,0 +1,1 @@
+savedcmd_/build/tools/vita-sgx-probe/vita_iftu_probe.mod := printf '%s\n'   vita_iftu_probe.o | awk '!x[$$0]++ { print("/build/tools/vita-sgx-probe/"$$0) }' > /build/tools/vita-sgx-probe/vita_iftu_probe.mod
